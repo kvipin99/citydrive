@@ -1,0 +1,52 @@
+"use client";
+
+import { usePathname } from 'next/navigation';
+import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
+import {
+  LayoutDashboard,
+  Users,
+  UserSquare,
+  Car,
+  Calendar,
+  Receipt,
+  Book,
+  DatabaseBackup,
+  Settings,
+} from 'lucide-react';
+
+const navItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/dashboard/students', icon: Users, label: 'Students' },
+  { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors' },
+  { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles' },
+  { href: '/dashboard/schedule', icon: Calendar, label: 'Scheduling' },
+  { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting' },
+  { href: '/dashboard/reports', icon: Book, label: 'Reports' },
+  { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup' },
+  { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
+];
+
+export default function SidebarNav() {
+  const pathname = usePathname();
+
+  return (
+    <div className="flex h-full flex-col justify-between p-2">
+      <SidebarMenu>
+        {navItems.map((item) => (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === item.href}
+              tooltip={item.label}
+            >
+              <a href={item.href}>
+                <item.icon />
+                <span>{item.label}</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+      </SidebarMenu>
+    </div>
+  );
+}
