@@ -121,7 +121,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p>You are currently on the <strong>Pro Plan</strong>.</p>
-            <p className="text-muted-foreground">Your next bill for $99.00 is on August 1, 2024.</p>
+            <p className="text-muted-foreground">Your next bill for ₹9,900 is on August 1, 2024.</p>
             <div className="flex gap-2">
                 <Button>Upgrade Plan</Button>
                 <Button variant="outline">View Billing History</Button>

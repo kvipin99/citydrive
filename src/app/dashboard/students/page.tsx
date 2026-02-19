@@ -201,8 +201,8 @@ export default function StudentsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <p className="font-medium">${student.amount}</p>
-                      {student.discount > 0 && <p className="text-xs text-muted-foreground line-through">${student.amount + student.discount}</p>}
+                      <p className="font-medium">₹{student.amount}</p>
+                      {student.discount > 0 && <p className="text-xs text-muted-foreground line-through">₹{student.amount + student.discount}</p>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -323,11 +323,11 @@ export default function StudentsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-discount">Discount ($)</Label>
+                    <Label htmlFor="edit-discount">Discount (₹)</Label>
                     <Input id="edit-discount" type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-amount">Total ($)</Label>
+                    <Label htmlFor="edit-amount">Total (₹)</Label>
                     <Input id="edit-amount" type="number" value={formData.amount} readOnly className="bg-muted" />
                   </div>
                 </div>
@@ -421,11 +421,11 @@ export default function StudentsPage() {
                   <div className="grid grid-cols-2 gap-4 mt-2">
                     <div className="rounded-lg border bg-card p-3 shadow-sm">
                       <p className="text-xs text-muted-foreground">Total Fee</p>
-                      <p className="text-lg font-bold text-primary">${selectedStudent.amount}</p>
+                      <p className="text-lg font-bold text-primary">₹{selectedStudent.amount}</p>
                     </div>
                     <div className="rounded-lg border bg-card p-3 shadow-sm">
                       <p className="text-xs text-muted-foreground">Discount Applied</p>
-                      <p className="text-lg font-bold text-green-600">${selectedStudent.discount}</p>
+                      <p className="text-lg font-bold text-green-600">₹{selectedStudent.discount}</p>
                     </div>
                   </div>
                 </div>

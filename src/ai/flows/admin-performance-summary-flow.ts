@@ -89,25 +89,25 @@ Use the following data:
 **Reporting Period**: {{reportingPeriod}}
 **Total Students**: {{totalStudents}}
 **Active Students**: {{activeStudents}}
-**Monthly Revenue**: \${{monthlyRevenue}}
-**Monthly Expenses**: \${{monthlyExpenses}}
-**Net Profit**: \${{netProfit}}
+**Monthly Revenue**: ₹{{monthlyRevenue}}
+**Monthly Expenses**: ₹{{monthlyExpenses}}
+**Net Profit**: ₹{{netProfit}}
 **Pending Payments**: {{pendingPaymentsCount}} outstanding payments.
 **Upcoming Classes**: {{upcomingClassesCount}} scheduled classes.
 
 **Monthly Revenue Trend**:
 {{#each monthlyRevenueTrend}}
-- {{this.month}}: \${{this.revenue}}
+- {{this.month}}: ₹{{this.revenue}}
 {{/each}}
 
 **Monthly Profit Trend**:
 {{#each monthlyProfitTrend}}
-- {{this.month}}: \${{this.profit}}
+- {{this.month}}: ₹{{this.profit}}
 {{/each}}
 
 **Expense Breakdown**:
 {{#each expenseBreakdown}}
-- {{this.category}}: \${{this.amount}}
+- {{this.category}}: ₹{{this.amount}}
 {{/each}}
 
 Ensure the summary is professional, clear, and easy to understand for a administrator. Focus on providing value and actionable insights.`,

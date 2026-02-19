@@ -24,7 +24,7 @@ export default function AccountingPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalIncome.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">+15.2% from last month</p>
           </CardContent>
         </Card>
@@ -34,7 +34,7 @@ export default function AccountingPage() {
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalExpenses.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">+10.1% from last month</p>
           </CardContent>
         </Card>
@@ -44,7 +44,7 @@ export default function AccountingPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${(totalIncome - totalExpenses).toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{(totalIncome - totalExpenses).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">+20.5% from last month</p>
           </CardContent>
         </Card>
@@ -130,7 +130,7 @@ function TransactionTable({ transactions }: { transactions: typeof import('@/lib
                 transaction.status === 'Pending' ? 'text-yellow-700 border-yellow-200' : 'text-red-700 border-red-200'
                }>{transaction.status}</Badge>
             </TableCell>
-            <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+            <TableCell className="text-right">₹{transaction.amount.toFixed(2)}</TableCell>
             <TableCell>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
