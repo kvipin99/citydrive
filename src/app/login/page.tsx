@@ -12,8 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Car, Lock, User } from 'lucide-react';
 
 export default function LoginPage() {
-  const [userId, setUserId] = useState('');
-  const [password, setPassword] = useState('City123');
+  const [userId, setUserId] = useState('admin');
+  const [password, setPassword] = useState('Cityadm');
   const [isLoading, setIsLoading] = useState(false);
   const auth = useAuth();
   const router = useRouter();
@@ -24,7 +24,7 @@ export default function LoginPage() {
     if (!userId || !password) return;
 
     setIsLoading(true);
-    // Requirement: Student ID + @citydriving.in
+    // Requirement: User ID + @citydriving.in
     const email = userId.includes('@') ? userId : `${userId.trim()}@citydriving.in`;
 
     try {
@@ -34,7 +34,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: 'Invalid credentials. Please check your Student ID and Password.',
+        description: 'Invalid credentials. Please check your ID and Password.',
       });
     } finally {
       setIsLoading(false);
@@ -52,18 +52,18 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Citydrive Login</CardTitle>
           <CardDescription>
-            Enter your ID number to access your portal
+            Enter your credentials to access the Citydrive portal
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="userId">ID Number (e.g., B1-00001)</Label>
+              <Label htmlFor="userId">User ID</Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="userId"
-                  placeholder="B1-XXXXX"
+                  placeholder="e.g., admin"
                   className="pl-9"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
@@ -90,9 +90,10 @@ export default function LoginPage() {
             <Button className="w-full" type="submit" disabled={isLoading}>
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              Default Password: <span className="font-mono font-bold">City123</span>
-            </p>
+            <div className="text-xs text-center text-muted-foreground space-y-1">
+              <p>Admin ID: <span className="font-mono font-bold">admin</span></p>
+              <p>Admin Password: <span className="font-mono font-bold">Cityadm</span></p>
+            </div>
           </CardFooter>
         </form>
       </Card>
