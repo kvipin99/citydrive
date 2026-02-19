@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Car, Lock, User } from 'lucide-react';
 
 export default function LoginPage() {
-  const [userId, setUserId] = useState('admin');
+  const [userId, setUserId] = useState('admin@citydriving.in');
   const [password, setPassword] = useState('Cityadm');
   const [isLoading, setIsLoading] = useState(false);
   const auth = useAuth();
@@ -24,8 +24,8 @@ export default function LoginPage() {
     if (!userId || !password) return;
 
     setIsLoading(true);
-    // Requirement: User ID + @citydriving.in
-    const email = userId.includes('@') ? userId : `${userId.trim()}@citydriving.in`;
+    // Automatically append domain if user only entered the ID part
+    const email = userId.includes('@') ? userId.trim() : `${userId.trim()}@citydriving.in`;
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -58,7 +58,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="userId">User ID</Label>
+              <Label htmlFor="userId">User ID / Email</Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -91,8 +91,8 @@ export default function LoginPage() {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
             <div className="text-xs text-center text-muted-foreground space-y-1">
-              <p>Admin ID: <span className="font-mono font-bold">admin</span></p>
-              <p>Admin Password: <span className="font-mono font-bold">Cityadm</span></p>
+              <p>Admin ID: <span className="font-mono font-bold text-primary">admin@citydriving.in</span></p>
+              <p>Admin Password: <span className="font-mono font-bold text-primary">Cityadm</span></p>
             </div>
           </CardFooter>
         </form>
