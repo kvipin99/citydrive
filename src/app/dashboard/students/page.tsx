@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { COURSE_PRICES, type Student } from "@/lib/mock-data";
 import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard } from "lucide-react";
@@ -30,7 +30,12 @@ const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as
 
 export default function StudentsPage() {
   const db = useFirestore();
-  const studentsQuery = useMemoFirebase(() => collection(db, 'students'), [db]);
+  const { user } = useUser();
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return collection(db, 'students');
+  }, [db, user]);
+  
   const { data: students, isLoading } = useCollection<Student>(studentsQuery);
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,7 +57,6 @@ export default function StudentsPage() {
     s.id.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
-  // Helper to create Auth login without signing out the current admin
   const createStudentAuth = async (studentId: string) => {
     const email = `${studentId}@citydriving.in`;
     const password = "City123";
@@ -61,9 +65,22 @@ export default function StudentsPage() {
     const secondaryAuth = getAuth(secondaryApp);
     
     try {
-      await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const uid = userCredential.user.uid;
+      
+      // Also create the user role document required for security rules
+      const userRef = doc(db, 'users', uid);
+      setDocumentNonBlocking(userRef, {
+        id: uid,
+        email: email,
+        role: 'Student',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: user?.uid
+      }, { merge: true });
+
       await deleteApp(secondaryApp);
-      return true;
+      return uid;
     } catch (error: any) {
       console.error("Error creating student auth:", error);
       try { await deleteApp(secondaryApp); } catch {}
@@ -87,23 +104,24 @@ export default function StudentsPage() {
     const studentId = `B${branchPrefix}-${String(studentCount).padStart(5, '0')}`;
     
     const amount = calculateFees(formData.courses || [], formData.discount || 0);
-    const newStudentData = {
-      ...formData,
-      id: studentId,
-      amount,
-      registrationDate: new Date().toISOString().split('T')[0],
-      payments: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
+    
     try {
       toast({ title: "Registering Student", description: "Creating login credentials and saving record..." });
       
-      // 1. Create Login
-      await createStudentAuth(studentId);
+      const authUid = await createStudentAuth(studentId);
       
-      // 2. Save to Firestore
+      const newStudentData = {
+        ...formData,
+        id: studentId,
+        userId: authUid,
+        amount,
+        registrationDate: new Date().toISOString().split('T')[0],
+        payments: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: user?.uid
+      };
+
       const studentRef = doc(db, 'students', studentId);
       setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
 

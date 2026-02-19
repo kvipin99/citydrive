@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
 import { type Instructor } from "@/lib/mock-data";
 import { MoreHorizontal, PlusCircle, File, Search } from "lucide-react";
@@ -15,7 +15,12 @@ import { useState } from "react";
 
 export default function InstructorsPage() {
   const db = useFirestore();
-  const instructorsQuery = useMemoFirebase(() => collection(db, 'instructors'), [db]);
+  const { user } = useUser();
+  const instructorsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return collection(db, 'instructors');
+  }, [db, user]);
+  
   const { data: instructors, isLoading } = useCollection<Instructor>(instructorsQuery);
   const [searchQuery, setSearchQuery] = useState("");
 

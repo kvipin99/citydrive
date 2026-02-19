@@ -6,14 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
 import { type Vehicle } from "@/lib/mock-data";
 import { MoreHorizontal, PlusCircle, File, Wrench } from "lucide-react";
 
 export default function VehiclesPage() {
   const db = useFirestore();
-  const vehiclesQuery = useMemoFirebase(() => collection(db, 'vehicles'), [db]);
+  const { user } = useUser();
+  const vehiclesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return collection(db, 'vehicles');
+  }, [db, user]);
+  
   const { data: vehicles, isLoading } = useCollection<Vehicle>(vehiclesQuery);
 
   return (
