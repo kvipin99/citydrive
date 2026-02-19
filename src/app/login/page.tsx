@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Car, Lock, User, AlertCircle } from 'lucide-react';
+import { Car, Lock, User, AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
@@ -26,7 +25,6 @@ export default function LoginPage() {
     if (!userId || !password) return;
 
     setIsLoading(true);
-    // Automatically append domain if user only entered the ID part
     const email = userId.includes('@') ? userId.trim() : `${userId.trim()}@citydriving.in`;
 
     try {
@@ -38,11 +36,9 @@ export default function LoginPage() {
       let errorMessage = 'Invalid credentials. Please check your ID and Password.';
       
       if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = 'Email/Password login is not enabled in your Firebase Console. Please enable it in the Auth section.';
+        errorMessage = 'Email/Password login is not enabled in your Firebase Console.';
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'User not found or incorrect password. Ensure the user exists in your Firebase project.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your internet connection.';
+        errorMessage = 'Account not found or incorrect password. Ensure you have created this user in the Firebase Console.';
       }
 
       toast({
@@ -57,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-md shadow-xl">
+      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
@@ -66,16 +62,18 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Citydrive Login</CardTitle>
           <CardDescription>
-            Access your driving school management portal
+            Management Portal
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-            <Alert variant="default" className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
-              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <AlertTitle className="text-blue-800 dark:text-blue-300">Setup Required</AlertTitle>
-              <AlertDescription className="text-blue-700 dark:text-blue-400 text-xs">
-                Ensure <strong>Email/Password</strong> is enabled in your Firebase Console and the admin user is created.
+            <Alert className="bg-primary/5 border-primary/20">
+              <Info className="h-4 w-4 text-primary" />
+              <AlertTitle className="text-sm font-semibold">First Time Setup?</AlertTitle>
+              <AlertDescription className="text-xs space-y-2 mt-1">
+                <p>1. Go to your <b>Firebase Console</b>.</p>
+                <p>2. Enable <b>Email/Password</b> in Auth settings.</p>
+                <p>3. Create a user: <b>admin@citydriving.in</b> with password <b>Cityadm</b>.</p>
               </AlertDescription>
             </Alert>
             
@@ -85,7 +83,7 @@ export default function LoginPage() {
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="userId"
-                  placeholder="e.g., admin"
+                  placeholder="admin"
                   className="pl-9"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
@@ -109,12 +107,11 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button className="w-full" type="submit" disabled={isLoading}>
+            <Button className="w-full h-11 text-base" type="submit" disabled={isLoading}>
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
-            <div className="text-xs text-center text-muted-foreground space-y-1 border-t pt-4 w-full">
-              <p>Admin Email: <span className="font-mono font-bold text-primary">admin@citydriving.in</span></p>
-              <p>Admin Password: <span className="font-mono font-bold text-primary">Cityadm</span></p>
+            <div className="text-[10px] text-center text-muted-foreground opacity-70">
+              &copy; {new Date().getFullYear()} Citydrive Management System
             </div>
           </CardFooter>
         </form>
