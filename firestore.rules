@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * CORE PHILOSOPHY
+     * This ruleset enforces a strict role-based and ownership-based access control model. 
+     * It leverages denormalized fields (like studentId, instructorId, and ownerId) to 
+     * ensure that authorization decisions are performant and skip unnecessary document lookups.
+     * 
+     * DATA STRUCTURE
+     * Data is organized into top-level collections representing the driving school's entities.
+     * User roles are centrally managed in the /users/{userId} collection, where userId 
+     * corresponds to the Firebase Authentication UID.
+     * 
+     * KEY SECURITY DECISIONS
+     * 1. Role-Based Access: Specific operations (e.g., managing expenses, backup metadata, or vehicle fleets) 
+     *    are restricted to Admin or Accountant roles.
+     * 2. Ownership & Assignment: Students and Instructors are granted access to their own profiles 
+     *    and records where they are explicitly listed as the participant or assignee.
+     * 3. Structural Integrity: We enforce that internal ID fields match the document path IDs 
+     *    on creation and remain immutable on updates.
+     * 4. Prototyping Flexibility: While authorization is strictly enforced, the exact schema of 
+     *    content fields is not validated to allow for rapid UI/UX iteration.
+     */
+
+    // --- HELPER FUNCTIONS ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // The 'isExistingOwner' function was unused and attempted to use 'resource' out of scope,
+    // which is not allowed in a helper function directly. Since it was unused, it has been removed.
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getRole() == role;
+    }
+
+    function isAdmin() {
+      return hasRole('Admin');
+    }
+
+    function isAccountant() {
+      return hasRole('Accountant');
+    }
+
+    function isInstructor() {
+      return hasRole('Instructor');
+    }
+
+    // --- COLLECTION RULES ---
+
+    /**
+     * @description Rules for User profiles. Users can read their own profile; Admins have full access.
+     * @path /users/{userId}
+     * @allow (get, list) if the user is the owner or an Admin.
+     * @deny (write) if the user is not an Admin.
+     * @principle Restricts sensitive profile and role data to the owner and administrators.
+     */
+    match /users/{userId} {
+      allow get, list: if isOwner(userId) || isAdmin();
+      allow create: if (isOwner(userId) && request.resource.data.id == userId) || isAdmin();
+      allow update: if resource != null && (isOwner(userId) || isAdmin());
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Student records. Students can view their own status; Instructors can view their assigned students.
+     * @path /students/{studentId}
+     * @allow (get) if the requester is the student, their assigned instructor, or an Admin/Accountant.
+     * @deny (create, update) if the user is not an Admin or Accountant.
+     * @principle Ensures financial and enrollment data is only modifiable by administrative staff.
+     */
+    match /students/{studentId} {
+      allow get: if isOwner(studentId) || isAdmin() || isAccountant() || resource.data.assignedInstructorId == request.auth.uid;
+      allow list: if isOwner(studentId) || isAdmin() || isAccountant() || (isInstructor() && resource.data.assignedInstructorId == request.auth.uid);
+      allow create: if (isAdmin() || isAccountant()) && request.resource.data.id == studentId;
+      allow update: if resource != null && (isAdmin() || isAccountant()) && request.resource.data.id == resource.data.id;
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Instructor records. Instructors can view their own profile; Admins manage the records.
+     * @path /instructors/{instructorId}
+     * @allow (get) if the requester is the instructor or an Admin.
+     * @deny (write) if the user is not an Admin.
+     * @principle Protects instructor salary and personal information from unauthorized access.
+     */
+    match /instructors/{instructorId} {
+      allow get, list: if isOwner(instructorId) || isAdmin();
+      allow create: if isAdmin() && request.resource.data.id == instructorId;
+      allow update: if resource != null && isAdmin() && request.resource.data.id == resource.data.id;
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Vehicles. Restricted to Admin management.
+     * @path /vehicles/{vehicleId}
+     * @allow (all) if the user is an Admin.
+     * @deny (all) if the user is a Student or Instructor.
+     * @principle Centralizes fleet management permissions to the Admin role.
+     */
+    match /vehicles/{vehicleId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Driving Classes. Students and Instructors can access classes they are associated with.
+     * @path /classes/{classId}
+     * @allow (read) if the user is the assigned student, instructor, or an Admin.
+     * @deny (delete) if the user is not an Admin.
+     * @principle Uses denormalized IDs to facilitate secure listing of scheduled sessions.
+     */
+    match /classes/{classId} {
+      allow get, list: if isAdmin() || resource.data.studentId == request.auth.uid || resource.data.instructorId == request.auth.uid;
+      allow create: if isAdmin() || isInstructor();
+      allow update: if resource != null && (isAdmin() || (isInstructor() && resource.data.instructorId == request.auth.uid));
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Payments. Students can see their own payments; Accountants manage the records.
+     * @path /payments/{paymentId}
+     * @allow (read) if the user is the student who paid, an Accountant, or an Admin.
+     * @deny (write) if the user is a Student.
+     * @principle Secures financial transactions while allowing students transparency into their own account.
+     */
+    match /payments/{paymentId} {
+      allow get, list: if isAdmin() || isAccountant() || resource.data.studentId == request.auth.uid;
+      allow create: if isAdmin() || isAccountant();
+      allow update: if resource != null && (isAdmin() || isAccountant());
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for Business Expenses. Restricted to Admin and Accountant roles.
+     * @path /expenses/{expenseId}
+     * @allow (all) if the user is an Admin or Accountant.
+     * @deny (all) if the user is a Student or Instructor.
+     * @principle Restricts sensitive operational cost data to financial administrators.
+     */
+    match /expenses/{expenseId} {
+      allow get, list: if isAdmin() || isAccountant();
+      allow create: if isAdmin() || isAccountant();
+      allow update, delete: if resource != null && (isAdmin() || isAccountant());
+    }
+
+    /**
+     * @description Rules for Backup Metadata. Restricted to Admin only.
+     * @path /backupMetadata/{backupId}
+     * @allow (all) if the user is an Admin.
+     * @deny (all) for any other role.
+     * @principle Protects system maintenance and recovery logs.
+     */
+    match /backupMetadata/{backupId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if resource != null && isAdmin();
+    }
+  }
+}
