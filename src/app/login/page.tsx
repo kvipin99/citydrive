@@ -11,10 +11,11 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Car, Lock, User, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function LoginPage() {
-  const [userId, setUserId] = useState('admin@citydriving.in');
-  const [password, setPassword] = useState('Cityadm');
+  const [userId, setUserId] = useState('admin');
+  const [password, setPassword] = useState('City123');
   const [isLoading, setIsLoading] = useState(false);
   const auth = useAuth();
   const router = useRouter();
@@ -31,9 +32,6 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (error: any) {
-      // Removing console.error to prevent Next.js error overlay on expected auth failures
-      // The user will see a descriptive toast message instead.
-      
       let errorMessage = 'Invalid credentials. Please check your ID and Password.';
       
       if (error.code === 'auth/operation-not-allowed') {
@@ -70,11 +68,19 @@ export default function LoginPage() {
           <CardContent className="space-y-4">
             <Alert className="bg-primary/5 border-primary/20">
               <Info className="h-4 w-4 text-primary" />
-              <AlertTitle className="text-sm font-semibold">First Time Setup?</AlertTitle>
-              <AlertDescription className="text-xs space-y-2 mt-1">
-                <p>1. Go to your <b>Firebase Console</b>.</p>
-                <p>2. Enable <b>Email/Password</b> in Auth settings.</p>
-                <p>3. Create a user: <b>admin@citydriving.in</b> with password <b>Cityadm</b>.</p>
+              <AlertTitle className="text-sm font-semibold">Required Setup</AlertTitle>
+              <AlertDescription className="text-xs mt-1">
+                <p className="mb-2">Please create these users in your <b>Firebase Console</b> (Authentication) with password <b>City123</b>:</p>
+                <ScrollArea className="h-24 rounded border p-2 bg-background/50">
+                  <ul className="space-y-1 list-disc list-inside">
+                    <li>admin@citydriving.in</li>
+                    <li>Branch1@citydriving.in</li>
+                    <li>Branch2@citydriving.in</li>
+                    <li>Branch3@citydriving.in</li>
+                    <li>Branch4@citydriving.in</li>
+                    <li>Branch5@citydriving.in</li>
+                  </ul>
+                </ScrollArea>
               </AlertDescription>
             </Alert>
             
@@ -84,7 +90,7 @@ export default function LoginPage() {
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="userId"
-                  placeholder="admin"
+                  placeholder="admin or Branch1"
                   className="pl-9"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
