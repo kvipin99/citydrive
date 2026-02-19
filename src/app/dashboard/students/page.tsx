@@ -99,14 +99,16 @@ export default function StudentsPage() {
       return;
     }
 
+    // Branch-specific ID generation: e.g., B1-00001
     const branchPrefix = formData.branch.split(' ')[1];
-    const studentCount = (students?.filter(s => s.branch === formData.branch).length || 0) + 1;
-    const studentId = `B${branchPrefix}-${String(studentCount).padStart(5, '0')}`;
+    const branchStudents = students?.filter(s => s.branch === formData.branch) || [];
+    const nextNumber = branchStudents.length + 1;
+    const studentId = `B${branchPrefix}-${String(nextNumber).padStart(5, '0')}`;
     
     const amount = calculateFees(formData.courses || [], formData.discount || 0);
     
     try {
-      toast({ title: "Registering Student", description: "Creating login credentials and saving record..." });
+      toast({ title: "Registering Student", description: `Generating ID ${studentId} and login...` });
       
       const authUid = await createStudentAuth(studentId);
       
@@ -127,7 +129,7 @@ export default function StudentsPage() {
 
       setIsAddDialogOpen(false);
       setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0 });
-      toast({ title: "Student Registered", description: `Login created for ${studentId}. Password: City123` });
+      toast({ title: "Registration Successful", description: `User ID: ${studentId}, Pass: City123` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Registration Failed", description: error.message || "Could not create student." });
     }
@@ -187,7 +189,7 @@ export default function StudentsPage() {
 
   const handleExportCSV = () => {
     if (!students) return;
-    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Aadhar", "Courses", "Total Fee", "Discount", "Amount Payable"];
+    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Aadhar", "Courses", "Total Fee", "Discount", "Amount Payable", "Balance Due"];
     const csvRows = [
       headers.join(','),
       ...students.map(s => [
@@ -202,7 +204,8 @@ export default function StudentsPage() {
         `"${s.courses.join('; ')}"`,
         (s.amount || 0) + (s.discount || 0),
         s.discount || 0,
-        s.amount || 0
+        s.amount || 0,
+        calculateBalanceDue(s)
       ].join(','))
     ];
     
@@ -211,9 +214,9 @@ export default function StudentsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `students_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `citydrive_students_${new Date().toISOString().split('T')[0]}.csv`);
     link.click();
-    toast({ title: "Report Exported", description: "The CSV file has been downloaded." });
+    toast({ title: "Report Exported", description: "CSV downloaded successfully." });
   };
 
   return (
@@ -223,14 +226,14 @@ export default function StudentsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Students Database</CardTitle>
-              <CardDescription>Real-time student management and automated login generation.</CardDescription>
+              <CardDescription>Automatic ID generation and login provisioning system.</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search students..."
+                  placeholder="Search ID or Name..."
                   className="pl-8 w-[200px] lg:w-[300px]"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -238,7 +241,7 @@ export default function StudentsPage() {
               </div>
               <Button variant="outline" onClick={handleExportCSV}>
                 <FileText className="mr-2 h-4 w-4" />
-                Export
+                Export CSV
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
@@ -249,8 +252,8 @@ export default function StudentsPage() {
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh]">
                   <DialogHeader>
-                    <DialogTitle>Register New Student</DialogTitle>
-                    <DialogDescription>Enter student details. A login will be generated automatically.</DialogDescription>
+                    <DialogTitle>New Registration</DialogTitle>
+                    <DialogDescription>Credentials will be auto-generated upon saving.</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="h-[60vh] pr-4">
                     <div className="grid gap-6 py-4">
@@ -266,17 +269,17 @@ export default function StudentsPage() {
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
-                          <Input placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                          <Input placeholder="Enter student name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Phone Number</Label>
-                          <Input placeholder="555-0101" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                          <Input placeholder="Contact number" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                         </div>
                         <div className="grid gap-2">
                           <Label>Guardian Name</Label>
-                          <Input placeholder="Parent Name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
+                          <Input placeholder="Parent/Guardian" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
                         </div>
                       </div>
                       <div className="grid gap-2">
@@ -333,7 +336,7 @@ export default function StudentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Student</TableHead>
+                  <TableHead>Student ID & Name</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Total Fee (₹)</TableHead>
@@ -345,7 +348,7 @@ export default function StudentsPage() {
                 {filteredStudents.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No student records found.
+                      No records found matching your search.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -358,8 +361,8 @@ export default function StudentsPage() {
                             <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="grid gap-0.5">
-                            <span className="font-medium">{student.name}</span>
-                            <span className="text-xs font-mono text-muted-foreground">{student.id}</span>
+                            <span className="font-bold text-primary">{student.id}</span>
+                            <span className="text-sm font-medium">{student.name}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -408,8 +411,8 @@ export default function StudentsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Edit Student Profile</DialogTitle>
-            <DialogDescription>Update info for {selectedStudent?.name}.</DialogDescription>
+            <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>Updating details for {selectedStudent?.id}.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="h-[60vh] pr-4">
             <div className="grid gap-6 py-4">
@@ -485,7 +488,7 @@ export default function StudentsPage() {
                   </Avatar>
                   <div>
                     <h3 className="text-2xl font-bold">{selectedStudent.name}</h3>
-                    <p className="text-sm font-mono text-muted-foreground">{selectedStudent.id}</p>
+                    <p className="text-sm font-bold text-primary uppercase tracking-widest">{selectedStudent.id}</p>
                     <Badge className="mt-2">{selectedStudent.status}</Badge>
                   </div>
                 </div>
@@ -504,19 +507,27 @@ export default function StudentsPage() {
                     <p className="text-sm">{selectedStudent.aadharNo || 'Not provided'}</p>
                   </div>
                   <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Branch</p>
+                    <p className="text-sm font-bold">{selectedStudent.branch}</p>
+                  </div>
+                  <div className="space-y-1">
                     <p className="text-xs font-semibold text-muted-foreground">Reg. Date</p>
                     <p className="text-sm">{selectedStudent.registrationDate}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Courses</p>
+                    <p className="text-sm">{selectedStudent.courses.join(', ')}</p>
                   </div>
                 </div>
                 <div className="space-y-4">
                    <h4 className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Financial Breakdown</h4>
                    <div className="grid grid-cols-2 gap-4">
                       <div className="p-3 border rounded-lg bg-muted/20">
-                        <p className="text-xs text-muted-foreground">Total Fee</p>
+                        <p className="text-xs text-muted-foreground">Payable Amount</p>
                         <p className="font-bold">₹{(selectedStudent.amount || 0).toLocaleString()}</p>
                       </div>
                       <div className="p-3 border rounded-lg bg-muted/20">
-                        <p className="text-xs text-muted-foreground">Balance Due</p>
+                        <p className="text-xs text-muted-foreground">Outstanding Balance</p>
                         <p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p>
                       </div>
                    </div>

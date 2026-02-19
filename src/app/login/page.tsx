@@ -2,22 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useAuth, useFirestore } from '@/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Car, Lock, User, Info } from 'lucide-react';
+import { Car, Lock, User, Info, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
+const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
+const DEFAULT_PASSWORD = 'City123';
 
 export default function LoginPage() {
   const [userId, setUserId] = useState('admin');
-  const [password, setPassword] = useState('City123');
+  const [password, setPassword] = useState(DEFAULT_PASSWORD);
   const [isLoading, setIsLoading] = useState(false);
   const auth = useAuth();
+  const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -29,21 +33,42 @@ export default function LoginPage() {
     const email = userId.includes('@') ? userId.trim() : `${userId.trim()}@citydriving.in`;
 
     try {
+      // 1. Attempt standard login
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (error: any) {
-      let errorMessage = 'Invalid credentials. Please check your ID and Password.';
-      
-      if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = 'Email/Password login is not enabled in your Firebase Console.';
-      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'Account not found or incorrect password. Please ensure you have created this user in the Firebase Console.';
+      // 2. Auto-provisioning logic: If it's a known staff ID and login fails, try to create it automatically
+      if (STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD) {
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          const uid = userCredential.user.uid;
+          
+          // Create the user profile document required for security rules
+          await setDoc(doc(db, 'users', uid), {
+            id: uid,
+            email: email,
+            role: userId === 'admin' ? 'Admin' : 'BranchManager',
+            branch: userId.startsWith('Branch') ? userId : 'HeadOffice',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          toast({
+            title: 'Account Provisioned',
+            description: `Auto-created system account for ${userId}.`,
+          });
+          router.push('/dashboard');
+          return;
+        } catch (createError: any) {
+          // If creation fails (e.g. user already exists but password was wrong), show standard error
+          console.error("Auto-provisioning failed:", createError);
+        }
       }
 
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: errorMessage,
+        description: 'Invalid User ID or Password. Please try again.',
       });
     } finally {
       setIsLoading(false);
@@ -59,38 +84,28 @@ export default function LoginPage() {
               <Car className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Citydrive Login</CardTitle>
+          <CardTitle className="text-2xl font-bold">Citydrive Portal</CardTitle>
           <CardDescription>
-            Management Portal
+            Enter your User ID to manage your branch
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <Alert className="bg-primary/5 border-primary/20">
-              <Info className="h-4 w-4 text-primary" />
-              <AlertTitle className="text-sm font-semibold">Required Setup</AlertTitle>
+              <Sparkles className="h-4 w-4 text-primary" />
+              <AlertTitle className="text-sm font-semibold">Instant Access Enabled</AlertTitle>
               <AlertDescription className="text-xs mt-1">
-                <p className="mb-2">Please create these users in your <b>Firebase Console</b> (Authentication) with password <b>City123</b>:</p>
-                <ScrollArea className="h-24 rounded border p-2 bg-background/50">
-                  <ul className="space-y-1 list-disc list-inside">
-                    <li>admin@citydriving.in</li>
-                    <li>Branch1@citydriving.in</li>
-                    <li>Branch2@citydriving.in</li>
-                    <li>Branch3@citydriving.in</li>
-                    <li>Branch4@citydriving.in</li>
-                    <li>Branch5@citydriving.in</li>
-                  </ul>
-                </ScrollArea>
+                System accounts (admin, Branch1-5) are automatically created on first login with password <b>{DEFAULT_PASSWORD}</b>.
               </AlertDescription>
             </Alert>
             
             <div className="space-y-2">
-              <Label htmlFor="userId">User ID / Email</Label>
+              <Label htmlFor="userId">User ID</Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="userId"
-                  placeholder="admin or Branch1"
+                  placeholder="e.g. admin or Branch1"
                   className="pl-9"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
@@ -115,7 +130,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button className="w-full h-11 text-base" type="submit" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? 'Verifying...' : 'Sign In'}
             </Button>
             <div className="text-[10px] text-center text-muted-foreground opacity-70">
               &copy; {new Date().getFullYear()} Citydrive Management System
