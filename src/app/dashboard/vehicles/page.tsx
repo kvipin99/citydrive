@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
@@ -6,17 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { vehicles } from "@/lib/mock-data";
-import { MoreHorizontal, PlusCircle, File } from "lucide-react";
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { collection } from "firebase/firestore";
+import { type Vehicle } from "@/lib/mock-data";
+import { MoreHorizontal, PlusCircle, File, Wrench } from "lucide-react";
 
 export default function VehiclesPage() {
+  const db = useFirestore();
+  const vehiclesQuery = useMemoFirebase(() => collection(db, 'vehicles'), [db]);
+  const { data: vehicles, isLoading } = useCollection<Vehicle>(vehiclesQuery);
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Vehicles</CardTitle>
-            <CardDescription>Manage your school's fleet of vehicles.</CardDescription>
+            <CardTitle>Fleet Management</CardTitle>
+            <CardDescription>Track maintenance and availability of school vehicles.</CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="outline">
@@ -31,67 +37,87 @@ export default function VehiclesPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>License Plate</TableHead>
-              <TableHead>Next Service</TableHead>
-              <TableHead>
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {vehicles.map((vehicle) => (
-              <TableRow key={vehicle.id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-3">
-                    <Image src={vehicle.imageUrl} alt={`${vehicle.make} ${vehicle.model}`} width={80} height={50} className="rounded-md" />
-                    <div className="grid gap-0.5">
-                      <span className="font-medium">{vehicle.make} {vehicle.model} ({vehicle.year})</span>
-                      <span className="text-xs text-muted-foreground">{vehicle.id}</span>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={vehicle.status === 'Available' ? 'default' : 'secondary'} className={
-                      vehicle.status === 'Available' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                      vehicle.status === 'In Use' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                      'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                   }>
-                    {vehicle.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="font-mono">{vehicle.licensePlate}</div>
-                </TableCell>
-                <TableCell>{new Date(vehicle.nextService).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button aria-haspopup="true" size="icon" variant="ghost">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Toggle menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>View Details</DropdownMenuItem>
-                      <DropdownMenuItem>Edit</DropdownMenuItem>
-                      <DropdownMenuItem>View Maintenance Log</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
-                        Remove Vehicle
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
+        {isLoading ? (
+           <div className="flex justify-center py-8">
+             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Plate</TableHead>
+                <TableHead>Next Service</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {vehicles?.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No vehicles registered in the fleet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                vehicles?.map((vehicle) => (
+                  <TableRow key={vehicle.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="relative h-12 w-20 overflow-hidden rounded-md border bg-muted">
+                          {vehicle.imageUrl ? (
+                            <Image 
+                              src={vehicle.imageUrl} 
+                              alt={vehicle.make} 
+                              fill 
+                              className="object-cover" 
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Wrench className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid gap-0.5">
+                          <span className="font-medium">{vehicle.make} {vehicle.model}</span>
+                          <span className="text-xs text-muted-foreground">{vehicle.year}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={vehicle.status === 'Available' ? 'default' : 'secondary'}>
+                        {vehicle.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs">{vehicle.licensePlate}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                         <span className="text-sm">{new Date(vehicle.nextService).toLocaleDateString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>Service Log</DropdownMenuItem>
+                          <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive">Decommission</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
       </CardContent>
     </Card>
   );
