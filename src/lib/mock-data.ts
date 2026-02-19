@@ -1,3 +1,10 @@
+export type Payment = {
+  date: string;
+  amount: number;
+  receiptNo: string;
+  method: 'Cash' | 'Online' | 'Cheque';
+};
+
 export type Student = {
   id: string;
   name: string;
@@ -10,13 +17,14 @@ export type Student = {
   guardianName?: string;
   aadharNo?: string;
   courses: string[];
-  amount: number;
+  amount: number; // Total Fee after Discount
   discount: number;
   onlineAppNo?: string;
   learnersDate?: string;
   testDate?: string;
   remarks?: string;
   branch: 'Branch 1' | 'Branch 2' | 'Branch 3' | 'Branch 4' | 'Branch 5';
+  payments: Payment[];
 };
 
 export type Instructor = {
@@ -68,33 +76,37 @@ export const COURSE_PRICES: Record<string, number> = {
 
 export const students: Student[] = [
   { 
-    id: 'S001', 
+    id: 'B1-00001', 
     name: 'Liam Johnson', 
     email: 'liam.j@example.com', 
     phone: '555-0101', 
     status: 'Active', 
     registrationDate: '2023-01-15', 
-    avatarUrl: 'https://picsum.photos/seed/S001/40/40',
+    avatarUrl: 'https://picsum.photos/seed/B100001/40/40',
     address: '123 Main St, Cityville',
     guardianName: 'Robert Johnson',
     aadharNo: '1234-5678-9012',
     courses: ['Basic Car (4-Wheeler)'],
-    amount: 5000,
+    amount: 4500,
     discount: 500,
     onlineAppNo: 'APP-1001',
     learnersDate: '2023-01-20',
     testDate: '2023-03-15',
     remarks: 'Quick learner, needs more reverse parking practice.',
-    branch: 'Branch 1'
+    branch: 'Branch 1',
+    payments: [
+      { date: '2023-01-15', amount: 2000, receiptNo: 'REC-1001', method: 'Cash' },
+      { date: '2023-02-15', amount: 1500, receiptNo: 'REC-1102', method: 'Online' }
+    ]
   },
   { 
-    id: 'S002', 
+    id: 'B2-00001', 
     name: 'Olivia Smith', 
     email: 'olivia.s@example.com', 
     phone: '555-0102', 
     status: 'Active', 
     registrationDate: '2023-02-20', 
-    avatarUrl: 'https://picsum.photos/seed/S002/40/40',
+    avatarUrl: 'https://picsum.photos/seed/B200001/40/40',
     address: '456 Oak Rd, Townsville',
     guardianName: 'Sarah Smith',
     aadharNo: '9876-5432-1098',
@@ -105,7 +117,10 @@ export const students: Student[] = [
     learnersDate: '2023-02-25',
     testDate: '2023-04-10',
     remarks: 'Already knows bike, focused on car now.',
-    branch: 'Branch 2'
+    branch: 'Branch 2',
+    payments: [
+      { date: '2023-02-20', amount: 7500, receiptNo: 'REC-1005', method: 'Online' }
+    ]
   },
 ];
 

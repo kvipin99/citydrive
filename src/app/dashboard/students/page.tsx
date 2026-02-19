@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { students as initialStudents, type Student, COURSE_PRICES } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, Mail, Phone, Calendar, Trash2, Edit2, Eye, MapPin, CreditCard, ClipboardList, Info, Building2 } from "lucide-react";
+import { MoreHorizontal, FileText, User, Mail, Phone, Calendar, Trash2, Edit2, Eye, MapPin, CreditCard, ClipboardList, Info, Building2, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const AVAILABLE_COURSES = Object.keys(COURSE_PRICES);
@@ -45,7 +45,8 @@ export default function StudentsPage() {
     learnersDate: '',
     testDate: '',
     remarks: '',
-    branch: 'Branch 1'
+    branch: 'Branch 1',
+    payments: []
   });
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function StudentsPage() {
     if (formData.amount !== finalAmount) {
       setFormData(prev => ({ ...prev, amount: finalAmount }));
     }
-  }, [formData.courses, formData.discount]);
+  }, [formData.courses, formData.discount, formData.amount]);
 
   const handleEditStudent = () => {
     if (!selectedStudent) return;
@@ -94,7 +95,7 @@ export default function StudentsPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Address", "Guardian", "Aadhar", "Courses", "Amount", "Discount", "Online App No", "Learners Date", "Test Date", "Remarks"];
+    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Address", "Guardian", "Aadhar", "Courses", "Total Fee", "Discount", "Balance Payable", "Online App No", "Learners Date", "Test Date", "Remarks"];
     const csvRows = [
       headers.join(','),
       ...students.map(s => [
@@ -109,8 +110,9 @@ export default function StudentsPage() {
         `"${s.guardianName || ''}"`,
         s.aadharNo || '',
         `"${s.courses.join('; ')}"`,
-        s.amount,
+        s.amount + s.discount,
         s.discount,
+        s.amount,
         s.onlineAppNo || '',
         s.learnersDate || '',
         s.testDate || '',
@@ -130,6 +132,14 @@ export default function StudentsPage() {
     document.body.removeChild(link);
     
     toast({ title: "Report Exported", description: "The CSV file has been downloaded successfully." });
+  };
+
+  const calculatePaidAmount = (student: Student) => {
+    return student.payments.reduce((sum, p) => sum + p.amount, 0);
+  };
+
+  const calculateBalanceDue = (student: Student) => {
+    return Math.max(0, student.amount - calculatePaidAmount(student));
   };
 
   return (
@@ -154,10 +164,10 @@ export default function StudentsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Student</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Branch</TableHead>
-                <TableHead>Courses</TableHead>
-                <TableHead>Fees</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Total Fee (₹)</TableHead>
+                <TableHead>Balance Due (₹)</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -172,8 +182,14 @@ export default function StudentsPage() {
                       </Avatar>
                       <div className="grid gap-0.5">
                         <span className="font-medium">{student.name}</span>
-                        <span className="text-xs text-muted-foreground">{student.id}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{student.id}</span>
                       </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm">{student.branch}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -187,22 +203,12 @@ export default function StudentsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">{student.branch}</span>
-                    </div>
+                    <div className="text-sm font-medium">₹{student.amount.toLocaleString()}</div>
+                    {student.discount > 0 && <div className="text-[10px] text-green-600">Incl. ₹{student.discount} disc.</div>}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-[200px]">
-                      {student.courses.map(c => (
-                        <Badge key={c} variant="outline" className="text-[10px] py-0">{c}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <p className="font-medium">₹{student.amount}</p>
-                      {student.discount > 0 && <p className="text-xs text-muted-foreground line-through">₹{student.amount + student.discount}</p>}
+                    <div className={`text-sm font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      ₹{calculateBalanceDue(student).toLocaleString()}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -327,7 +333,7 @@ export default function StudentsPage() {
                     <Input id="edit-discount" type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-amount">Total (₹)</Label>
+                    <Label htmlFor="edit-amount">Total Payable (₹)</Label>
                     <Input id="edit-amount" type="number" value={formData.amount} readOnly className="bg-muted" />
                   </div>
                 </div>
@@ -347,7 +353,7 @@ export default function StudentsPage() {
         <SheetContent side="right" className="sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>Student Detailed Profile</SheetTitle>
-            <SheetDescription>Comprehensive view of student records across branches.</SheetDescription>
+            <SheetDescription>Comprehensive view of student records and payments.</SheetDescription>
           </SheetHeader>
           {selectedStudent && (
             <ScrollArea className="h-[calc(100vh-100px)] mt-6 pr-4">
@@ -359,7 +365,7 @@ export default function StudentsPage() {
                   </Avatar>
                   <div>
                     <h3 className="text-2xl font-bold">{selectedStudent.name}</h3>
-                    <p className="text-sm text-muted-foreground">ID: {selectedStudent.id}</p>
+                    <p className="text-sm font-mono text-muted-foreground">{selectedStudent.id}</p>
                     <div className="flex gap-2 justify-center mt-2">
                       <Badge variant="outline" className="bg-primary/5">{selectedStudent.branch}</Badge>
                       <Badge>{selectedStudent.status}</Badge>
@@ -418,15 +424,59 @@ export default function StudentsPage() {
                       <Badge key={c} variant="secondary" className="px-3 py-1">{c}</Badge>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mt-2">
+                  <div className="grid grid-cols-3 gap-3 mt-2">
                     <div className="rounded-lg border bg-card p-3 shadow-sm">
-                      <p className="text-xs text-muted-foreground">Total Fee</p>
-                      <p className="text-lg font-bold text-primary">₹{selectedStudent.amount}</p>
+                      <p className="text-[10px] text-muted-foreground">Total Fee</p>
+                      <p className="text-sm font-bold">₹{(selectedStudent.amount + selectedStudent.discount).toLocaleString()}</p>
                     </div>
-                    <div className="rounded-lg border bg-card p-3 shadow-sm">
-                      <p className="text-xs text-muted-foreground">Discount Applied</p>
-                      <p className="text-lg font-bold text-green-600">₹{selectedStudent.discount}</p>
+                    <div className="rounded-lg border bg-card p-3 shadow-sm border-green-100 bg-green-50/30">
+                      <p className="text-[10px] text-green-700">Discount</p>
+                      <p className="text-sm font-bold text-green-600">- ₹{selectedStudent.discount.toLocaleString()}</p>
                     </div>
+                    <div className="rounded-lg border bg-card p-3 shadow-sm border-primary/20 bg-primary/5">
+                      <p className="text-[10px] text-primary">Balance Payable</p>
+                      <p className="text-sm font-bold text-primary">₹{selectedStudent.amount.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                   <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Receipt className="h-4 w-4" /> Payment Details
+                  </h4>
+                  <div className="rounded-lg border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="h-8 text-[10px] uppercase">Date</TableHead>
+                          <TableHead className="h-8 text-[10px] uppercase">Receipt</TableHead>
+                          <TableHead className="h-8 text-[10px] uppercase text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedStudent.payments.length > 0 ? (
+                          selectedStudent.payments.map((p, idx) => (
+                            <TableRow key={idx} className="h-10">
+                              <TableCell className="py-2 text-xs">{new Date(p.date).toLocaleDateString()}</TableCell>
+                              <TableCell className="py-2 text-xs font-mono">{p.receiptNo}</TableCell>
+                              <TableCell className="py-2 text-xs text-right font-medium">₹{p.amount.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="h-12 text-center text-xs text-muted-foreground">No payments recorded</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-lg bg-muted/40">
+                    <span className="text-sm font-medium">Net Outstanding Balance:</span>
+                    <span className={`text-lg font-bold ${calculateBalanceDue(selectedStudent) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      ₹{calculateBalanceDue(selectedStudent).toLocaleString()}
+                    </span>
                   </div>
                 </div>
 
