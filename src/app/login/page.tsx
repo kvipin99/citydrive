@@ -86,10 +86,13 @@ export default function LoginPage() {
               </div>
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-col gap-4">
             <Button className="w-full" type="submit" disabled={isLoading}>
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
+            <p className="text-xs text-center text-muted-foreground">
+              Default Password: <span className="font-mono font-bold">City123</span>
+            </p>
           </CardFooter>
         </form>
       </Card>
