@@ -6,6 +6,16 @@ export type Student = {
   status: 'Active' | 'Inactive' | 'Completed' | 'On Hold';
   registrationDate: string;
   avatarUrl: string;
+  address?: string;
+  guardianName?: string;
+  aadharNo?: string;
+  courses: string[];
+  amount: number;
+  discount: number;
+  onlineAppNo?: string;
+  learnersDate?: string;
+  testDate?: string;
+  remarks?: string;
 };
 
 export type Instructor = {
@@ -47,12 +57,53 @@ export type Transaction = {
   status: 'Paid' | 'Pending' | 'Overdue';
 };
 
+export const COURSE_PRICES: Record<string, number> = {
+  "Basic Car (4-Wheeler)": 5000,
+  "Advanced Car (4-Wheeler)": 8000,
+  "Two-Wheeler (Bike)": 2500,
+  "Heavy Vehicle": 12000,
+  "Refresher Course": 3000
+};
+
 export const students: Student[] = [
-  { id: 'S001', name: 'Liam Johnson', email: 'liam.j@example.com', phone: '555-0101', status: 'Active', registrationDate: '2023-01-15', avatarUrl: 'https://picsum.photos/seed/S001/40/40' },
-  { id: 'S002', name: 'Olivia Smith', email: 'olivia.s@example.com', phone: '555-0102', status: 'Active', registrationDate: '2023-02-20', avatarUrl: 'https://picsum.photos/seed/S002/40/40' },
-  { id: 'S003', name: 'Noah Williams', email: 'noah.w@example.com', phone: '555-0103', status: 'Completed', registrationDate: '2022-11-10', avatarUrl: 'https://picsum.photos/seed/S003/40/40' },
-  { id: 'S004', name: 'Emma Brown', email: 'emma.b@example.com', phone: '555-0104', status: 'On Hold', registrationDate: '2023-03-05', avatarUrl: 'https://picsum.photos/seed/S004/40/40' },
-  { id: 'S005', name: 'James Jones', email: 'james.j@example.com', phone: '555-0105', status: 'Active', registrationDate: '2023-04-12', avatarUrl: 'https://picsum.photos/seed/S005/40/40' },
+  { 
+    id: 'S001', 
+    name: 'Liam Johnson', 
+    email: 'liam.j@example.com', 
+    phone: '555-0101', 
+    status: 'Active', 
+    registrationDate: '2023-01-15', 
+    avatarUrl: 'https://picsum.photos/seed/S001/40/40',
+    address: '123 Main St, Cityville',
+    guardianName: 'Robert Johnson',
+    aadharNo: '1234-5678-9012',
+    courses: ['Basic Car (4-Wheeler)'],
+    amount: 5000,
+    discount: 500,
+    onlineAppNo: 'APP-1001',
+    learnersDate: '2023-01-20',
+    testDate: '2023-03-15',
+    remarks: 'Quick learner, needs more reverse parking practice.'
+  },
+  { 
+    id: 'S002', 
+    name: 'Olivia Smith', 
+    email: 'olivia.s@example.com', 
+    phone: '555-0102', 
+    status: 'Active', 
+    registrationDate: '2023-02-20', 
+    avatarUrl: 'https://picsum.photos/seed/S002/40/40',
+    address: '456 Oak Rd, Townsville',
+    guardianName: 'Sarah Smith',
+    aadharNo: '9876-5432-1098',
+    courses: ['Two-Wheeler (Bike)', 'Basic Car (4-Wheeler)'],
+    amount: 7500,
+    discount: 0,
+    onlineAppNo: 'APP-1002',
+    learnersDate: '2023-02-25',
+    testDate: '2023-04-10',
+    remarks: 'Already knows bike, focused on car now.'
+  },
 ];
 
 export const instructors: Instructor[] = [
