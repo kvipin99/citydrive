@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Car, Lock, User, AlertCircle, Info } from 'lucide-react';
+import { Car, Lock, User, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LoginPage() {
@@ -31,14 +31,15 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (error: any) {
-      console.error("Login error:", error.code, error.message);
+      // Removing console.error to prevent Next.js error overlay on expected auth failures
+      // The user will see a descriptive toast message instead.
       
       let errorMessage = 'Invalid credentials. Please check your ID and Password.';
       
       if (error.code === 'auth/operation-not-allowed') {
         errorMessage = 'Email/Password login is not enabled in your Firebase Console.';
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'Account not found or incorrect password. Ensure you have created this user in the Firebase Console.';
+        errorMessage = 'Account not found or incorrect password. Please ensure you have created this user in the Firebase Console.';
       }
 
       toast({
