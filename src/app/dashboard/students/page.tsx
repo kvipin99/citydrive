@@ -5,10 +5,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,11 +16,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
-import { collection, doc } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase";
+import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { COURSE_PRICES, type Student } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, Phone, Calendar, Trash2, Edit2, Eye, MapPin, CreditCard, ClipboardList, Info, Building2, Receipt, Search } from "lucide-react";
+import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { firebaseConfig } from "@/firebase/config";
 
 const AVAILABLE_COURSES = Object.keys(COURSE_PRICES);
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -32,31 +35,102 @@ export default function StudentsPage() {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<Student>>({});
+  const [formData, setFormData] = useState<Partial<Student>>({
+    branch: "Branch 1",
+    status: "Active",
+    courses: [],
+    discount: 0,
+  });
 
   const filteredStudents = students?.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     s.id.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
+  // Helper to create Auth login without signing out the current admin
+  const createStudentAuth = async (studentId: string) => {
+    const email = `${studentId}@citydriving.in`;
+    const password = "City123";
+    const secondaryAppName = `secondary-${studentId}-${Date.now()}`;
+    const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+    
+    try {
+      await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      await deleteApp(secondaryApp);
+      return true;
+    } catch (error: any) {
+      console.error("Error creating student auth:", error);
+      try { await deleteApp(secondaryApp); } catch {}
+      throw error;
+    }
+  };
+
+  const calculateFees = (courses: string[], discount: number) => {
+    const baseAmount = courses.reduce((sum, course) => sum + (COURSE_PRICES[course] || 0), 0);
+    return Math.max(0, baseAmount - (discount || 0));
+  };
+
+  const handleAddStudent = async () => {
+    if (!formData.name || !formData.branch) {
+      toast({ variant: "destructive", title: "Error", description: "Name and Branch are required." });
+      return;
+    }
+
+    const branchPrefix = formData.branch.split(' ')[1];
+    const studentCount = (students?.filter(s => s.branch === formData.branch).length || 0) + 1;
+    const studentId = `B${branchPrefix}-${String(studentCount).padStart(5, '0')}`;
+    
+    const amount = calculateFees(formData.courses || [], formData.discount || 0);
+    const newStudentData = {
+      ...formData,
+      id: studentId,
+      amount,
+      registrationDate: new Date().toISOString().split('T')[0],
+      payments: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      toast({ title: "Registering Student", description: "Creating login credentials and saving record..." });
+      
+      // 1. Create Login
+      await createStudentAuth(studentId);
+      
+      // 2. Save to Firestore
+      const studentRef = doc(db, 'students', studentId);
+      setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
+
+      setIsAddDialogOpen(false);
+      setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0 });
+      toast({ title: "Student Registered", description: `Login created for ${studentId}. Password: City123` });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Registration Failed", description: error.message || "Could not create student." });
+    }
+  };
+
   const handleUpdateStudent = () => {
     if (!selectedStudent) return;
     const studentRef = doc(db, 'students', selectedStudent.id);
     
-    // Calculate new amount based on courses and discount
     const courses = formData.courses || [];
-    const baseAmount = courses.reduce((sum, course) => sum + (COURSE_PRICES[course] || 0), 0);
-    const finalAmount = Math.max(0, baseAmount - (Number(formData.discount) || 0));
+    const amount = calculateFees(courses, formData.discount || 0);
 
-    const updatedData = { ...formData, amount: finalAmount };
+    const updatedData = { 
+      ...formData, 
+      amount,
+      updatedAt: serverTimestamp()
+    };
     
     updateDocumentNonBlocking(studentRef, updatedData);
     setIsEditDialogOpen(false);
-    toast({ title: "Student Updated", description: "The student profile has been updated in Firestore." });
+    toast({ title: "Student Updated", description: "The student profile has been updated." });
   };
 
   const handleDeleteStudent = (id: string) => {
@@ -85,9 +159,17 @@ export default function StudentsPage() {
     }
   };
 
+  const calculatePaidAmount = (student: Student) => {
+    return student.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+  };
+
+  const calculateBalanceDue = (student: Student) => {
+    return Math.max(0, (student.amount || 0) - calculatePaidAmount(student));
+  };
+
   const handleExportCSV = () => {
     if (!students) return;
-    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Address", "Guardian", "Aadhar", "Courses", "Total Fee", "Discount", "Balance Payable"];
+    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Aadhar", "Courses", "Total Fee", "Discount", "Amount Payable"];
     const csvRows = [
       headers.join(','),
       ...students.map(s => [
@@ -98,8 +180,6 @@ export default function StudentsPage() {
         s.status,
         s.branch,
         s.registrationDate,
-        `"${s.address || ''}"`,
-        `"${s.guardianName || ''}"`,
         s.aadharNo || '',
         `"${s.courses.join('; ')}"`,
         (s.amount || 0) + (s.discount || 0),
@@ -118,14 +198,6 @@ export default function StudentsPage() {
     toast({ title: "Report Exported", description: "The CSV file has been downloaded." });
   };
 
-  const calculatePaidAmount = (student: Student) => {
-    return student.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-  };
-
-  const calculateBalanceDue = (student: Student) => {
-    return Math.max(0, (student.amount || 0) - calculatePaidAmount(student));
-  };
-
   return (
     <div className="space-y-6">
       <Card>
@@ -133,7 +205,7 @@ export default function StudentsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Students Database</CardTitle>
-              <CardDescription>Real-time student management synchronized with Cloud Firestore.</CardDescription>
+              <CardDescription>Real-time student management and automated login generation.</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -150,6 +222,87 @@ export default function StudentsPage() {
                 <FileText className="mr-2 h-4 w-4" />
                 Export
               </Button>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0 })}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Register Student
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh]">
+                  <DialogHeader>
+                    <DialogTitle>Register New Student</DialogTitle>
+                    <DialogDescription>Enter student details. A login will be generated automatically.</DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="h-[60vh] pr-4">
+                    <div className="grid gap-6 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Branch</Label>
+                          <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Full Name</Label>
+                          <Input placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Phone Number</Label>
+                          <Input placeholder="555-0101" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Guardian Name</Label>
+                          <Input placeholder="Parent Name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Aadhar Number</Label>
+                        <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
+                      </div>
+                      <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
+                        <Label className="font-bold">Courses Selection</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {AVAILABLE_COURSES.map(course => (
+                            <div key={course} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={`add-course-${course}`} 
+                                checked={formData.courses?.includes(course)} 
+                                onCheckedChange={() => handleCourseToggle(course)}
+                              />
+                              <Label htmlFor={`add-course-${course}`} className="text-sm cursor-pointer">{course} (₹{COURSE_PRICES[course]})</Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Discount (₹)</Label>
+                          <Input type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Net Amount Payable</Label>
+                          <div className="h-10 px-3 py-2 border rounded-md bg-muted text-sm font-bold flex items-center">
+                            ₹{calculateFees(formData.courses || [], formData.discount || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Remarks</Label>
+                        <Textarea value={formData.remarks} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+                      </div>
+                    </div>
+                  </ScrollArea>
+                  <DialogFooter>
+                    <Button onClick={handleAddStudent}>Complete Registration</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </CardHeader>
@@ -183,7 +336,7 @@ export default function StudentsPage() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            <AvatarImage src={student.avatarUrl} alt={student.name} />
+                            <AvatarImage src={`https://picsum.photos/seed/${student.id}/40/40`} alt={student.name} />
                             <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="grid gap-0.5">
@@ -234,35 +387,28 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog & Profile Sheet remain same as functional implementation but using updated handlers */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Edit Student Profile</DialogTitle>
-            <DialogDescription>Update the information for {selectedStudent?.name}. Changes will sync instantly.</DialogDescription>
+            <DialogDescription>Update info for {selectedStudent?.name}.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="h-[60vh] pr-4">
             <div className="grid gap-6 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-branch">Branch</Label>
+                    <Label>Branch</Label>
                     <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Branch" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {BRANCHES.map(b => (
-                          <SelectItem key={b} value={b}>{b}</SelectItem>
-                        ))}
+                        {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-status">Status</Label>
+                    <Label>Status</Label>
                     <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Active">Active</SelectItem>
                         <SelectItem value="Completed">Completed</SelectItem>
@@ -274,15 +420,14 @@ export default function StudentsPage() {
                 </div>
                <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-name">Full Name</Label>
-                    <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                    <Label>Full Name</Label>
+                    <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-guardian">Parent/Guardian Name</Label>
-                    <Input id="edit-guardian" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
+                    <Label>Guardian Name</Label>
+                    <Input value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
                   </div>
                 </div>
-                {/* ... other form fields ... */}
                 <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
                   <Label className="font-bold">Courses Selection</Label>
                   <div className="grid grid-cols-2 gap-3">
@@ -298,11 +443,9 @@ export default function StudentsPage() {
                     ))}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-discount">Discount (₹)</Label>
-                    <Input id="edit-discount" type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
-                  </div>
+                <div className="grid gap-2">
+                  <Label>Discount (₹)</Label>
+                  <Input type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
                 </div>
             </div>
           </ScrollArea>
@@ -314,27 +457,41 @@ export default function StudentsPage() {
 
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
-          {/* Detailed view rendered using selectedStudent data */}
           {selectedStudent && (
             <ScrollArea className="h-full mt-6 pr-4">
               <div className="space-y-8 pb-10">
                 <div className="flex flex-col items-center gap-4 text-center">
                   <Avatar className="h-28 w-28">
-                    <AvatarImage src={selectedStudent.avatarUrl} />
+                    <AvatarImage src={`https://picsum.photos/seed/${selectedStudent.id}/112/112`} />
                     <AvatarFallback>{selectedStudent.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div>
                     <h3 className="text-2xl font-bold">{selectedStudent.name}</h3>
                     <p className="text-sm font-mono text-muted-foreground">{selectedStudent.id}</p>
+                    <Badge className="mt-2">{selectedStudent.status}</Badge>
                   </div>
                 </div>
                 <Separator />
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" /> Location</h4>
-                  <p className="text-sm">{selectedStudent.branch} - {selectedStudent.address || 'No address'}</p>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-2"><MapPin className="h-3 w-3" /> Address</p>
+                    <p className="text-sm">{selectedStudent.address || 'Not provided'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-2"><User className="h-3 w-3" /> Guardian</p>
+                    <p className="text-sm">{selectedStudent.guardianName || 'Not provided'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Aadhar No.</p>
+                    <p className="text-sm">{selectedStudent.aadharNo || 'Not provided'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Reg. Date</p>
+                    <p className="text-sm">{selectedStudent.registrationDate}</p>
+                  </div>
                 </div>
                 <div className="space-y-4">
-                   <h4 className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Financials</h4>
+                   <h4 className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Financial Breakdown</h4>
                    <div className="grid grid-cols-2 gap-4">
                       <div className="p-3 border rounded-lg bg-muted/20">
                         <p className="text-xs text-muted-foreground">Total Fee</p>
@@ -345,6 +502,28 @@ export default function StudentsPage() {
                         <p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p>
                       </div>
                    </div>
+                </div>
+                {selectedStudent.payments && selectedStudent.payments.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" /> Payment History</h4>
+                    <div className="space-y-2">
+                      {selectedStudent.payments.map((p, i) => (
+                        <div key={i} className="flex justify-between items-center p-3 border rounded-lg text-sm">
+                          <div>
+                            <p className="font-medium">₹{p.amount.toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground">{p.receiptNo} • {p.method}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{p.date}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Remarks</h4>
+                  <div className="p-4 border rounded-lg bg-muted/30 text-sm text-muted-foreground italic">
+                    {selectedStudent.remarks || "No additional remarks."}
+                  </div>
                 </div>
               </div>
             </ScrollArea>
