@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Car, Lock, User, Info, Sparkles } from 'lucide-react';
+import { Car, Lock, User, Sparkles, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [userId, setUserId] = useState('admin');
   const [password, setPassword] = useState(DEFAULT_PASSWORD);
   const [isLoading, setIsLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
   const auth = useAuth();
   const db = useFirestore();
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function LoginPage() {
     if (!userId || !password) return;
 
     setIsLoading(true);
+    setSetupError(null);
     const email = userId.includes('@') ? userId.trim() : `${userId.trim()}@citydriving.in`;
 
     try {
@@ -60,15 +62,19 @@ export default function LoginPage() {
           router.push('/dashboard');
           return;
         } catch (createError: any) {
-          // If creation fails (e.g. user already exists but password was wrong), show standard error
-          console.error("Auto-provisioning failed:", createError);
+          if (createError.code === 'auth/operation-not-allowed') {
+            setSetupError('Email/Password provider is not enabled in Firebase Console.');
+          }
+          // If creation fails for other reasons (like user already exists), we fall through to the error toast
         }
       }
 
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: 'Invalid User ID or Password. Please try again.',
+        description: error.code === 'auth/operation-not-allowed' 
+          ? 'System configuration required: Enable Email/Password in Firebase Console.'
+          : 'Invalid User ID or Password. Please try again.',
       });
     } finally {
       setIsLoading(false);
@@ -91,13 +97,23 @@ export default function LoginPage() {
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-            <Alert className="bg-primary/5 border-primary/20">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <AlertTitle className="text-sm font-semibold">Instant Access Enabled</AlertTitle>
-              <AlertDescription className="text-xs mt-1">
-                System accounts (admin, Branch1-5) are automatically created on first login with password <b>{DEFAULT_PASSWORD}</b>.
-              </AlertDescription>
-            </Alert>
+            {setupError ? (
+              <Alert variant="destructive" className="bg-destructive/10">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Configuration Required</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Please go to <b>Firebase Console</b> &rarr; <b>Authentication</b> &rarr; <b>Sign-in method</b> and enable <b>Email/Password</b> to allow auto-creation of accounts.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="bg-primary/5 border-primary/20">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <AlertTitle className="text-sm font-semibold">Instant Access Enabled</AlertTitle>
+                <AlertDescription className="text-xs mt-1">
+                  System accounts (admin, Branch1-5) are automatically created on first login with password <b>{DEFAULT_PASSWORD}</b>.
+                </AlertDescription>
+              </Alert>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="userId">User ID</Label>
