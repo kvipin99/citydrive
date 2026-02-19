@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'DriveFlow - Driving School Management',
+  title: 'Citydrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
 };
 

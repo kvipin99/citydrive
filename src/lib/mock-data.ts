@@ -56,9 +56,9 @@ export const students: Student[] = [
 ];
 
 export const instructors: Instructor[] = [
-  { id: 'I01', name: 'Olivia Smith', email: 'olivia.s@driveflow.com', phone: '555-0201', vehicle: 'Toyota Corolla', status: 'Active', avatarUrl: 'https://picsum.photos/seed/I01/40/40' },
-  { id: 'I02', name: 'Ethan Wilson', email: 'ethan.w@driveflow.com', phone: '555-0202', vehicle: 'Honda Civic', status: 'Active', avatarUrl: 'https://picsum.photos/seed/I02/40/40' },
-  { id: 'I03', name: 'Noah Brown', email: 'noah.b@driveflow.com', phone: '555-0203', vehicle: 'Ford Focus', status: 'On Leave', avatarUrl: 'https://picsum.photos/seed/I03/40/40' },
+  { id: 'I01', name: 'Olivia Smith', email: 'olivia.s@citydriving.in', phone: '555-0201', vehicle: 'Toyota Corolla', status: 'Active', avatarUrl: 'https://picsum.photos/seed/I01/40/40' },
+  { id: 'I02', name: 'Ethan Wilson', email: 'ethan.w@citydriving.in', phone: '555-0202', vehicle: 'Honda Civic', status: 'Active', avatarUrl: 'https://picsum.photos/seed/I02/40/40' },
+  { id: 'I03', name: 'Noah Brown', email: 'noah.b@citydriving.in', phone: '555-0203', vehicle: 'Ford Focus', status: 'On Leave', avatarUrl: 'https://picsum.photos/seed/I03/40/40' },
 ];
 
 export const vehicles: Vehicle[] = [

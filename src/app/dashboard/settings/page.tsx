@@ -37,11 +37,11 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="school-name">School Name</Label>
-              <Input id="school-name" defaultValue="DriveFlow" />
+              <Input id="school-name" defaultValue="Citydrive" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="school-email">Contact Email</Label>
-              <Input id="school-email" type="email" defaultValue="contact@driveflow.com" />
+              <Input id="school-email" type="email" defaultValue="contact@citydriving.in" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="school-phone">Contact Phone</Label>
@@ -69,7 +69,7 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="admin-email">Email</Label>
-              <Input id="admin-email" type="email" defaultValue="admin@driveflow.com" />
+              <Input id="admin-email" type="email" defaultValue="admin@citydriving.in" />
             </div>
             <Button variant="outline">Change Password</Button>
             <br/>
