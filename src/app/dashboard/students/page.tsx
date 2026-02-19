@@ -54,7 +54,8 @@ export default function StudentsPage() {
 
   const filteredStudents = students?.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+    s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.phone?.includes(searchQuery)
   ) || [];
 
   const createStudentAuth = async (studentId: string) => {
@@ -233,7 +234,7 @@ export default function StudentsPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search ID or Name..."
+                  placeholder="Search ID, Name or Mobile..."
                   className="pl-8 w-[200px] lg:w-[300px]"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
