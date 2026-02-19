@@ -16,6 +16,7 @@ export type Student = {
   learnersDate?: string;
   testDate?: string;
   remarks?: string;
+  branch: 'Branch 1' | 'Branch 2' | 'Branch 3' | 'Branch 4' | 'Branch 5';
 };
 
 export type Instructor = {
@@ -83,7 +84,8 @@ export const students: Student[] = [
     onlineAppNo: 'APP-1001',
     learnersDate: '2023-01-20',
     testDate: '2023-03-15',
-    remarks: 'Quick learner, needs more reverse parking practice.'
+    remarks: 'Quick learner, needs more reverse parking practice.',
+    branch: 'Branch 1'
   },
   { 
     id: 'S002', 
@@ -102,7 +104,8 @@ export const students: Student[] = [
     onlineAppNo: 'APP-1002',
     learnersDate: '2023-02-25',
     testDate: '2023-04-10',
-    remarks: 'Already knows bike, focused on car now.'
+    remarks: 'Already knows bike, focused on car now.',
+    branch: 'Branch 2'
   },
 ];
 

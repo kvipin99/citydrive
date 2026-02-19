@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,20 +17,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { students as initialStudents, type Student, COURSE_PRICES } from "@/lib/mock-data";
-import { MoreHorizontal, PlusCircle, File, User, Mail, Phone, Calendar, Trash2, Edit2, Eye, MapPin, CreditCard, ClipboardList, Info } from "lucide-react";
+import { MoreHorizontal, FileText, User, Mail, Phone, Calendar, Trash2, Edit2, Eye, MapPin, CreditCard, ClipboardList, Info, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const AVAILABLE_COURSES = Object.keys(COURSE_PRICES);
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const { toast } = useToast();
 
-  // Form State
   const [formData, setFormData] = useState<Partial<Student>>({
     name: '',
     email: '',
@@ -45,10 +44,10 @@ export default function StudentsPage() {
     onlineAppNo: '',
     learnersDate: '',
     testDate: '',
-    remarks: ''
+    remarks: '',
+    branch: 'Branch 1'
   });
 
-  // Automatically calculate amount when courses or discount change
   useEffect(() => {
     const courses = formData.courses || [];
     const baseAmount = courses.reduce((sum, course) => sum + (COURSE_PRICES[course] || 0), 0);
@@ -58,32 +57,6 @@ export default function StudentsPage() {
       setFormData(prev => ({ ...prev, amount: finalAmount }));
     }
   }, [formData.courses, formData.discount]);
-
-  const handleAddStudent = () => {
-    const newStudent: Student = {
-      id: `S${(students.length + 1).toString().padStart(3, '0')}`,
-      name: formData.name || '',
-      email: formData.email || '',
-      phone: formData.phone || '',
-      status: (formData.status as any) || 'Active',
-      registrationDate: new Date().toISOString().split('T')[0],
-      avatarUrl: `https://picsum.photos/seed/${Math.random()}/100/100`,
-      address: formData.address,
-      guardianName: formData.guardianName,
-      aadharNo: formData.aadharNo,
-      courses: formData.courses || [],
-      amount: formData.amount || 0,
-      discount: formData.discount || 0,
-      onlineAppNo: formData.onlineAppNo,
-      learnersDate: formData.learnersDate,
-      testDate: formData.testDate,
-      remarks: formData.remarks
-    };
-    setStudents([...students, newStudent]);
-    setIsAddDialogOpen(false);
-    resetForm();
-    toast({ title: "Student Registered", description: `${newStudent.name} has been successfully registered.` });
-  };
 
   const handleEditStudent = () => {
     if (!selectedStudent) return;
@@ -111,25 +84,6 @@ export default function StudentsPage() {
     setIsProfileOpen(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      status: 'Active',
-      address: '',
-      guardianName: '',
-      aadharNo: '',
-      courses: [],
-      amount: 0,
-      discount: 0,
-      onlineAppNo: '',
-      learnersDate: '',
-      testDate: '',
-      remarks: ''
-    });
-  };
-
   const handleCourseToggle = (course: string) => {
     const currentCourses = formData.courses || [];
     if (currentCourses.includes(course)) {
@@ -139,6 +93,45 @@ export default function StudentsPage() {
     }
   };
 
+  const handleExportCSV = () => {
+    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Address", "Guardian", "Aadhar", "Courses", "Amount", "Discount", "Online App No", "Learners Date", "Test Date", "Remarks"];
+    const csvRows = [
+      headers.join(','),
+      ...students.map(s => [
+        s.id,
+        `"${s.name}"`,
+        s.email,
+        s.phone,
+        s.status,
+        s.branch,
+        s.registrationDate,
+        `"${s.address || ''}"`,
+        `"${s.guardianName || ''}"`,
+        s.aadharNo || '',
+        `"${s.courses.join('; ')}"`,
+        s.amount,
+        s.discount,
+        s.onlineAppNo || '',
+        s.learnersDate || '',
+        s.testDate || '',
+        `"${s.remarks || ''}"`
+      ].join(','))
+    ];
+    
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `students_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Report Exported", description: "The CSV file has been downloaded successfully." });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -146,111 +139,13 @@ export default function StudentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Students</CardTitle>
-              <CardDescription>Manage your students and their registration details.</CardDescription>
+              <CardDescription>Manage your students and their registration details across branches.</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline">
-                <File className="mr-2 h-4 w-4" />
-                Export
+              <Button variant="outline" onClick={handleExportCSV}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export CSV
               </Button>
-              <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if (!open) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Student
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh]">
-                  <DialogHeader>
-                    <DialogTitle>Register New Student</DialogTitle>
-                    <DialogDescription>Fill in the comprehensive details to register a new student.</DialogDescription>
-                  </DialogHeader>
-                  <ScrollArea className="h-[60vh] pr-4">
-                    <div className="grid gap-6 py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="name">Full Name</Label>
-                          <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="John Doe" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="guardianName">Parent/Guardian Name</Label>
-                          <Input id="guardianName" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} placeholder="Robert Doe" />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="email">Email</Label>
-                          <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="john@example.com" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="phone">Mobile Number</Label>
-                          <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="555-0000" />
-                        </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="address">Address</Label>
-                        <Input id="address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="123 Street Name, City" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="aadharNo">Aadhar Number</Label>
-                          <Input id="aadharNo" value={formData.aadharNo} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} placeholder="XXXX-XXXX-XXXX" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="onlineAppNo">Online Application No.</Label>
-                          <Input id="onlineAppNo" value={formData.onlineAppNo} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} placeholder="APP-12345" />
-                        </div>
-                      </div>
-                      
-                      <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
-                        <Label className="font-bold">Courses Selection</Label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {AVAILABLE_COURSES.map(course => (
-                            <div key={course} className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`course-${course}`} 
-                                checked={formData.courses?.includes(course)} 
-                                onCheckedChange={() => handleCourseToggle(course)}
-                              />
-                              <Label htmlFor={`course-${course}`} className="text-sm cursor-pointer">{course} (${COURSE_PRICES[course]})</Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="discount">Discount Amount ($)</Label>
-                          <Input id="discount" type="number" value={formData.discount} onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="amount">Total Amount ($) - Auto Calculated</Label>
-                          <Input id="amount" type="number" value={formData.amount} readOnly className="bg-muted" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="learnersDate">Learners License Date</Label>
-                          <Input id="learnersDate" type="date" value={formData.learnersDate} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="testDate">Test Date</Label>
-                          <Input id="testDate" type="date" value={formData.testDate} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="remarks">Remarks</Label>
-                        <Textarea id="remarks" value={formData.remarks} onChange={(e) => setFormData({...formData, remarks: e.target.value})} placeholder="Any additional notes..." />
-                      </div>
-                    </div>
-                  </ScrollArea>
-                  <DialogFooter>
-                    <Button onClick={handleAddStudent}>Register Student</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </div>
           </div>
         </CardHeader>
@@ -260,6 +155,7 @@ export default function StudentsPage() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Branch</TableHead>
                 <TableHead>Courses</TableHead>
                 <TableHead>Fees</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -289,6 +185,12 @@ export default function StudentsPage() {
                      }>
                       {student.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm">{student.branch}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
@@ -333,7 +235,6 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog - Reuse the structure of Add Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
@@ -342,17 +243,20 @@ export default function StudentsPage() {
           </DialogHeader>
           <ScrollArea className="h-[60vh] pr-4">
             <div className="grid gap-6 py-4">
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-name">Full Name</Label>
-                    <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-guardian">Parent/Guardian Name</Label>
-                    <Input id="edit-guardian" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
-                  </div>
-                </div>
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-branch">Branch</Label>
+                    <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BRANCHES.map(b => (
+                          <SelectItem key={b} value={b}>{b}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="edit-status">Status</Label>
                     <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
@@ -367,12 +271,27 @@ export default function StudentsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-name">Full Name</Label>
+                    <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-guardian">Parent/Guardian Name</Label>
+                    <Input id="edit-guardian" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-email">Email</Label>
+                    <Input id="edit-email" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="edit-phone">Mobile No.</Label>
                     <Input id="edit-phone" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                   </div>
                 </div>
-                {/* ... (Other fields can be added here mirroring the add dialog) */}
                 <div className="grid gap-2">
                   <Label htmlFor="edit-address">Address</Label>
                   <Input id="edit-address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} />
@@ -424,12 +343,11 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Sheet */}
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>Student Detailed Profile</SheetTitle>
-            <SheetDescription>Comprehensive view of student records.</SheetDescription>
+            <SheetDescription>Comprehensive view of student records across branches.</SheetDescription>
           </SheetHeader>
           {selectedStudent && (
             <ScrollArea className="h-[calc(100vh-100px)] mt-6 pr-4">
@@ -442,7 +360,10 @@ export default function StudentsPage() {
                   <div>
                     <h3 className="text-2xl font-bold">{selectedStudent.name}</h3>
                     <p className="text-sm text-muted-foreground">ID: {selectedStudent.id}</p>
-                    <Badge className="mt-2">{selectedStudent.status}</Badge>
+                    <div className="flex gap-2 justify-center mt-2">
+                      <Badge variant="outline" className="bg-primary/5">{selectedStudent.branch}</Badge>
+                      <Badge>{selectedStudent.status}</Badge>
+                    </div>
                   </div>
                 </div>
 
@@ -539,6 +460,10 @@ export default function StudentsPage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Online App No.</p>
                         <p className="text-sm font-medium">{selectedStudent.onlineAppNo || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Branch</p>
+                        <p className="text-sm font-medium">{selectedStudent.branch}</p>
                       </div>
                     </div>
                   </div>
