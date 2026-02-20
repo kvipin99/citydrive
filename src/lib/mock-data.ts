@@ -17,6 +17,8 @@ export type Student = {
   guardianName?: string;
   aadharNo?: string;
   courses: string[];
+  specialCourseFee?: number;
+  specialCourseName?: string;
   amount: number; // Total Fee after Discount
   discount: number;
   onlineAppNo?: string;
@@ -71,7 +73,8 @@ export const COURSE_PRICES: Record<string, number> = {
   "Advanced Car (4-Wheeler)": 8000,
   "Two-Wheeler (Bike)": 2500,
   "Heavy Vehicle": 12000,
-  "Refresher Course": 3000
+  "Refresher Course": 3000,
+  "Other Special Course": 0
 };
 
 export const students: Student[] = [

@@ -50,6 +50,8 @@ export default function StudentsPage() {
     status: "Active",
     courses: [],
     discount: 0,
+    specialCourseFee: 0,
+    specialCourseName: "",
   });
 
   const filteredStudents = students?.filter(s => 
@@ -69,7 +71,6 @@ export default function StudentsPage() {
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const uid = userCredential.user.uid;
       
-      // Also create the user role document required for security rules
       const userRef = doc(db, 'users', uid);
       setDocumentNonBlocking(userRef, {
         id: uid,
@@ -89,9 +90,10 @@ export default function StudentsPage() {
     }
   };
 
-  const calculateFees = (courses: string[], discount: number) => {
+  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, course) => sum + (COURSE_PRICES[course] || 0), 0);
-    return Math.max(0, baseAmount - (discount || 0));
+    const totalWithSpecial = baseAmount + (courses.includes("Other Special Course") ? (specialFee || 0) : 0);
+    return Math.max(0, totalWithSpecial - (discount || 0));
   };
 
   const handleAddStudent = async () => {
@@ -100,13 +102,12 @@ export default function StudentsPage() {
       return;
     }
 
-    // Branch-specific ID generation: e.g., B1-00001
     const branchPrefix = formData.branch.split(' ')[1];
     const branchStudents = students?.filter(s => s.branch === formData.branch) || [];
     const nextNumber = branchStudents.length + 1;
     const studentId = `B${branchPrefix}-${String(nextNumber).padStart(5, '0')}`;
     
-    const amount = calculateFees(formData.courses || [], formData.discount || 0);
+    const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
       toast({ title: "Registering Student", description: `Generating ID ${studentId} and login...` });
@@ -129,7 +130,7 @@ export default function StudentsPage() {
       setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
 
       setIsAddDialogOpen(false);
-      setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0 });
+      setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0, specialCourseFee: 0, specialCourseName: "" });
       toast({ title: "Registration Successful", description: `User ID: ${studentId}, Pass: City123` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Registration Failed", description: error.message || "Could not create student." });
@@ -141,7 +142,7 @@ export default function StudentsPage() {
     const studentRef = doc(db, 'students', selectedStudent.id);
     
     const courses = formData.courses || [];
-    const amount = calculateFees(courses, formData.discount || 0);
+    const amount = calculateFees(courses, formData.discount || 0, formData.specialCourseFee || 0);
 
     const updatedData = { 
       ...formData, 
@@ -190,7 +191,7 @@ export default function StudentsPage() {
 
   const handleExportCSV = () => {
     if (!students) return;
-    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Aadhar", "Courses", "Total Fee", "Discount", "Amount Payable", "Balance Due"];
+    const headers = ["ID", "Name", "Email", "Phone", "Status", "Branch", "Registration Date", "Aadhar", "Courses", "Special Course", "Total Fee", "Discount", "Amount Payable", "Balance Due"];
     const csvRows = [
       headers.join(','),
       ...students.map(s => [
@@ -203,6 +204,7 @@ export default function StudentsPage() {
         s.registrationDate,
         s.aadharNo || '',
         `"${s.courses.join('; ')}"`,
+        `"${s.specialCourseName || ''}"`,
         (s.amount || 0) + (s.discount || 0),
         s.discount || 0,
         s.amount || 0,
@@ -246,7 +248,7 @@ export default function StudentsPage() {
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0 })}>
+                  <Button onClick={() => setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0, specialCourseFee: 0, specialCourseName: "" })}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Register Student
                   </Button>
@@ -297,10 +299,22 @@ export default function StudentsPage() {
                                 checked={formData.courses?.includes(course)} 
                                 onCheckedChange={() => handleCourseToggle(course)}
                               />
-                              <Label htmlFor={`add-course-${course}`} className="text-sm cursor-pointer">{course} (₹{COURSE_PRICES[course]})</Label>
+                              <Label htmlFor={`add-course-${course}`} className="text-sm cursor-pointer">{course} {COURSE_PRICES[course] > 0 ? `(₹${COURSE_PRICES[course]})` : ''}</Label>
                             </div>
                           ))}
                         </div>
+                        {formData.courses?.includes("Other Special Course") && (
+                          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                            <div className="grid gap-2">
+                              <Label>Special Course Name</Label>
+                              <Input placeholder="Enter course name" value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Special Course Fee (₹)</Label>
+                              <Input type="number" value={formData.specialCourseFee} onChange={(e) => setFormData({...formData, specialCourseFee: Number(e.target.value)})} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
@@ -310,7 +324,7 @@ export default function StudentsPage() {
                         <div className="grid gap-2">
                           <Label>Net Amount Payable</Label>
                           <div className="h-10 px-3 py-2 border rounded-md bg-muted text-sm font-bold flex items-center">
-                            ₹{calculateFees(formData.courses || [], formData.discount || 0).toLocaleString()}
+                            ₹{calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0).toLocaleString()}
                           </div>
                         </div>
                       </div>
@@ -464,6 +478,18 @@ export default function StudentsPage() {
                       </div>
                     ))}
                   </div>
+                  {formData.courses?.includes("Other Special Course") && (
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                      <div className="grid gap-2">
+                        <Label>Special Course Name</Label>
+                        <Input placeholder="Enter course name" value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Special Course Fee (₹)</Label>
+                        <Input type="number" value={formData.specialCourseFee} onChange={(e) => setFormData({...formData, specialCourseFee: Number(e.target.value)})} />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Discount (₹)</Label>
@@ -517,7 +543,10 @@ export default function StudentsPage() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-muted-foreground">Courses</p>
-                    <p className="text-sm">{selectedStudent.courses.join(', ')}</p>
+                    <p className="text-sm">
+                      {selectedStudent.courses.join(', ')}
+                      {selectedStudent.courses.includes("Other Special Course") && selectedStudent.specialCourseName && ` (${selectedStudent.specialCourseName})`}
+                    </p>
                   </div>
                 </div>
                 <div className="space-y-4">
