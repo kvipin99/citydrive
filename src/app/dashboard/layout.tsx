@@ -7,6 +7,7 @@ import { Car } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { AutoBackupTrigger } from '@/components/dashboard/auto-backup-trigger';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
@@ -37,6 +38,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <div className="bg-sidebar">
+        {/* Background Automated Tasks */}
+        <AutoBackupTrigger />
+        
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-2 p-2">

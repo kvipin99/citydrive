@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Mail, ShieldCheck, DatabaseBackup } from "lucide-react";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -24,7 +26,7 @@ export default function SettingsPage() {
       <TabsList className="grid w-full grid-cols-4">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="profile">Profile</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        <TabsTrigger value="automation">Automation</TabsTrigger>
         <TabsTrigger value="billing">Billing</TabsTrigger>
       </TabsList>
 
@@ -78,37 +80,56 @@ export default function SettingsPage() {
         </Card>
       </TabsContent>
 
-      <TabsContent value="notifications">
+      <TabsContent value="automation">
         <Card>
           <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-            <CardDescription>Manage how you receive notifications.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <DatabaseBackup className="h-5 w-5 text-primary" />
+              Backup Automation
+            </CardTitle>
+            <CardDescription>Configure automatic email backups (Twice per week).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Email Notifications</h3>
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <p className="text-sm">New Student Registrations</p>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Enable Auto-Backup</Label>
+                  <p className="text-sm text-muted-foreground">Automatically send database snapshots twice a week.</p>
+                </div>
                 <Switch defaultChecked />
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <p className="text-sm">Class Cancellations</p>
-                <Switch defaultChecked />
+
+              <div className="grid gap-2">
+                <Label htmlFor="backup-email">Destination Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input id="backup-email" type="email" className="pl-9" defaultValue="admin@citydriving.in" />
+                </div>
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <p className="text-sm">Weekly Performance Summary</p>
-                <Switch />
+
+              <div className="grid gap-2">
+                <Label>Backup Frequency</Label>
+                <Select defaultValue="twice-week">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily (Every 24 Hours)</SelectItem>
+                    <SelectItem value="twice-week">Twice a Week (Every 3.5 Days)</SelectItem>
+                    <SelectItem value="weekly">Weekly (Every 7 Days)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Next automated backup scheduled for 3 days from now.
               </div>
             </div>
+            
             <Separator />
-             <div className="space-y-2">
-              <h3 className="text-lg font-medium">Push Notifications</h3>
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <p className="text-sm">Urgent Alerts</p>
-                <Switch defaultChecked />
-              </div>
-            </div>
-            <Button onClick={() => handleSaveChanges('Notifications')}>Save Changes</Button>
+            
+            <Button onClick={() => handleSaveChanges('Automation')}>Update Automation Settings</Button>
           </CardContent>
         </Card>
       </TabsContent>
@@ -138,7 +159,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </TabsContent>
-
     </Tabs>
   );
 }
