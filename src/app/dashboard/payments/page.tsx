@@ -153,13 +153,16 @@ export default function PaymentsPage() {
   };
 
   const handleDeletePayment = async (payment: PaymentRecord) => {
+    if (!isAdmin) return;
     if (!confirm(`Are you sure you want to delete receipt #${payment.receiptNo}? This will also remove it from the student's profile.`)) return;
 
     const paymentRef = doc(db, 'payments', payment.id);
     const studentRef = doc(db, 'students', payment.studentId);
 
+    // 1. Delete the central record
     deleteDocumentNonBlocking(paymentRef);
 
+    // 2. Update the student's internal payment array
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {

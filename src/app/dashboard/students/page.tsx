@@ -310,6 +310,39 @@ export default function StudentsPage() {
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} saved.` });
   };
 
+  const handleDeletePayment = async (payId: string, receiptNo: string) => {
+    if (!isAdmin || !selectedStudent) return;
+    if (!confirm(`Delete receipt #${receiptNo}? This cannot be undone.`)) return;
+
+    const paymentRef = doc(db, 'payments', payId);
+    const studentRef = doc(db, 'students', selectedStudent.id);
+
+    deleteDocumentNonBlocking(paymentRef);
+
+    try {
+      const studentSnap = await getDoc(studentRef);
+      if (studentSnap.exists()) {
+        const currentPayments = studentSnap.data().payments || [];
+        const updatedPayments = currentPayments.filter((p: any) => p.id !== payId);
+        
+        updateDocumentNonBlocking(studentRef, {
+          payments: updatedPayments,
+          updatedAt: serverTimestamp(),
+        });
+        
+        // Update local UI state for the sheet if needed
+        setSelectedStudent({
+          ...selectedStudent,
+          payments: updatedPayments
+        });
+      }
+    } catch (e) {
+      console.error("Failed to remove payment from student record:", e);
+    }
+
+    toast({ title: "Payment Deleted", description: `Receipt #${receiptNo} removed.` });
+  };
+
   const handleExportCSV = () => {
     if (!students || students.length === 0) {
       toast({ variant: "destructive", title: "Export Failed", description: "No student data available to export." });
@@ -819,11 +852,23 @@ export default function StudentsPage() {
                                 <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
                                 <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
                                 <TableCell>{p.method}</TableCell>
-                                <TableCell className="text-muted-foreground italic text-right">#{p.receiptNo}</TableCell>
+                                <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
+                                <TableCell className="text-right">
+                                  {isAdmin && p.id && (
+                                    <Button 
+                                      size="icon" 
+                                      variant="ghost" 
+                                      className="h-6 w-6 text-destructive" 
+                                      onClick={() => handleDeletePayment(p.id, p.receiptNo)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                             {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
-                              <TableRow><TableCell className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
+                              <TableRow><TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
                             )}
                           </TableBody>
                         </Table>
