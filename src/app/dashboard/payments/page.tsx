@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, MoreHorizontal, Trash2, Edit2 } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt, User, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -65,7 +65,6 @@ export default function PaymentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     receiptNo: '',
@@ -76,7 +75,6 @@ export default function PaymentsPage() {
   const resetForm = () => {
     setSelectedStudent(null);
     setSearchTerm('');
-    setEditingPayment(null);
     setPaymentData({ 
       amount: 0, 
       receiptNo: '', 
@@ -105,7 +103,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    const paymentId = editingPayment ? editingPayment.id : `PAY-${Date.now()}`;
+    const paymentId = `PAY-${Date.now()}`;
     const paymentRef = doc(db, 'payments', paymentId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
@@ -125,37 +123,20 @@ export default function PaymentsPage() {
 
     setDocumentNonBlocking(paymentRef, fullPaymentRecord, { merge: true });
 
-    // For student document, we fetch the array, modify it, and save it back to ensure precision
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
-        let updatedPayments;
-
-        if (editingPayment) {
-          // Replace existing entry
-          updatedPayments = currentPayments.map((p: any) => 
-            p.id === paymentId ? {
-              id: paymentId,
-              amount: paymentData.amount,
-              date: transactionDate.toISOString(),
-              receiptNo: paymentData.receiptNo,
-              method: paymentData.method,
-            } : p
-          );
-        } else {
-          // Add new entry
-          updatedPayments = [
-            ...currentPayments,
-            {
-              id: paymentId,
-              amount: paymentData.amount,
-              date: transactionDate.toISOString(),
-              receiptNo: paymentData.receiptNo,
-              method: paymentData.method,
-            }
-          ];
-        }
+        const updatedPayments = [
+          ...currentPayments,
+          {
+            id: paymentId,
+            amount: paymentData.amount,
+            date: transactionDate.toISOString(),
+            receiptNo: paymentData.receiptNo,
+            method: paymentData.method,
+          }
+        ];
 
         updateDocumentNonBlocking(studentRef, {
           payments: updatedPayments,
@@ -168,31 +149,11 @@ export default function PaymentsPage() {
 
     setIsDialogOpen(false);
     resetForm();
-    toast({ title: editingPayment ? "Payment Updated" : "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
-  };
-
-  const handleEditClick = (payment: PaymentRecord) => {
-    const student = students?.find(s => s.id === payment.studentId);
-    if (!student) {
-      toast({ variant: "destructive", title: "Error", description: "Student record not found." });
-      return;
-    }
-
-    setEditingPayment(payment);
-    setSelectedStudent(student);
-    setPaymentData({
-      amount: payment.amount,
-      receiptNo: payment.receiptNo,
-      method: payment.method,
-      date: payment.date?.seconds 
-        ? new Date(payment.date.seconds * 1000).toISOString().split('T')[0] 
-        : new Date().toISOString().split('T')[0],
-    });
-    setIsDialogOpen(true);
+    toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
   };
 
   const handleDeletePayment = async (payment: PaymentRecord) => {
-    if (!confirm(`Are you sure you want to delete receipt #${payment.receiptNo}?`)) return;
+    if (!confirm(`Are you sure you want to delete receipt #${payment.receiptNo}? This will also remove it from the student's profile.`)) return;
 
     const paymentRef = doc(db, 'payments', payment.id);
     const studentRef = doc(db, 'students', payment.studentId);
@@ -214,7 +175,7 @@ export default function PaymentsPage() {
       console.error("Failed to remove payment from student record:", e);
     }
 
-    toast({ title: "Payment Deleted", description: `Receipt #${payment.receiptNo} has been removed.` });
+    toast({ title: "Payment Deleted", description: `Receipt #${payment.receiptNo} has been removed from all records.` });
   };
 
   const sortedPayments = useMemo(() => {
@@ -241,9 +202,9 @@ export default function PaymentsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingPayment ? 'Edit Payment' : 'Receive New Payment'}</DialogTitle>
+              <DialogTitle>Receive New Payment</DialogTitle>
               <DialogDescription>
-                {editingPayment ? 'Modify the payment details for this receipt.' : 'Search for a student and record the amount received.'}
+                Search for a student and record the amount received.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-6 py-4">
@@ -284,7 +245,7 @@ export default function PaymentsPage() {
                       <p className="font-bold text-primary">{selectedStudent.name}</p>
                       <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
                     </div>
-                    {!editingPayment && <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>}
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="p-2 border rounded bg-muted/30">
@@ -342,7 +303,7 @@ export default function PaymentsPage() {
             </div>
             <DialogFooter>
               <Button disabled={!selectedStudent} onClick={handleReceivePayment} className="w-full">
-                {editingPayment ? 'Update Payment' : 'Confirm Payment'}
+                Confirm Payment
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -416,9 +377,6 @@ export default function PaymentsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditClick(p)}>
-                                <Edit2 className="mr-2 h-4 w-4" /> Edit
-                              </DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => handleDeletePayment(p)}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete
                               </DropdownMenuItem>
