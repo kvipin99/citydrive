@@ -1,7 +1,7 @@
+
 import AiSummary from "@/components/dashboard/ai-summary";
 import { RevenueChart, ProfitChart, ExpensesChart } from "@/components/dashboard/charts";
 import StatsCards from "@/components/dashboard/stats-cards";
-import UpcomingClasses from "@/components/dashboard/upcoming-classes";
 import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
 
 export default function DashboardPage() {
@@ -27,7 +27,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      <UpcomingClasses />
     </div>
   );
 }

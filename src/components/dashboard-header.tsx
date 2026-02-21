@@ -41,8 +41,6 @@ export default function DashboardHeader() {
         return 'Instructors';
       case '/dashboard/vehicles':
         return 'Vehicles';
-      case '/dashboard/schedule':
-        return 'Scheduling';
       case '/dashboard/accounting':
         return 'Accounting';
       case '/dashboard/expenses':
