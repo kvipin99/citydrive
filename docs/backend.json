@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -17,7 +18,7 @@
         },
         "role": {
           "type": "string",
-          "description": "The role of the user within the system (e.g., Admin, Instructor, Accountant)."
+          "description": "The role of the user within the system (e.g., Admin, Instructor, Accountant, BranchManager)."
         },
         "createdAt": {
           "type": "string",
@@ -28,10 +29,6 @@
           "type": "string",
           "description": "Timestamp when the user record was last updated.",
           "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this user record. (Relationship: User 1:N User)"
         }
       },
       "required": [
@@ -42,438 +39,82 @@
         "updatedAt"
       ]
     },
+    "Course": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Course",
+      "type": "object",
+      "description": "Represents a driving course offered by the school.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the course."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the course."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The standard fee for this course."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "amount"
+      ]
+    },
     "Student": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Student",
       "type": "object",
-      "description": "Represents a student enrolled in the driving school, including personal details, course information, and financial status.",
+      "description": "Represents a student enrolled in the driving school.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the Student entity."
+          "type": "string"
         },
         "userId": {
-          "type": "string",
-          "description": "Reference to the associated User entity for authentication purposes. (Relationship: User 1:1 Student)"
+          "type": "string"
         },
-        "fullName": {
-          "type": "string",
-          "description": "The full name of the student."
+        "name": {
+          "type": "string"
         },
         "phone": {
-          "type": "string",
-          "description": "The student's contact phone number."
+          "type": "string"
         },
-        "address": {
-          "type": "string",
-          "description": "The student's residential address."
+        "branch": {
+          "type": "string"
         },
-        "courseType": {
-          "type": "string",
-          "description": "The type of driving course the student is enrolled in."
+        "courses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "amount": {
+          "type": "number",
+          "description": "The total fee agreed upon at registration."
+        },
+        "discount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string"
         },
         "registrationDate": {
           "type": "string",
-          "description": "The date when the student registered for the course.",
           "format": "date"
-        },
-        "assignedInstructorId": {
-          "type": "string",
-          "description": "Reference to the Instructor assigned to this student. (Relationship: Instructor 1:N Student)"
-        },
-        "totalFee": {
-          "type": "number",
-          "description": "The total fee for the student's course."
-        },
-        "paidAmount": {
-          "type": "number",
-          "description": "The total amount paid by the student so far."
-        },
-        "dueAmount": {
-          "type": "number",
-          "description": "The remaining amount due from the student (auto-calculated)."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the student (e.g., Active, Completed)."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the student record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the student record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this student record. (Relationship: User 1:N Student)"
         }
-      },
-      "required": [
-        "id",
-        "userId",
-        "fullName",
-        "phone",
-        "courseType",
-        "registrationDate",
-        "assignedInstructorId",
-        "totalFee",
-        "paidAmount",
-        "dueAmount",
-        "status",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "Instructor": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Instructor",
-      "type": "object",
-      "description": "Represents a driving instructor, including personal details, contact information, and salary structure.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Instructor entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the associated User entity for authentication purposes. (Relationship: User 1:1 Instructor)"
-        },
-        "name": {
-          "type": "string",
-          "description": "The full name of the instructor."
-        },
-        "phone": {
-          "type": "string",
-          "description": "The instructor's contact phone number."
-        },
-        "salaryType": {
-          "type": "string",
-          "description": "The type of salary payment (e.g., Fixed, Per Student)."
-        },
-        "salaryAmount": {
-          "type": "number",
-          "description": "The amount for the instructor's salary, interpreted based on salaryType."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the instructor record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the instructor record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this instructor record. (Relationship: User 1:N Instructor)"
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "phone",
-        "salaryType",
-        "salaryAmount",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "Vehicle": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Vehicle",
-      "type": "object",
-      "description": "Represents a vehicle used by the driving school, including its registration and maintenance details.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Vehicle entity."
-        },
-        "vehicleName": {
-          "type": "string",
-          "description": "The make and model name of the vehicle."
-        },
-        "registrationNumber": {
-          "type": "string",
-          "description": "The vehicle's unique registration number."
-        },
-        "insuranceExpiry": {
-          "type": "string",
-          "description": "The expiry date of the vehicle's insurance policy.",
-          "format": "date"
-        },
-        "serviceDueDate": {
-          "type": "string",
-          "description": "The next due date for vehicle service.",
-          "format": "date"
-        },
-        "status": {
-          "type": "string",
-          "description": "The current operational status of the vehicle (e.g., Available, In Service, Under Repair)."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the vehicle record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the vehicle record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this vehicle record. (Relationship: User 1:N Vehicle)"
-        }
-      },
-      "required": [
-        "id",
-        "vehicleName",
-        "registrationNumber",
-        "insuranceExpiry",
-        "serviceDueDate",
-        "status",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "Class": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Class",
-      "type": "object",
-      "description": "Represents a scheduled driving class, linking a student, an instructor, and tracking class details.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Class entity."
-        },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to the Student attending this class. (Relationship: Student 1:N Class)"
-        },
-        "instructorId": {
-          "type": "string",
-          "description": "Reference to the Instructor teaching this class. (Relationship: Instructor 1:N Class)"
-        },
-        "date": {
-          "type": "string",
-          "description": "The date when the class is scheduled.",
-          "format": "date"
-        },
-        "time": {
-          "type": "string",
-          "description": "The scheduled time for the class (e.g., 'HH:MM AM/PM')."
-        },
-        "attendanceStatus": {
-          "type": "string",
-          "description": "The attendance status for the class (e.g., Present, Absent, Canceled)."
-        },
-        "notes": {
-          "type": "string",
-          "description": "Any additional notes or remarks for the class."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the class record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the class record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this class record. (Relationship: User 1:N Class)"
-        }
-      },
-      "required": [
-        "id",
-        "studentId",
-        "instructorId",
-        "date",
-        "time",
-        "attendanceStatus",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "Payment": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Payment",
-      "type": "object",
-      "description": "Records individual payment transactions made by students.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Payment entity."
-        },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to the Student who made the payment. (Relationship: Student 1:N Payment)"
-        },
-        "amount": {
-          "type": "number",
-          "description": "The amount of the payment made."
-        },
-        "paymentDate": {
-          "type": "string",
-          "description": "The date when the payment was received.",
-          "format": "date"
-        },
-        "paymentMethod": {
-          "type": "string",
-          "description": "The method of payment (e.g., Cash, Card, Bank Transfer)."
-        },
-        "receiptNumber": {
-          "type": "string",
-          "description": "A unique identifier or number for the payment receipt."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the payment record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the payment record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this payment record. (Relationship: User 1:N Payment)"
-        }
-      },
-      "required": [
-        "id",
-        "studentId",
-        "amount",
-        "paymentDate",
-        "paymentMethod",
-        "receiptNumber",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "Expense": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Expense",
-      "type": "object",
-      "description": "Records individual expenses incurred by the driving school.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Expense entity."
-        },
-        "category": {
-          "type": "string",
-          "description": "The category of the expense (e.g., Fuel, Salary, Maintenance, Office)."
-        },
-        "amount": {
-          "type": "number",
-          "description": "The monetary amount of the expense."
-        },
-        "expenseDate": {
-          "type": "string",
-          "description": "The date when the expense was incurred.",
-          "format": "date"
-        },
-        "description": {
-          "type": "string",
-          "description": "A brief description of the expense."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the expense record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the expense record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User who created this expense record. (Relationship: User 1:N Expense)"
-        }
-      },
-      "required": [
-        "id",
-        "category",
-        "amount",
-        "expenseDate",
-        "description",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
-    },
-    "BackupMetadata": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "BackupMetadata",
-      "type": "object",
-      "description": "Stores metadata about each successful or attempted Firestore data backup to Google Drive.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the BackupMetadata entity."
-        },
-        "fileName": {
-          "type": "string",
-          "description": "The name of the backup file stored in Google Drive (e.g., backup_YYYY_MM_DD.json)."
-        },
-        "googleDriveFileId": {
-          "type": "string",
-          "description": "The unique ID of the backup file within Google Drive."
-        },
-        "backupDate": {
-          "type": "string",
-          "description": "The timestamp when the backup operation was completed.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "The status of the backup operation (e.g., 'Completed', 'Failed', 'Pending')."
-        },
-        "sizeBytes": {
-          "type": "number",
-          "description": "The size of the backup file in bytes."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the backup metadata record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp when the backup metadata record was last updated.",
-          "format": "date-time"
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "Reference to the User (typically an Admin) who initiated this backup. (Relationship: User 1:N BackupMetadata)"
-        }
-      },
-      "required": [
-        "id",
-        "fileName",
-        "googleDriveFileId",
-        "backupDate",
-        "status",
-        "createdAt",
-        "updatedAt",
-        "createdBy"
-      ]
+      }
     }
   },
   "auth": {
@@ -491,13 +132,17 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profiles and their assigned roles. The document ID (`{userId}`) matches the Firebase Authentication UID, which allows direct role lookup for security rules. Includes denormalized 'role' for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique Firebase Authentication User ID (UID) of the user."
-            }
-          ]
+          "description": "User profiles and roles."
+        }
+      },
+      {
+        "path": "/courses/{courseId}",
+        "definition": {
+          "entityName": "Course",
+          "schema": {
+            "$ref": "#/backend/entities/Course"
+          },
+          "description": "Master list of courses and pricing."
         }
       },
       {
@@ -507,112 +152,9 @@
           "schema": {
             "$ref": "#/backend/entities/Student"
           },
-          "description": "Maintains records for all enrolled students. The document ID (`{studentId}`) matches the Firebase Authentication UID of the associated student user. Includes denormalized 'userId' (same as document ID) for student's self-access and 'assignedInstructorId' for instructor's access, ensuring authorization independence.",
-          "params": [
-            {
-              "name": "studentId",
-              "description": "The unique Firebase Authentication User ID (UID) of the student."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/instructors/{instructorId}",
-        "definition": {
-          "entityName": "Instructor",
-          "schema": {
-            "$ref": "#/backend/entities/Instructor"
-          },
-          "description": "Manages records for all driving instructors. The document ID (`{instructorId}`) matches the Firebase Authentication UID of the associated instructor user. Includes denormalized 'userId' (same as document ID) for instructor's self-access, ensuring authorization independence.",
-          "params": [
-            {
-              "name": "instructorId",
-              "description": "The unique Firebase Authentication User ID (UID) of the instructor."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/vehicles/{vehicleId}",
-        "definition": {
-          "entityName": "Vehicle",
-          "schema": {
-            "$ref": "#/backend/entities/Vehicle"
-          },
-          "description": "Contains details about the driving school's vehicles. Access is typically restricted to Admin roles.",
-          "params": [
-            {
-              "name": "vehicleId",
-              "description": "The unique identifier for the vehicle."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/classes/{classId}",
-        "definition": {
-          "entityName": "Class",
-          "schema": {
-            "$ref": "#/backend/entities/Class"
-          },
-          "description": "Schedules and tracks individual driving classes. Includes denormalized 'studentId' and 'instructorId' for authorization independence, allowing direct access checks without parent document lookups for students and instructors.",
-          "params": [
-            {
-              "name": "classId",
-              "description": "The unique identifier for the class."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/payments/{paymentId}",
-        "definition": {
-          "entityName": "Payment",
-          "schema": {
-            "$ref": "#/backend/entities/Payment"
-          },
-          "description": "Records all payment transactions made by students. Includes denormalized 'studentId' for authorization independence, allowing students to access their own payment history directly.",
-          "params": [
-            {
-              "name": "paymentId",
-              "description": "The unique identifier for the payment record."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/expenses/{expenseId}",
-        "definition": {
-          "entityName": "Expense",
-          "schema": {
-            "$ref": "#/backend/entities/Expense"
-          },
-          "description": "Logs all operational expenses of the driving school. Access is typically restricted to Accountant and Admin roles.",
-          "params": [
-            {
-              "name": "expenseId",
-              "description": "The unique identifier for the expense record."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/backupMetadata/{backupId}",
-        "definition": {
-          "entityName": "BackupMetadata",
-          "schema": {
-            "$ref": "#/backend/entities/BackupMetadata"
-          },
-          "description": "Stores metadata about each Google Drive backup operation. Access is strictly restricted to Admin roles.",
-          "params": [
-            {
-              "name": "backupId",
-              "description": "The unique identifier for the backup metadata record."
-            }
-          ]
+          "description": "Student enrollment data."
         }
       }
-    ],
-    "reasoning": "The Firestore structure is designed to be secure, scalable, and easily debuggable, prioritizing authorization independence and query-after-permission (QAP) principles. Each top-level collection represents a distinct entity, ensuring structural segregation and homogeneous security postures. Authorization roles (Admin, Instructor, Accountant) are stored directly within the `/users/{userId}` document, making role-based access control (DBAC) straightforward using `request.auth.uid` to fetch the user's role. This avoids the complexity and debugging challenges associated with custom claims.\n\n**Authorization Independence:** To eliminate `get()` calls in security rules and enable atomic operations, key authorization contexts are denormalized. For instance:\n*   In `/students/{studentId}`, the `userId` (which is the student's Firebase Auth UID, also used as the document ID) and `assignedInstructorId` fields are explicitly stored. This allows a student to directly access their own record (`request.auth.uid == studentId`) and an instructor to query for their assigned students (`assignedInstructorId == request.auth.uid`) without needing to fetch a parent document.\n*   Similarly, `/instructors/{instructorId}` documents store the `userId` (the instructor's Firebase Auth UID and document ID), enabling direct self-access.\n*   In `/classes/{classId}`, both `studentId` and `instructorId` are denormalized into each class document. This allows students to list their specific classes (`studentId == request.auth.uid`) and instructors to list their assigned classes (`instructorId == request.auth.uid`) directly, fulfilling QAP requirements for `list` operations without relying on slow or insecure cross-document lookups.\n*   Payments in `/payments/{paymentId}` also include `studentId` for direct student and accountant access.\n\n**Query-After-Permission (QAP):** The structure facilitates secure `list` operations by embedding the necessary authorization fields directly into the documents. This means security rules can check document-level attributes (`request.auth.uid == resource.data.ownerId`, `request.auth.uid in resource.data.members`, `request.auth.uid == resource.data.studentId`, `request.auth.uid == resource.data.instructorId`) without needing to filter client-side or use expensive `get()` calls that would break QAP. Collections like `/vehicles`, `/expenses`, and `/backupMetadata` are primarily managed by specific roles (Admin/Accountant), making their `list` operations inherently secure based on the requesting user's role found in their `/users/{userId}` profile.\n\nAll documents consistently include `createdAt`, `updatedAt`, and `createdBy` fields, supporting audit trails and invariant checks for ownership and data integrity. Path parameters are explicitly named (e.g., `{userId}`, `{studentId}`), enhancing clarity and debuggability of security rules."
+    ]
   }
 }

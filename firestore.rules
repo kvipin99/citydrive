@@ -1,22 +1,12 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * CORE PHILOSOPHY
-     * This ruleset enforces a role-based and ownership-based access control model. 
-     * It allows administrators, accountants, and branch managers to oversee operations
-     * while granting students and instructors access to their specific records.
-     */
 
     // --- HELPER FUNCTIONS ---
 
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
     }
 
     function getRole() {
@@ -31,86 +21,60 @@ service cloud.firestore {
       return hasRole('Admin');
     }
 
-    function isAccountant() {
-      return hasRole('Accountant');
-    }
-
-    function isInstructor() {
-      return hasRole('Instructor');
-    }
-
     function isBranchManager() {
       return hasRole('BranchManager');
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     // --- COLLECTION RULES ---
 
-    /**
-     * @description Rules for User profiles.
-     */
     match /users/{userId} {
-      allow get, list: if isOwner(userId) || isAdmin() || isBranchManager();
-      allow create: if (isOwner(userId) && request.resource.data.id == userId) || isAdmin();
-      allow update: if resource != null && (isOwner(userId) || isAdmin());
-      allow delete: if resource != null && isAdmin();
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
     }
 
-    /**
-     * @description Rules for Student records.
-     */
+    match /courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /students/{studentId} {
-      allow get, list: if isOwner(studentId) || isAdmin() || isAccountant() || isBranchManager() || (isInstructor() && resource.data.assignedInstructorId == request.auth.uid);
-      allow create, update: if isAdmin() || isAccountant() || isBranchManager();
-      allow delete: if resource != null && isAdmin();
-    }
-
-    /**
-     * @description Rules for Instructor records.
-     */
-    match /instructors/{instructorId} {
-      allow get, list: if isOwner(instructorId) || isAdmin() || isBranchManager();
+      allow read: if isSignedIn() && (isOwner(studentId) || isAdmin() || isBranchManager());
       allow create, update: if isAdmin() || isBranchManager();
-      allow delete: if resource != null && isAdmin();
+      allow delete: if isAdmin();
     }
 
-    /**
-     * @description Rules for Vehicles.
-     */
+    match /instructors/{instructorId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager();
+    }
+
     match /vehicles/{vehicleId} {
-      allow get, list: if isAdmin() || isBranchManager() || isInstructor();
-      allow create, update, delete: if isAdmin() || isBranchManager();
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager();
     }
 
-    /**
-     * @description Rules for Driving Classes.
-     */
     match /classes/{classId} {
-      allow get, list: if isAdmin() || isBranchManager() || resource.data.studentId == request.auth.uid || resource.data.instructorId == request.auth.uid;
-      allow create, update: if isAdmin() || isBranchManager() || isInstructor();
-      allow delete: if resource != null && (isAdmin() || isBranchManager());
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager() || hasRole('Instructor');
     }
 
-    /**
-     * @description Rules for Payments.
-     */
     match /payments/{paymentId} {
-      allow get, list: if isAdmin() || isAccountant() || isBranchManager() || resource.data.studentId == request.auth.uid;
-      allow create, update: if isAdmin() || isAccountant() || isBranchManager();
-      allow delete: if resource != null && isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
     }
 
-    /**
-     * @description Rules for Business Expenses.
-     */
     match /expenses/{expenseId} {
-      allow get, list, create, update, delete: if isAdmin() || isAccountant() || isBranchManager();
+      allow read, write: if isAdmin() || isBranchManager() || hasRole('Accountant');
     }
 
-    /**
-     * @description Rules for Backup Metadata.
-     */
     match /backupMetadata/{backupId} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }
