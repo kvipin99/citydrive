@@ -45,9 +45,13 @@ export default function StudentsPage() {
   const isAdmin = profile?.role === 'Admin';
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'students');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    // Branch isolation logic: Admin sees all, managers see only their branch
+    if (isAdmin) {
+      return collection(db, 'students');
+    }
+    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -72,7 +76,7 @@ export default function StudentsPage() {
   });
 
   const [formData, setFormData] = useState<Partial<Student>>({
-    branch: "Branch 1",
+    branch: profile?.branch || "Branch 1",
     status: "Active",
     courses: [],
     discount: 0,
@@ -103,11 +107,13 @@ export default function StudentsPage() {
     return map;
   }, [masterCourses]);
 
-  const filteredStudents = students?.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.phone?.includes(searchQuery)
-  ) || [];
+  const filteredStudents = useMemo(() => {
+    return students?.filter(s => 
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.phone?.includes(searchQuery)
+    ) || [];
+  }, [students, searchQuery]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -220,7 +226,7 @@ export default function StudentsPage() {
 
   const resetForm = () => {
     setFormData({ 
-      branch: "Branch 1", 
+      branch: profile?.branch || "Branch 1", 
       status: "Active", 
       courses: [], 
       discount: 0, 
@@ -384,7 +390,7 @@ export default function StudentsPage() {
           address: address || "",
           aadharNo: aadhar || "",
           onlineAppNo: appNo || "",
-          branch: branch || "Branch 1",
+          branch: branch || profile?.branch || "Branch 1",
           status: status || "Active",
           registrationDate: regDate || new Date().toISOString().split('T')[0],
           courses: courses,
@@ -412,7 +418,9 @@ export default function StudentsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Students Database</CardTitle>
-              <CardDescription>Comprehensive student profiles and course management.</CardDescription>
+              <CardDescription>
+                {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+              </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -488,7 +496,11 @@ export default function StudentsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label>Branch</Label>
-                          <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
+                          <Select 
+                            value={formData.branch} 
+                            onValueChange={(v) => setFormData({...formData, branch: v as any})}
+                            disabled={!isAdmin}
+                          >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
@@ -623,44 +635,52 @@ export default function StudentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStudents.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
-                          <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="grid gap-0.5">
-                          <span className="font-bold text-primary">{student.id}</span>
-                          <span className="text-sm">{student.name}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{student.branch}</TableCell>
-                    <TableCell className="text-sm">{student.phone}</TableCell>
-                    <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                        ₹{calculateBalanceDue(student).toLocaleString()}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}><Trash2 className="mr-2 h-4 w-4" /> Deactivate</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {filteredStudents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                      No student records found.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredStudents.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
+                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="grid gap-0.5">
+                            <span className="font-bold text-primary">{student.id}</span>
+                            <span className="text-sm">{student.name}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{student.branch}</TableCell>
+                      <TableCell className="text-sm">{student.phone}</TableCell>
+                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                          ₹{calculateBalanceDue(student).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}><Trash2 className="mr-2 h-4 w-4" /> Deactivate</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           )}
@@ -925,7 +945,11 @@ export default function StudentsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
                   <Label>Branch</Label>
-                  <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
+                  <Select 
+                    value={formData.branch} 
+                    onValueChange={(v) => setFormData({...formData, branch: v as any})}
+                    disabled={!isAdmin}
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
