@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
-import { DollarSign, PlusCircle, Receipt, TrendingUp, Filter, X, Calendar as CalendarIcon } from "lucide-react";
+import { DollarSign, PlusCircle, Receipt, TrendingUp, Filter, X, Calendar as CalendarIcon, ArrowRightCircle } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -142,10 +142,12 @@ export default function AccountingPage() {
             </Select>
           </div>
           {(dateFilter.month || dateFilter.year) && (
-            <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
-              <CalendarIcon className="h-3.5 w-3.5" />
-              {dateFilter.month ? format(new Date(dateFilter.month + "-01"), 'MMMM yyyy') : dateFilter.year}
-              <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={clearDateFilter}>
+            <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-left-2">
+              <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+              <span className="font-bold">
+                {dateFilter.month ? format(new Date(dateFilter.month + "-01"), 'MMMM yyyy') : dateFilter.year}
+              </span>
+              <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent text-primary hover:text-destructive" onClick={clearDateFilter}>
                 <X className="h-3 w-3" />
               </Button>
             </Badge>
@@ -162,34 +164,40 @@ export default function AccountingPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-l-4 border-l-green-500">
+        <Card className="border-l-4 border-l-green-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Total collections for {selectedBranch}</p>
+            <p className="text-xs text-muted-foreground">
+              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} collections for {selectedBranch}
+            </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-red-500">
+        <Card className="border-l-4 border-l-red-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Expenses</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Operational costs for {selectedBranch}</p>
+            <p className="text-xs text-muted-foreground">
+              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} costs for {selectedBranch}
+            </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-primary">
+        <Card className="border-l-4 border-l-primary shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Net Profit</CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{netProfit.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Earnings after expenses</p>
+            <p className="text-xs text-muted-foreground">
+              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} earnings after expenses
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -206,7 +214,7 @@ export default function AccountingPage() {
             <CardHeader>
               <CardTitle>Transaction Log</CardTitle>
               <CardDescription>
-                Detailed list for {selectedBranch}
+                Detailed list for {selectedBranch === "Full" ? 'Full School' : selectedBranch}
                 {dateFilter.month ? ` in ${format(new Date(dateFilter.month + "-01"), 'MMMM yyyy')}` : dateFilter.year ? ` in ${dateFilter.year}` : ''}.
               </CardDescription>
             </CardHeader>
@@ -220,7 +228,7 @@ export default function AccountingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Monthly Performance</CardTitle>
-              <CardDescription>Click a row to view specific transactions for that month.</CardDescription>
+              <CardDescription>View aggregated data for {selectedBranch}. Click any row to see the full log for that month.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -238,7 +246,7 @@ export default function AccountingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Yearly Performance</CardTitle>
-              <CardDescription>Click a row to view specific transactions for that year.</CardDescription>
+              <CardDescription>View aggregated data for {selectedBranch}. Click any row to see the full log for that year.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -278,7 +286,7 @@ function TransactionTable({ transactions }: { transactions: Transaction[] }) {
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No transactions found.</TableCell>
+            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">No transactions found for this selection.</TableCell>
           </TableRow>
         ) : (
           transactions.map((t) => (
@@ -319,12 +327,13 @@ function SummaryTable({
           <TableHead className="text-right">Revenue (₹)</TableHead>
           <TableHead className="text-right">Expenses (₹)</TableHead>
           <TableHead className="text-right">Profit (₹)</TableHead>
+          <TableHead className="w-[50px]"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {data.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No data available for this period.</TableCell>
+            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No data available for this selection.</TableCell>
           </TableRow>
         ) : (
           data.map(([period, values]) => {
@@ -342,6 +351,9 @@ function SummaryTable({
                 <TableCell className="text-right text-red-600">₹{values.expense.toLocaleString()}</TableCell>
                 <TableCell className={`text-right font-black ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                   ₹{profit.toLocaleString()}
+                </TableCell>
+                <TableCell>
+                  <ArrowRightCircle className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
                 </TableCell>
               </TableRow>
             );
