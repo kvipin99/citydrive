@@ -54,7 +54,7 @@ export default function InstructorsPage() {
     phone: '',
   });
 
-  // Pre-calculate the next available SID
+  // Pre-calculate the next available SID based on existing records
   const nextAvailableId = useMemo(() => {
     const lastIdNum = instructors?.reduce((max, inst) => {
       const numPart = inst.id.replace('SID', '');
@@ -115,10 +115,9 @@ export default function InstructorsPage() {
     }
 
     setIsSubmitting(true);
-    let success = false;
 
     try {
-      toast({ title: "Registering Staff", description: `Attempting registration for ${staffId}...` });
+      toast({ title: "Registering Staff", description: `Creating system account for ${staffId}...` });
       
       const authUid = await createInstructorAuth(staffId);
       
@@ -137,22 +136,23 @@ export default function InstructorsPage() {
 
       setIsAddDialogOpen(false);
       setFormData({ id: '', status: 'Active', name: '', phone: '' });
-      toast({ title: "Success", description: `Staff ${staffId} registered. Login: ${staffId.toLowerCase()}, Pass: City123` });
-      success = true;
+      toast({ title: "Registration Successful", description: `Account ${staffId} created. Password: City123` });
     } catch (error: any) {
       console.error("Staff registration error:", error);
-      let errorMsg = error.message || "Could not create account.";
+      let errorMsg = error.message || "An unexpected error occurred.";
+      let errorTitle = "Registration Failed";
       
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `The ID "${staffId}" is already registered in the login system. Please use a different ID or contact the administrator.`;
+        errorTitle = "ID Already Registered";
+        errorMsg = `The ID "${staffId}" exists in the system login database (even if the record was previously deleted). Please choose a different unique ID like "${staffId}_NEW" or increment the number.`;
       } else if (error.code === 'auth/operation-not-allowed') {
         errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
       }
       
-      toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
+      toast({ variant: "destructive", title: errorTitle, description: errorMsg });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
 
   const handleDeleteInstructor = (id: string) => {
@@ -160,8 +160,8 @@ export default function InstructorsPage() {
     deleteDocumentNonBlocking(instructorRef);
     toast({ 
       variant: "destructive", 
-      title: "Staff Removed", 
-      description: `Staff record ${id} has been deleted from the database. Note: The login account remains active in the authentication system.` 
+      title: "Record Removed", 
+      description: `Instructor ${id} removed from database. Note: Login credentials remain in the authentication system for security.` 
     });
   };
 
@@ -200,11 +200,11 @@ export default function InstructorsPage() {
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Add New Staff Member</DialogTitle>
-                    <DialogDescription>Review or change the auto-generated ID. Default password: City123</DialogDescription>
+                    <DialogDescription>Assign a unique ID. Default password is City123.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="staffId">Staff ID</Label>
+                      <Label htmlFor="staffId">Staff ID (Changeable)</Label>
                       <Input 
                         id="staffId" 
                         placeholder="e.g. SID01" 
@@ -216,7 +216,7 @@ export default function InstructorsPage() {
                       <Label htmlFor="name">Full Name</Label>
                       <Input 
                         id="name" 
-                        placeholder="John Doe" 
+                        placeholder="Enter full name" 
                         value={formData.name || ''} 
                         onChange={(e) => setFormData({...formData, name: e.target.value})} 
                       />
@@ -225,7 +225,7 @@ export default function InstructorsPage() {
                       <Label htmlFor="phone">Mobile Number</Label>
                       <Input 
                         id="phone" 
-                        placeholder="555-0101" 
+                        placeholder="e.g. 9876543210" 
                         value={formData.phone || ''} 
                         onChange={(e) => setFormData({...formData, phone: e.target.value})} 
                       />
@@ -246,9 +246,9 @@ export default function InstructorsPage() {
                       {isSubmitting ? (
                         <div className="flex items-center gap-2">
                           <RefreshCw className="h-4 w-4 animate-spin" />
-                          Processing...
+                          Creating Account...
                         </div>
-                      ) : "Create Staff Account"}
+                      ) : "Confirm & Register"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -312,12 +312,12 @@ export default function InstructorsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Options</DropdownMenuLabel>
+                            <DropdownMenuLabel>Staff Actions</DropdownMenuLabel>
                             <DropdownMenuItem>View Profile</DropdownMenuItem>
                             <DropdownMenuItem>Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInstructor(instructor.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete Staff
+                              <Trash2 className="mr-2 h-4 w-4" /> Remove Instructor
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
