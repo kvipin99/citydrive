@@ -50,17 +50,16 @@ const AdminPerformanceSummaryInputSchema = z.object({
 });
 export type AdminPerformanceSummaryInput = z.infer<typeof AdminPerformanceSummaryInputSchema>;
 
-const AdminPerformanceSummaryOutputSchema = z
-  .string()
-  .describe(
-    "A natural language summary of the driving school's performance, including financial trends, student progress, and operational insights."
-  );
+const AdminPerformanceSummaryOutputSchema = z.object({
+  summary: z.string().describe("A natural language summary of the driving school's performance, including financial trends, student progress, and operational insights.")
+});
 export type AdminPerformanceSummaryOutput = z.infer<typeof AdminPerformanceSummaryOutputSchema>;
 
 export async function getAdminPerformanceSummary(
   input: AdminPerformanceSummaryInput
-): Promise<AdminPerformanceSummaryOutput> {
-  return adminPerformanceSummaryFlow(input);
+): Promise<string> {
+  const result = await adminPerformanceSummaryFlow(input);
+  return result.summary;
 }
 
 const prompt = ai.definePrompt({
@@ -121,6 +120,9 @@ const adminPerformanceSummaryFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('The AI model failed to generate a response. Please try again.');
+    }
+    return output;
   }
 );
