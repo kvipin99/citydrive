@@ -153,7 +153,11 @@ export default function PaymentsPage() {
   };
 
   const handleDeletePayment = async (payment: PaymentRecord) => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      toast({ variant: "destructive", title: "Access Denied", description: "Only administrators can delete payments." });
+      return;
+    }
+
     if (!confirm(`Are you sure you want to delete receipt #${payment.receiptNo}? This will also remove it from the student's profile.`)) return;
 
     const paymentRef = doc(db, 'payments', payment.id);
@@ -167,18 +171,22 @@ export default function PaymentsPage() {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = currentPayments.filter((p: any) => p.id !== payment.id);
+        // Match by ID if available, otherwise by receipt number for legacy records
+        const updatedPayments = currentPayments.filter((p: any) => {
+          if (p.id) return p.id !== payment.id;
+          return p.receiptNo !== payment.receiptNo;
+        });
         
         updateDocumentNonBlocking(studentRef, {
           payments: updatedPayments,
           updatedAt: serverTimestamp(),
         });
       }
+      toast({ title: "Payment Deleted", description: `Receipt #${payment.receiptNo} has been removed.` });
     } catch (e) {
       console.error("Failed to remove payment from student record:", e);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update student profile." });
     }
-
-    toast({ title: "Payment Deleted", description: `Receipt #${payment.receiptNo} has been removed from all records.` });
   };
 
   const sortedPayments = useMemo(() => {

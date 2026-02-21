@@ -317,13 +317,18 @@ export default function StudentsPage() {
     const paymentRef = doc(db, 'payments', payId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
+    // 1. Delete the central record
     deleteDocumentNonBlocking(paymentRef);
 
+    // 2. Update the student's internal payment array
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = currentPayments.filter((p: any) => p.id !== payId);
+        const updatedPayments = currentPayments.filter((p: any) => {
+          if (p.id) return p.id !== payId;
+          return p.receiptNo !== receiptNo;
+        });
         
         updateDocumentNonBlocking(studentRef, {
           payments: updatedPayments,
@@ -336,11 +341,11 @@ export default function StudentsPage() {
           payments: updatedPayments
         });
       }
+      toast({ title: "Payment Deleted", description: `Receipt #${receiptNo} removed.` });
     } catch (e) {
       console.error("Failed to remove payment from student record:", e);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update student profile." });
     }
-
-    toast({ title: "Payment Deleted", description: `Receipt #${receiptNo} removed.` });
   };
 
   const handleExportCSV = () => {
@@ -854,12 +859,12 @@ export default function StudentsPage() {
                                 <TableCell>{p.method}</TableCell>
                                 <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
                                 <TableCell className="text-right">
-                                  {isAdmin && p.id && (
+                                  {isAdmin && (p.id || p.receiptNo) && (
                                     <Button 
                                       size="icon" 
                                       variant="ghost" 
                                       className="h-6 w-6 text-destructive" 
-                                      onClick={() => handleDeletePayment(p.id, p.receiptNo)}
+                                      onClick={() => handleDeletePayment(p.id || '', p.receiptNo)}
                                     >
                                       <Trash2 className="h-3 w-3" />
                                     </Button>
