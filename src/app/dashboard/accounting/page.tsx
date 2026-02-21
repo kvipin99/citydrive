@@ -1,31 +1,35 @@
 "use client"
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
-import { DollarSign, MoreHorizontal, PlusCircle, Receipt, TrendingUp, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
-import { format } from "date-fns";
+import { DollarSign, MoreHorizontal, PlusCircle, Receipt, TrendingUp, ArrowUpCircle, ArrowDownCircle, Filter } from "lucide-react";
+import { format, parseISO, startOfMonth, startOfYear } from "date-fns";
 import Link from "next/link";
+
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
-  date: any;
+  date: Date;
   description: string;
   amount: number;
   type: 'Income' | 'Expense';
-  status: 'Paid' | 'Pending';
+  branch: string;
   category?: string;
 }
 
 export default function AccountingPage() {
   const db = useFirestore();
   const { user } = useUser();
+  const [selectedBranch, setSelectedBranch] = useState<string>("Full");
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -44,134 +48,168 @@ export default function AccountingPage() {
     const income: Transaction[] = (payments || []).map(p => ({
       id: p.id,
       date: p.date?.seconds ? new Date(p.date.seconds * 1000) : new Date(),
-      description: `Fee Collection: ${p.studentName} (#${p.receiptNo})`,
-      amount: p.amount || 0,
+      description: `Fee: ${p.studentName} (#${p.receiptNo})`,
+      amount: Number(p.amount) || 0,
       type: 'Income',
-      status: 'Paid'
+      branch: p.branch || 'Unknown'
     }));
 
     const outgo: Transaction[] = (expenses || []).map(e => ({
       id: e.id,
       date: e.date ? new Date(e.date) : new Date(),
       description: e.description || `${e.category} Expense`,
-      amount: e.amount || 0,
+      amount: Number(e.amount) || 0,
       type: 'Expense',
-      status: 'Paid',
+      branch: e.branch || 'Unknown',
       category: e.category
     }));
 
-    return [...income, ...outgo].sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [payments, expenses]);
+    let combined = [...income, ...outgo];
+    
+    if (selectedBranch !== "Full") {
+      combined = combined.filter(t => t.branch === selectedBranch);
+    }
 
-  const incomeList = transactions.filter(t => t.type === 'Income');
-  const expenseList = transactions.filter(t => t.type === 'Expense');
+    return combined.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [payments, expenses, selectedBranch]);
 
-  const totalIncome = incomeList.reduce((acc, t) => acc + t.amount, 0);
-  const totalExpenses = expenseList.reduce((acc, t) => acc + t.amount, 0);
+  const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
+  const totalExpenses = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
+
+  const monthlySummary = useMemo(() => {
+    const summary: Record<string, { income: number, expense: number }> = {};
+    transactions.forEach(t => {
+      const monthKey = format(t.date, 'yyyy-MM');
+      if (!summary[monthKey]) summary[monthKey] = { income: 0, expense: 0 };
+      if (t.type === 'Income') summary[monthKey].income += t.amount;
+      else summary[monthKey].expense += t.amount;
+    });
+    return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [transactions]);
+
+  const yearlySummary = useMemo(() => {
+    const summary: Record<string, { income: number, expense: number }> = {};
+    transactions.forEach(t => {
+      const yearKey = format(t.date, 'yyyy');
+      if (!summary[yearKey]) summary[yearKey] = { income: 0, expense: 0 };
+      if (t.type === 'Income') summary[yearKey].income += t.amount;
+      else summary[yearKey].expense += t.amount;
+    });
+    return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [transactions]);
 
   const isLoading = isPaymentsLoading || isExpensesLoading;
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Full">Full School View</SelectItem>
+              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/dashboard/payments">Collect Fee</Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/dashboard/expenses">Add Expense</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Total fees collected</p>
+            <p className="text-xs text-muted-foreground">Total collections for {selectedBranch}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-red-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Expenses</CardTitle>
+            <Receipt className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Operational costs</p>
+            <p className="text-xs text-muted-foreground">Operational costs for {selectedBranch}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-primary">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Net Profit</CardTitle>
+            <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{netProfit.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Revenue minus expenses</p>
+            <p className="text-xs text-muted-foreground">Earnings after expenses</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="all">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <TabsList>
-            <TabsTrigger value="all">All Transactions</TabsTrigger>
-            <TabsTrigger value="income">Income</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          </TabsList>
-          <div className="sm:ml-auto flex items-center gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/dashboard/payments">
-                <ArrowUpCircle className="mr-2 h-4 w-4" />
-                Collect Fee
-              </Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href="/dashboard/expenses">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Expense
-              </Link>
-            </Button>
-          </div>
-        </div>
+      <Tabs defaultValue="transactions">
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="transactions">Log</TabsTrigger>
+          <TabsTrigger value="monthly">Monthly</TabsTrigger>
+          <TabsTrigger value="yearly">Yearly</TabsTrigger>
+        </TabsList>
         
-        <TabsContent value="all" className="mt-4">
+        <TabsContent value="transactions" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Unified Transaction Log</CardTitle>
-              <CardDescription>Recent income and expenses across all categories.</CardDescription>
+              <CardTitle>Transaction Log</CardTitle>
+              <CardDescription>Detailed list of all activity for {selectedBranch}.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                </div>
-              ) : (
-                <TransactionTable transactions={transactions} />
-              )}
+              {isLoading ? <LoadingSpinner /> : <TransactionTable transactions={transactions} />}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="income">
-           <Card>
+        <TabsContent value="monthly">
+          <Card>
             <CardHeader>
-              <CardTitle>Income Only</CardTitle>
-              <CardDescription>Records of all student fee collections.</CardDescription>
+              <CardTitle>Monthly Performance</CardTitle>
+              <CardDescription>Aggregated monthly totals for {selectedBranch}.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TransactionTable transactions={incomeList} />
+              {isLoading ? <LoadingSpinner /> : <SummaryTable data={monthlySummary} type="Month" />}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="expenses">
-           <Card>
+        <TabsContent value="yearly">
+          <Card>
             <CardHeader>
-              <CardTitle>Expenses Only</CardTitle>
-              <CardDescription>Operational expenditures and branch costs.</CardDescription>
+              <CardTitle>Yearly Performance</CardTitle>
+              <CardDescription>Aggregated yearly totals for {selectedBranch}.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TransactionTable transactions={expenseList} />
+              {isLoading ? <LoadingSpinner /> : <SummaryTable data={yearlySummary} type="Year" />}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex justify-center py-12">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
     </div>
   );
 }
@@ -183,62 +221,69 @@ function TransactionTable({ transactions }: { transactions: Transaction[] }) {
         <TableRow>
           <TableHead>Date</TableHead>
           <TableHead>Description</TableHead>
-          <TableHead>Type</TableHead>
+          <TableHead>Branch</TableHead>
           <TableHead className="text-right">Amount</TableHead>
-          <TableHead className="w-[50px]"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-              No transactions found.
-            </TableCell>
+            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No transactions found.</TableCell>
           </TableRow>
         ) : (
-          transactions.map((transaction) => (
-            <TableRow key={transaction.id}>
-              <TableCell className="text-xs text-muted-foreground">
-                {format(transaction.date, 'MMM dd, yyyy')}
-              </TableCell>
+          transactions.map((t) => (
+            <TableRow key={t.id}>
+              <TableCell className="text-xs text-muted-foreground">{format(t.date, 'MMM dd, yyyy')}</TableCell>
               <TableCell>
                 <div className="grid gap-0.5">
-                  <span className="font-medium text-sm">{transaction.description}</span>
-                  {transaction.category && (
-                    <span className="text-[10px] uppercase text-muted-foreground tracking-wider">{transaction.category}</span>
-                  )}
+                  <span className="font-medium text-sm">{t.description}</span>
+                  {t.category && <span className="text-[10px] uppercase text-muted-foreground">{t.category}</span>}
                 </div>
               </TableCell>
-              <TableCell>
-                <Badge 
-                  variant={transaction.type === 'Income' ? 'default' : 'secondary'} 
-                  className={transaction.type === 'Income' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}
-                >
-                  {transaction.type === 'Income' ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
-                  {transaction.type}
-                </Badge>
-              </TableCell>
-              <TableCell className={`text-right font-bold ${transaction.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
-                {transaction.type === 'Income' ? '+' : '-'}₹{transaction.amount.toLocaleString()}
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link href={transaction.type === 'Income' ? '/dashboard/payments' : '/dashboard/expenses'}>
-                        View in {transaction.type === 'Income' ? 'Fees' : 'Expenses'}
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <TableCell><Badge variant="outline" className="text-[10px]">{t.branch}</Badge></TableCell>
+              <TableCell className={`text-right font-bold ${t.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
+                {t.type === 'Income' ? '+' : '-'}₹{t.amount.toLocaleString()}
               </TableCell>
             </TableRow>
           ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function SummaryTable({ data, type }: { data: [string, { income: number, expense: number }][], type: string }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{type}</TableHead>
+          <TableHead className="text-right">Revenue (₹)</TableHead>
+          <TableHead className="text-right">Expenses (₹)</TableHead>
+          <TableHead className="text-right">Profit (₹)</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {data.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">No data available for this period.</TableCell>
+          </TableRow>
+        ) : (
+          data.map(([period, values]) => {
+            const profit = values.income - values.expense;
+            return (
+              <TableRow key={period}>
+                <TableCell className="font-bold">
+                  {type === 'Month' ? format(new Date(period + "-01"), 'MMMM yyyy') : period}
+                </TableCell>
+                <TableCell className="text-right text-green-600">₹{values.income.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-red-600">₹{values.expense.toLocaleString()}</TableCell>
+                <TableCell className={`text-right font-black ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                  ₹{profit.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            );
+          })
         )}
       </TableBody>
     </Table>
