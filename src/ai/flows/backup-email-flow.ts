@@ -1,18 +1,20 @@
 'use server';
 /**
- * @fileOverview This file implements a Genkit flow for simulating the delivery of a database backup via email.
+ * @fileOverview This file implements a Genkit flow for sending database backups via email using Resend.
  *
- * - sendBackupEmail - A function that "sends" the backup data to a specified email.
+ * - sendBackupEmail - A function that handles the email delivery process.
  * - BackupEmailInput - The input type for the sendBackupEmail function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { Resend } from 'resend';
 
 const BackupEmailInputSchema = z.object({
   email: z.string().email().describe('The recipient email address for the backup.'),
   backupSummary: z.string().describe('A summary of the backup contents (record counts, etc.).'),
   timestamp: z.string().describe('The time the backup was generated.'),
+  backupDataJson: z.string().optional().describe('The serialized JSON data of the entire database.'),
 });
 export type BackupEmailInput = z.infer<typeof BackupEmailInputSchema>;
 
@@ -32,21 +34,48 @@ const backupEmailFlow = ai.defineFlow(
     outputSchema: BackupEmailOutputSchema,
   },
   async (input) => {
-    // In a production app, you would integrate with an email provider like SendGrid or Resend here.
-    // For this prototype, we use the AI to generate a confirmation of the "sent" email.
-    
-    const response = await ai.generate({
-      prompt: `Simulate sending a system backup email to ${input.email}. 
-      The backup was generated at ${input.timestamp}.
-      Summary of data: ${input.backupSummary}.
-      Confirm that the data has been securely archived and "sent".`,
-    });
+    const apiKey = process.env.RESEND_API_KEY;
 
-    console.log(`[BACKUP AUTOMATION] Email "sent" to ${input.email} at ${new Date().toISOString()}`);
+    if (!apiKey || apiKey === 're_123') {
+      console.error('[BACKUP FLOW] RESEND_API_KEY is missing or invalid.');
+      return {
+        success: false,
+        message: "Missing API Key: Please add RESEND_API_KEY to your .env file to enable real email delivery.",
+      };
+    }
 
-    return {
-      success: true,
-      message: response.text || "Backup email successfully processed and sent.",
-    };
+    try {
+      const resend = new Resend(apiKey);
+      
+      const { data, error } = await resend.emails.send({
+        from: 'Citydrive Backup <onboarding@resend.dev>',
+        to: [input.email],
+        subject: `[BACKUP] Citydrive Data - ${input.timestamp}`,
+        text: `${input.backupSummary}\n\nGenerated: ${input.timestamp}\n\nThis is an automated backup. Please find the database snapshot attached as a JSON file.`,
+        attachments: input.backupDataJson ? [
+          {
+            filename: `citydrive_snapshot_${input.timestamp.replace(/[/:\s]/g, '_')}.json`,
+            content: Buffer.from(input.backupDataJson).toString('base64'),
+          }
+        ] : [],
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      console.log(`[BACKUP FLOW] Email sent successfully to ${input.email}. ID: ${data?.id}`);
+
+      return {
+        success: true,
+        message: `Backup successfully emailed to ${input.email}.`,
+      };
+    } catch (err: any) {
+      console.error('[BACKUP FLOW] Error sending email:', err);
+      return {
+        success: false,
+        message: `Failed to send email: ${err.message}`,
+      };
+    }
   }
 );

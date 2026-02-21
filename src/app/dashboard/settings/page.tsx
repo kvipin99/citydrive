@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -123,7 +122,7 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Backup Started", description: "Aggregating system data for email report..." });
+    toast({ title: "Backup Started", description: "Aggregating system data for email delivery..." });
 
     try {
       const backupData: Record<string, any[]> = {};
@@ -144,6 +143,7 @@ function SettingsContent() {
         email: emailRecipient,
         backupSummary: summary,
         timestamp: new Date().toLocaleString(),
+        backupDataJson: JSON.stringify(backupData, null, 2),
       });
 
       if (result.success) {
@@ -156,11 +156,13 @@ function SettingsContent() {
           type: "Manual Email Backup"
         }, { merge: true });
 
-        toast({ title: "Backup Sent", description: `Report sent to ${emailRecipient}.` });
+        toast({ title: "Backup Sent", description: result.message });
+      } else {
+        toast({ variant: "destructive", title: "Email Failed", description: result.message });
       }
     } catch (error: any) {
       console.error("Manual backup failed:", error);
-      toast({ variant: "destructive", title: "Backup Failed", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setIsBackingUpManual(false);
     }

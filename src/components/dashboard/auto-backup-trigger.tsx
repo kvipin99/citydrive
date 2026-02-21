@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { differenceInDays } from 'date-fns';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
-const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses"];
+const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
 /**
  * This component runs silently in the background. 
@@ -63,31 +62,36 @@ export function AutoBackupTrigger() {
           }
 
           const emailRecipient = autoSettings?.email || "ezydriveapp@gmail.com";
-          const summary = `Full Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
+          const summary = `Scheduled Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
           
-          await sendBackupEmail({
+          const result = await sendBackupEmail({
             email: emailRecipient,
             backupSummary: summary,
             timestamp: new Date().toLocaleString(),
+            backupDataJson: JSON.stringify(backupData, null, 2),
           });
 
-          // Log the successful automated backup
-          const metadataRef = doc(db, "backupMetadata", `AUTO-${Date.now()}`);
-          setDocumentNonBlocking(metadataRef, {
-            id: metadataRef.id,
-            timestamp: serverTimestamp(),
-            performedBy: "SYSTEM (Automated)",
-            status: "Successful",
-            type: "Scheduled Email Backup"
-          }, { merge: true });
+          if (result.success) {
+            // Log the successful automated backup
+            const metadataRef = doc(db, "backupMetadata", `AUTO-${Date.now()}`);
+            setDocumentNonBlocking(metadataRef, {
+              id: metadataRef.id,
+              timestamp: serverTimestamp(),
+              performedBy: "SYSTEM (Automated)",
+              status: "Successful",
+              type: "Scheduled Email Backup"
+            }, { merge: true });
 
-          toast({
-            title: "Automated Backup Sent",
-            description: `A scheduled backup of ${totalRecords} records was sent to ${emailRecipient}.`,
-          });
+            toast({
+              title: "Automated Backup Sent",
+              description: `A scheduled backup of ${totalRecords} records was sent to ${emailRecipient}.`,
+            });
+          } else {
+            console.error("[AUTO-BACKUP] Email failed:", result.message);
+          }
         }
       } catch (error) {
-        console.error("[AUTO-BACKUP] Failed:", error);
+        console.error("[AUTO-BACKUP] Error during check:", error);
       }
     }
 
