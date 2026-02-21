@@ -1,17 +1,20 @@
+
 'use client';
 
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import SidebarNav from '@/components/sidebar-nav';
 import DashboardHeader from '@/components/dashboard-header';
-import { Car } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { AutoBackupTrigger } from '@/components/dashboard/auto-backup-trigger';
+import Image from 'next/image';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const logo = PlaceHolderImages.find(p => p.id === 'app-logo');
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -30,7 +33,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // If no user after loading, we show nothing while redirect happens
   if (!user) {
     return null;
   }
@@ -38,16 +40,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <div className="bg-sidebar">
-        {/* Background Automated Tasks */}
         <AutoBackupTrigger />
         
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-2 p-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Car className="h-5 w-5 text-primary-foreground" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-background overflow-hidden border">
+                {logo && (
+                  <Image 
+                    src={logo.imageUrl} 
+                    alt="Citydrive Logo" 
+                    width={40} 
+                    height={40} 
+                    className="object-contain"
+                    data-ai-hint={logo.imageHint}
+                  />
+                )}
               </div>
-              <span className="text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">Citydrive</span>
+              <span className="text-lg font-bold text-primary group-data-[collapsible=icon]:hidden">Citydrive</span>
             </div>
           </SidebarHeader>
           <SidebarContent>

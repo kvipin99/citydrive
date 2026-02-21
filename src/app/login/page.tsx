@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -10,8 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Car, Lock, User, Sparkles, AlertCircle } from 'lucide-react';
+import { Lock, User, Sparkles, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Image from 'next/image';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
@@ -25,6 +28,7 @@ export default function LoginPage() {
   const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+  const logo = PlaceHolderImages.find(p => p.id === 'app-logo');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,17 +39,14 @@ export default function LoginPage() {
     const email = userId.includes('@') ? userId.trim() : `${userId.trim()}@citydriving.in`;
 
     try {
-      // 1. Attempt standard login
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (error: any) {
-      // 2. Auto-provisioning logic: If it's a known staff ID and login fails, try to create it automatically
       if (STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD) {
         try {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const uid = userCredential.user.uid;
           
-          // Create the user profile document required for security rules
           await setDoc(doc(db, 'users', uid), {
             id: uid,
             email: email,
@@ -65,7 +66,6 @@ export default function LoginPage() {
           if (createError.code === 'auth/operation-not-allowed') {
             setSetupError('Email/Password provider is not enabled in Firebase Console.');
           }
-          // If creation fails for other reasons (like user already exists), we fall through to the error toast
         }
       }
 
@@ -86,8 +86,17 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Car className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-background border shadow-sm overflow-hidden p-2">
+              {logo && (
+                <Image 
+                  src={logo.imageUrl} 
+                  alt="Citydrive Logo" 
+                  width={64} 
+                  height={64} 
+                  className="object-contain"
+                  data-ai-hint={logo.imageHint}
+                />
+              )}
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">Citydrive Portal</CardTitle>
