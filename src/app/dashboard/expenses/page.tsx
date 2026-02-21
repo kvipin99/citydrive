@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -209,10 +208,10 @@ export default function ExpensesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <CardTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</CardTitle>
-            <CardDescription>
+            <DialogTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</DialogTitle>
+            <DialogDescription>
               {selectedExpense ? 'Update the details of this expenditure.' : 'Enter the details of the expenditure.'}
-            </CardDescription>
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
