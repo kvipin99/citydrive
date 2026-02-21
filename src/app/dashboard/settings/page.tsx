@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useMemo } from "react";
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from "@/firebase";
 import { collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -39,6 +38,7 @@ export default function SettingsPage() {
   // Form States
   const [newPassword, setNewPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,8 +66,7 @@ export default function SettingsPage() {
 
   const handleResetUserPassword = (targetUser: any) => {
     const targetRef = doc(db, "users", targetUser.id);
-    // In a real app, this would trigger a cloud function to reset auth password.
-    // For this prototype, we update a flag that the system uses to suggest the reset.
+    // In a prototype environment, we simulate a password reset flag
     updateDocumentNonBlocking(targetRef, { 
       passwordResetRequested: true,
       updatedAt: serverTimestamp() 
@@ -99,6 +98,16 @@ export default function SettingsPage() {
     toast({ title: "Automation Saved", description: "Backup settings updated." });
   };
 
+  const filteredUsers = useMemo(() => {
+    if (!allUsers) return [];
+    if (!userSearchTerm) return allUsers;
+    const term = userSearchTerm.toLowerCase();
+    return allUsers.filter(u => 
+      u.email?.toLowerCase().includes(term) || 
+      u.role?.toLowerCase().includes(term)
+    );
+  }, [allUsers, userSearchTerm]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <Tabs defaultValue="general" className="w-full">
@@ -110,12 +119,23 @@ export default function SettingsPage() {
 
         <TabsContent value="general" className="space-y-6 mt-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                User Control
-              </CardTitle>
-              <CardDescription>Manage staff accounts and monitor activity across all branches.</CardDescription>
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="grid gap-1">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  User Control
+                </CardTitle>
+                <CardDescription>Manage staff accounts and monitor activity across all branches.</CardDescription>
+              </div>
+              <div className="relative w-full sm:w-[250px]">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search email or role..."
+                  className="pl-8"
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -129,8 +149,14 @@ export default function SettingsPage() {
                 <TableBody>
                   {isUsersLoading ? (
                     <TableRow><TableCell colSpan={3} className="text-center py-8">Loading users...</TableCell></TableRow>
+                  ) : filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
+                        No users found matching your search.
+                      </TableCell>
+                    </TableRow>
                   ) : (
-                    allUsers?.map((u: any) => (
+                    filteredUsers.map((u: any) => (
                       <TableRow key={u.id}>
                         <TableCell>
                           <div className="flex flex-col">
