@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -23,15 +24,16 @@ export function AutoBackupTrigger() {
   // Check Admin Status
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
 
-  // Fetch Automation Settings
-  const settingsRef = useMemoFirebase(() => (db ? doc(db, "settings", "backup") : null), [db]);
+  // Fetch Automation Settings - Only if the user is an Admin to avoid permission errors
+  const settingsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "backup") : null), [db, isAdmin]);
   const { data: autoSettings } = useDoc(settingsRef);
   
   useEffect(() => {
     async function checkAndRunBackup() {
-      // Logic checks
-      if (!db || !user || !profile || profile.role !== 'Admin' || hasRunThisSession) return;
+      // Logic checks - only Admins can run the backup check
+      if (!db || !user || !profile || !isAdmin || hasRunThisSession) return;
       if (autoSettings?.enabled === false) return;
 
       try {
@@ -97,7 +99,7 @@ export function AutoBackupTrigger() {
     }
 
     checkAndRunBackup();
-  }, [db, user, profile, autoSettings, hasRunThisSession, toast]);
+  }, [db, user, profile, isAdmin, autoSettings, hasRunThisSession, toast]);
 
   return null;
 }

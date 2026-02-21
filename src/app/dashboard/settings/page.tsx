@@ -32,29 +32,33 @@ function SettingsContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tab Sync Logic
-  const defaultTab = searchParams.get("tab") || "general";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState("profile");
+
+  // Data Fetching - Profile first to determine role
+  const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(profileRef);
+  const isAdmin = profile?.role === 'Admin';
 
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab && tab !== activeTab) {
-      setActiveTab(tab);
+    const tabFromUrl = searchParams.get("tab");
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    } else if (profile) {
+      // Default view based on role
+      setActiveTab(isAdmin ? "general" : "profile");
     }
-  }, [searchParams]);
+  }, [searchParams, profile, isAdmin]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     router.push(`/dashboard/settings?tab=${value}`);
   };
 
-  // Data Fetching
-  const usersQuery = useMemoFirebase(() => (db ? collection(db, "users") : null), [db]);
+  // Sensitive data queries only run for Admins
+  const usersQuery = useMemoFirebase(() => (db && isAdmin ? collection(db, "users") : null), [db, isAdmin]);
   const { data: allUsers, isLoading: isUsersLoading } = useCollection(usersQuery);
 
-  const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
-  const { data: profile } = useDoc(profileRef);
-
-  const settingsRef = useMemoFirebase(() => (db ? doc(db, "settings", "backup") : null), [db]);
+  const settingsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "backup") : null), [db, isAdmin]);
   const { data: autoSettings } = useDoc(settingsRef);
 
   // Form States
@@ -186,7 +190,6 @@ function SettingsContent() {
   const filteredUsers = useMemo(() => {
     if (!allUsers) return [];
     
-    // Deduplicate by email to handle "Repeatly same user id" issue
     const uniqueUsers: any[] = [];
     const seenEmails = new Set();
     
@@ -207,97 +210,105 @@ function SettingsContent() {
     );
   }, [allUsers, userSearchTerm]);
 
+  if (!profile) return (
+    <div className="flex justify-center py-12">
+      <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="general">General</TabsTrigger>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-1'} max-w-md`}>
+          {isAdmin && <TabsTrigger value="general">General</TabsTrigger>}
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="automation">Automation</TabsTrigger>
+          {isAdmin && <TabsTrigger value="automation">Automation</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="general" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="grid gap-1">
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  User Control
-                </CardTitle>
-                <CardDescription>Manage login accounts and clean up orphaned records.</CardDescription>
-              </div>
-              <div className="relative w-full sm:w-[250px]">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search email or role..."
-                  className="pl-8"
-                  value={userSearchTerm}
-                  onChange={(e) => setUserSearchTerm(e.target.value)}
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User / Role</TableHead>
-                    <TableHead>Last Active</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isUsersLoading ? (
-                    <TableRow><TableCell colSpan={3} className="text-center py-8">Loading users...</TableCell></TableRow>
-                  ) : filteredUsers.length === 0 ? (
+        {isAdmin && (
+          <TabsContent value="general" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="grid gap-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    User Control
+                  </CardTitle>
+                  <CardDescription>Manage login accounts and clean up orphaned records.</CardDescription>
+                </div>
+                <div className="relative w-full sm:w-[250px]">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search email or role..."
+                    className="pl-8"
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                        No users found matching your search.
-                      </TableCell>
+                      <TableHead>User / Role</TableHead>
+                      <TableHead>Last Active</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredUsers.map((u: any) => (
-                      <TableRow key={u.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{u.email || u.id}</span>
-                            <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-tight">
-                              {u.role || 'Unassigned Role'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {u.updatedAt?.seconds 
-                            ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) 
-                            : 'Never'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-[10px] h-8 text-primary"
-                              onClick={() => handleResetUserPassword(u)}
-                            >
-                              <Key className="h-3 w-3 mr-1" /> Reset
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteUserRecord(u)}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" /> Delete
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {isUsersLoading ? (
+                      <TableRow><TableCell colSpan={3} className="text-center py-8">Loading users...</TableCell></TableRow>
+                    ) : filteredUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
+                          No users found matching your search.
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    ) : (
+                      filteredUsers.map((u: any) => (
+                        <TableRow key={u.id}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{u.email || u.id}</span>
+                              <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-tight">
+                                {u.role || 'Unassigned Role'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {u.updatedAt?.seconds 
+                              ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) 
+                              : 'Never'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-[10px] h-8 text-primary"
+                                onClick={() => handleResetUserPassword(u)}
+                              >
+                                <Key className="h-3 w-3 mr-1" /> Reset
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteUserRecord(u)}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" /> Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="profile" className="space-y-6 mt-6">
           <div className="grid gap-6 md:grid-cols-5">
@@ -362,72 +373,74 @@ function SettingsContent() {
           </div>
         </TabsContent>
 
-        <TabsContent value="automation" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DatabaseBackup className="h-5 w-5 text-primary" />
-                Backup Automation
-              </CardTitle>
-              <CardDescription>Configure automatic email snapshots of your entire database.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Enable Auto-Backup</Label>
-                  <p className="text-sm text-muted-foreground">Automatically send database reports every Sunday at 12:00 AM.</p>
-                </div>
-                <Switch 
-                  checked={autoSettings?.enabled ?? true} 
-                  onCheckedChange={(checked) => handleSaveAutomation({ enabled: checked })}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="backup-email">Destination Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="backup-email" 
-                    type="email" 
-                    className="pl-9" 
-                    placeholder="ezydriveapp@gmail.com"
-                    value={autoSettings?.email || "ezydriveapp@gmail.com"} 
-                    onChange={(e) => handleSaveAutomation({ email: e.target.value })}
+        {isAdmin && (
+          <TabsContent value="automation" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DatabaseBackup className="h-5 w-5 text-primary" />
+                  Backup Automation
+                </CardTitle>
+                <CardDescription>Configure automatic email snapshots of your entire database.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Enable Auto-Backup</Label>
+                    <p className="text-sm text-muted-foreground">Automatically send database reports every Sunday at 12:00 AM.</p>
+                  </div>
+                  <Switch 
+                    checked={autoSettings?.enabled ?? true} 
+                    onCheckedChange={(checked) => handleSaveAutomation({ enabled: checked })}
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground italic">Default: ezydriveapp@gmail.com</p>
-              </div>
 
-              <Separator />
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
-                <div className="grid gap-1">
-                  <p className="text-sm font-bold">Manual Email Backup</p>
-                  <p className="text-xs text-muted-foreground">Need a snapshot right now? Trigger a report manually.</p>
+                <div className="grid gap-2">
+                  <Label htmlFor="backup-email">Destination Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="backup-email" 
+                      type="email" 
+                      className="pl-9" 
+                      placeholder="ezydriveapp@gmail.com"
+                      value={autoSettings?.email || "ezydriveapp@gmail.com"} 
+                      onChange={(e) => handleSaveAutomation({ email: e.target.value })}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">Default: ezydriveapp@gmail.com</p>
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={handleManualBackupTrigger} 
-                  disabled={isBackingUpManual}
-                  className="w-full sm:w-auto"
-                >
-                  {isBackingUpManual ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
-                  {isBackingUpManual ? "Sending..." : "Send Backup Now"}
-                </Button>
-              </div>
 
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-                Backup schedule is active. Data is aggregated every Sunday.
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <Separator />
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
+                  <div className="grid gap-1">
+                    <p className="text-sm font-bold">Manual Email Backup</p>
+                    <p className="text-xs text-muted-foreground">Need a snapshot right now? Trigger a report manually.</p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={handleManualBackupTrigger} 
+                    disabled={isBackingUpManual}
+                    className="w-full sm:w-auto"
+                  >
+                    {isBackingUpManual ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    {isBackingUpManual ? "Sending..." : "Send Backup Now"}
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                  Backup schedule is active. Data is aggregated every Sunday.
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
