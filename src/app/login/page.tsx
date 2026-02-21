@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, Sparkles, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -47,11 +47,16 @@ export default function LoginPage() {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const uid = userCredential.user.uid;
           
+          // Map Branch1 to "Branch 1" to match student records
+          const formattedBranch = userId.startsWith('Branch') 
+            ? `Branch ${userId.replace('Branch', '')}` 
+            : 'HeadOffice';
+
           await setDoc(doc(db, 'users', uid), {
             id: uid,
             email: email,
             role: userId === 'admin' ? 'Admin' : 'BranchManager',
-            branch: userId.startsWith('Branch') ? userId : 'HeadOffice',
+            branch: formattedBranch,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -72,9 +77,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.code === 'auth/operation-not-allowed' 
-          ? 'System configuration required: Enable Email/Password in Firebase Console.'
-          : 'Invalid User ID or Password. Please try again.',
+        description: 'Invalid User ID or Password. Please try again.',
       });
     } finally {
       setIsLoading(false);
@@ -101,7 +104,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Citydrive Portal</CardTitle>
           <CardDescription>
-            Enter your User ID
+            Enter your credentials
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -111,7 +114,7 @@ export default function LoginPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Configuration Required</AlertTitle>
                 <AlertDescription className="text-xs">
-                  Please go to <b>Firebase Console</b> &rarr; <b>Authentication</b> &rarr; <b>Sign-in method</b> and enable <b>Email/Password</b> to allow auto-creation of accounts.
+                  Please enable Email/Password login in the Firebase Console.
                 </AlertDescription>
               </Alert>
             )}
