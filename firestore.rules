@@ -76,5 +76,9 @@ service cloud.firestore {
     match /backupMetadata/{backupId} {
       allow read, write: if isAdmin();
     }
+
+    match /settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
   }
 }
