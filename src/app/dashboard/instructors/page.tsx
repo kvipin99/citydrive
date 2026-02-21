@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, MapPin, User } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -121,7 +121,7 @@ export default function InstructorsPage() {
     setIsSubmitting(true);
 
     try {
-      toast({ title: "Registering Staff", description: `Creating system account for ${staffId}...` });
+      toast({ title: "Registering Staff", description: `Creating login account for ${staffId} with default password City123...` });
       const authUid = await createInstructorAuth(staffId);
       
       const newInstructorData = {
@@ -139,12 +139,12 @@ export default function InstructorsPage() {
 
       setIsAddDialogOpen(false);
       setFormData({ id: '', status: 'Active', name: '', phone: '' });
-      toast({ title: "Registration Successful", description: `Account ${staffId} created. Password: City123` });
+      toast({ title: "Registration Successful", description: `Account ${staffId} created. Login: ${staffId.toLowerCase()}@citydriving.in / Password: City123` });
     } catch (error: any) {
       console.error("Staff registration error:", error);
       let errorMsg = error.message || "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID "${staffId}" is still blocked by a previous login account. Use the "Force Delete Auth" tool below to clear it.`;
+        errorMsg = `Login ID "${staffId}" already exists in the security database. Use the "Force Delete Auth" tool to clear it before reusing.`;
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -185,15 +185,13 @@ export default function InstructorsPage() {
     const secondaryAuth = getAuth(secondaryApp);
 
     try {
-      // 1. Try to delete from Auth
       try {
         const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
         await deleteUser(cred.user);
       } catch (authErr) {
-        console.warn("Auth cleanup failed (possibly already deleted):", authErr);
+        console.warn("Auth cleanup failed (possibly already deleted or password changed):", authErr);
       }
 
-      // 2. Delete Firestore records
       await deleteDoc(doc(db, 'instructors', staffId));
       await deleteDoc(doc(db, 'users', instructor.userId));
 
@@ -246,7 +244,7 @@ export default function InstructorsPage() {
                 <UserSquare className="h-5 w-5 text-primary" />
                 Staff & Instructors
               </CardTitle>
-              <CardDescription>Manage IDs and statuses for your driving school staff.</CardDescription>
+              <CardDescription>Manage IDs and automated login accounts for your staff.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -278,7 +276,7 @@ export default function InstructorsPage() {
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="staffId">Staff ID (Changeable)</Label>
+                      <Label htmlFor="staffId">Staff ID (Editable)</Label>
                       <Input 
                         id="staffId" 
                         placeholder="e.g. SID01" 
@@ -324,10 +322,10 @@ export default function InstructorsPage() {
                     <div className="w-full pt-4 border-t mt-2">
                       <div className="flex items-center gap-1.5 mb-2 text-orange-600">
                         <AlertCircle className="h-3 w-3" />
-                        <p className="text-[10px] font-bold uppercase tracking-tight">Fix "Email already in use" Error</p>
+                        <p className="text-[10px] font-bold uppercase tracking-tight">Fix SID Conflict Error</p>
                       </div>
                       <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
-                        If SID01 or SID02 was deleted before, their login might still exist. Enter the ID below to force-clear it.
+                        If an ID was used previously, its login might still exist in the security database. Enter the ID below to force-clear it.
                       </p>
                       <div className="flex gap-2">
                         <Input 
@@ -520,7 +518,7 @@ export default function InstructorsPage() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground flex items-center gap-2">
-                          <Mail className="h-3.5 w-3.5" /> Email
+                          <Mail className="h-3.5 w-3.5" /> Login Email
                         </span>
                         <span className="font-medium lowercase text-xs">{selectedInstructor.id}@citydriving.in</span>
                       </div>
