@@ -9,9 +9,9 @@
     },
     {
       "id": "app-logo",
-      "description": "Logo for Citydrive Driving School",
-      "imageUrl": "https://images.unsplash.com/photo-1593941707874-ef25b8b4a92b?q=80&w=1000&auto=format&fit=crop",
-      "imageHint": "steering wheel logo"
+      "description": "CDS Driving School Logo with steering wheel and thumbs up",
+      "imageUrl": "https://picsum.photos/seed/cds-driving-logo/400/400",
+      "imageHint": "driving logo"
     }
   ]
 }
