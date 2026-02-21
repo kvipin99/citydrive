@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, AlertCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, AlertCircle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -95,62 +95,70 @@ export default function InstructorsPage() {
       return;
     }
 
-    if (isLoading) {
-      toast({ title: "System Busy", description: "Please wait for current records to load." });
-      return;
-    }
-
     setIsSubmitting(true);
 
-    // SMARTER SID LOGIC: Find highest number and increment
-    // This avoids reused IDs that might still exist in Firebase Auth
+    // Calculate initial SID base
     const lastIdNum = instructors?.reduce((max, inst) => {
       const numPart = inst.id.replace('SID', '');
       const num = parseInt(numPart, 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0) || 0;
     
-    const staffId = `SID${String(lastIdNum + 1).padStart(2, '0')}`;
-    
-    try {
-      toast({ title: "Registering Staff", description: `Setting up ID ${staffId}...` });
-      
-      const authUid = await createInstructorAuth(staffId);
-      
-      const newInstructorData = {
-        ...formData,
-        id: staffId,
-        userId: authUid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: user?.uid,
-        avatarUrl: `https://picsum.photos/seed/${staffId}/40/40`
-      };
+    let currentIdNum = lastIdNum + 1;
+    let success = false;
+    let attempts = 0;
+    const maxAttempts = 5;
 
-      const instructorRef = doc(db, 'instructors', staffId);
-      setDocumentNonBlocking(instructorRef, newInstructorData, { merge: true });
+    while (!success && attempts < maxAttempts) {
+      const staffId = `SID${String(currentIdNum).padStart(2, '0')}`;
+      try {
+        toast({ title: "Registering Staff", description: `Attempting registration for ${staffId}...` });
+        
+        const authUid = await createInstructorAuth(staffId);
+        
+        const newInstructorData = {
+          ...formData,
+          id: staffId,
+          userId: authUid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: user?.uid,
+          avatarUrl: `https://picsum.photos/seed/${staffId}/40/40`
+        };
 
-      setIsAddDialogOpen(false);
-      setFormData({ status: 'Active', name: '', phone: '' });
-      toast({ title: "Success", description: `Staff ${staffId} registered. Login: ${staffId.toLowerCase()}, Pass: City123` });
-    } catch (error: any) {
-      console.error("Staff registration error:", error);
-      let errorMsg = error.message || "Could not create account.";
-      
-      if (error.code === 'auth/operation-not-allowed') {
-        errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
-      } else if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `Staff ID ${staffId} was previously used and still exists in the security system. Please contact the administrator to manually remove the old account.`;
+        const instructorRef = doc(db, 'instructors', staffId);
+        setDocumentNonBlocking(instructorRef, newInstructorData, { merge: true });
+
+        setIsAddDialogOpen(false);
+        setFormData({ status: 'Active', name: '', phone: '' });
+        toast({ title: "Success", description: `Staff ${staffId} registered. Login: ${staffId.toLowerCase()}, Pass: City123` });
+        success = true;
+      } catch (error: any) {
+        if (error.code === 'auth/email-already-in-use') {
+          console.warn(`Collision detected for ${staffId}, skipping to next ID...`);
+          currentIdNum++;
+          attempts++;
+        } else {
+          console.error("Staff registration error:", error);
+          let errorMsg = error.message || "Could not create account.";
+          if (error.code === 'auth/operation-not-allowed') {
+            errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
+          }
+          toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
+          break;
+        }
       }
+    }
 
+    if (!success && attempts >= maxAttempts) {
       toast({ 
         variant: "destructive", 
-        title: "Registration Failed", 
-        description: errorMsg
+        title: "Registration Error", 
+        description: "Multiple Staff IDs are already in use in the authentication system. Please contact the administrator to clean up old accounts." 
       });
-    } finally {
-      setIsSubmitting(false);
     }
+
+    setIsSubmitting(false);
   };
 
   const handleDeleteInstructor = (id: string) => {
@@ -159,7 +167,7 @@ export default function InstructorsPage() {
     toast({ 
       variant: "destructive", 
       title: "Staff Removed", 
-      description: `Database record for ${id} deleted. Note: The login account remains active in the authentication system.` 
+      description: `Staff record ${id} has been deleted from the database.` 
     });
   };
 
@@ -219,7 +227,12 @@ export default function InstructorsPage() {
                   </div>
                   <DialogFooter>
                     <Button onClick={handleAddInstructor} className="w-full" disabled={isSubmitting}>
-                      {isSubmitting ? "Processing..." : "Create Staff Account"}
+                      {isSubmitting ? (
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Processing...
+                        </div>
+                      ) : "Create Staff Account"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
