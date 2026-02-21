@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard } from "lucide-react";
+import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -32,6 +32,14 @@ export default function StudentsPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const userProfileRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid);
+  }, [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -74,7 +82,7 @@ export default function StudentsPage() {
   ) || [];
 
   const createStudentAuth = async (studentId: string) => {
-    const email = `${studentId}@citydriving.in`;
+    const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
     const secondaryAppName = `secondary-${studentId}-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
@@ -151,9 +159,6 @@ export default function StudentsPage() {
     if (!selectedStudent) return;
     const studentRef = doc(db, 'students', selectedStudent.id);
     
-    // Note: We don't automatically recalculate 'amount' if prices in coursePriceMap changed, 
-    // unless the admin specifically changes the courses/discount here. 
-    // This honors the "cannot change old amount" requirement.
     const updatedData = { 
       ...formData, 
       updatedAt: serverTimestamp()
@@ -173,7 +178,6 @@ export default function StudentsPage() {
       newCourses = [...currentCourses, course];
     }
     
-    // If it's a NEW registration, update the amount dynamically
     const newAmount = calculateFees(newCourses, formData.discount || 0, formData.specialCourseFee || 0);
     setFormData({ ...formData, courses: newCourses, amount: newAmount });
   };
@@ -181,6 +185,84 @@ export default function StudentsPage() {
   const calculateBalanceDue = (student: Student) => {
     const paid = student.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
     return Math.max(0, (student.amount || 0) - paid);
+  };
+
+  const handleExportCSV = () => {
+    if (!students || students.length === 0) {
+      toast({ variant: "destructive", title: "Export Failed", description: "No student data available to export." });
+      return;
+    }
+    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Registration Date", "Courses", "Total Amount", "Discount"];
+    const rows = students.map(s => [
+      s.id,
+      s.name,
+      s.phone,
+      s.email || '',
+      s.branch,
+      s.status,
+      s.registrationDate,
+      `"${s.courses?.join('; ')}"`,
+      s.amount,
+      s.discount
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `citydrive_students_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Successful", description: "Student records downloaded as CSV." });
+  };
+
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split("\n").filter(line => line.trim() !== "");
+      const dataLines = lines.slice(1);
+      
+      toast({ title: "Importing Students", description: `Processing ${dataLines.length} records...` });
+
+      for (const line of dataLines) {
+        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Split by comma but respect quotes
+        if (parts.length < 5) continue;
+
+        const [id, name, phone, email, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
+        
+        const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
+        const studentId = id || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const studentRef = doc(db, 'students', studentId);
+        
+        const newStudentData = {
+          id: studentId,
+          name: name || "Unknown",
+          phone: phone || "",
+          email: email || `${studentId.toLowerCase()}@citydriving.in`,
+          branch: branch || "Branch 1",
+          status: status || "Active",
+          registrationDate: regDate || new Date().toISOString().split('T')[0],
+          courses: courses,
+          amount: Number(amount) || 0,
+          discount: Number(discount) || 0,
+          payments: [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: user?.uid
+        };
+
+        setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
+      }
+      
+      toast({ title: "Import Complete", description: "Student records have been processed." });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -192,7 +274,7 @@ export default function StudentsPage() {
               <CardTitle>Students Database</CardTitle>
               <CardDescription>Live pricing sourced from Course Catalog.</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -202,6 +284,27 @@ export default function StudentsPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+              
+              {isAdmin && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import
+                  </Button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept=".csv"
+                    onChange={handleImportCSV}
+                  />
+                </div>
+              )}
+
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0, specialCourseFee: 0, specialCourseName: "", amount: 0 })}>
@@ -352,7 +455,6 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Profile & Edit Dialogs remain similarly structured, refactored to use dynamic pricing labels */}
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
           {selectedStudent && (
