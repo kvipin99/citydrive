@@ -12,12 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
-import { collection, doc, serverTimestamp } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, AlertCircle, RefreshCw } from "lucide-react";
+import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking } from "@/firebase";
+import { collection, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
 
 interface Instructor {
@@ -46,6 +46,7 @@ export default function InstructorsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cleanupId, setCleanupId] = useState("");
   
   const [formData, setFormData] = useState<Partial<Instructor>>({
     id: '',
@@ -54,7 +55,6 @@ export default function InstructorsPage() {
     phone: '',
   });
 
-  // Pre-calculate the next available SID based on existing records
   const nextAvailableId = useMemo(() => {
     const lastIdNum = instructors?.reduce((max, inst) => {
       const numPart = inst.id.replace('SID', '');
@@ -64,7 +64,6 @@ export default function InstructorsPage() {
     return `SID${String(lastIdNum + 1).padStart(2, '0')}`;
   }, [instructors]);
 
-  // Set default ID when dialog opens
   useEffect(() => {
     if (isAddDialogOpen && !formData.id) {
       setFormData(prev => ({ ...prev, id: nextAvailableId }));
@@ -80,7 +79,7 @@ export default function InstructorsPage() {
   const createInstructorAuth = async (staffId: string) => {
     const email = `${staffId.toLowerCase()}@citydriving.in`;
     const password = "City123";
-    const secondaryAppName = `staff-${staffId}-${Date.now()}`;
+    const secondaryAppName = `create-${staffId}-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
     const secondaryAuth = getAuth(secondaryApp);
     
@@ -88,7 +87,6 @@ export default function InstructorsPage() {
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const uid = userCredential.user.uid;
       
-      // Create User role doc for security rules
       const userRef = doc(db, 'users', uid);
       setDocumentNonBlocking(userRef, {
         id: uid,
@@ -118,7 +116,6 @@ export default function InstructorsPage() {
 
     try {
       toast({ title: "Registering Staff", description: `Creating system account for ${staffId}...` });
-      
       const authUid = await createInstructorAuth(staffId);
       
       const newInstructorData = {
@@ -140,29 +137,77 @@ export default function InstructorsPage() {
     } catch (error: any) {
       console.error("Staff registration error:", error);
       let errorMsg = error.message || "An unexpected error occurred.";
-      let errorTitle = "Registration Failed";
-      
       if (error.code === 'auth/email-already-in-use') {
-        errorTitle = "ID Already Registered";
-        errorMsg = `The ID "${staffId}" exists in the system login database (even if the record was previously deleted). Please choose a different unique ID like "${staffId}_NEW" or increment the number.`;
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
+        errorMsg = `ID "${staffId}" is still in the system login database. Use "Cleanup Ghost Account" below to clear it.`;
       }
-      
-      toast({ variant: "destructive", title: errorTitle, description: errorMsg });
+      toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteInstructor = (id: string) => {
-    const instructorRef = doc(db, 'instructors', id);
-    deleteDocumentNonBlocking(instructorRef);
-    toast({ 
-      variant: "destructive", 
-      title: "Record Removed", 
-      description: `Instructor ${id} removed from database. Note: Login credentials remain in the authentication system for security.` 
-    });
+  const handleDeleteInstructor = async (instructor: Instructor) => {
+    const staffId = instructor.id;
+    const email = `${staffId.toLowerCase()}@citydriving.in`;
+    const password = "City123";
+
+    setIsSubmitting(true);
+    toast({ title: "Removing Staff", description: `Cleaning up ${staffId} from database and login system...` });
+
+    const secondaryAppName = `del-${staffId}-${Date.now()}`;
+    const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+      // 1. Try to delete from Auth
+      try {
+        const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+        await deleteUser(cred.user);
+      } catch (authErr) {
+        console.warn("Auth cleanup failed (possibly already deleted):", authErr);
+      }
+
+      // 2. Delete Firestore records
+      await deleteDoc(doc(db, 'instructors', staffId));
+      await deleteDoc(doc(db, 'users', instructor.userId));
+
+      await deleteApp(secondaryApp);
+      toast({ title: "Staff Removed", description: `Records and login account for ${staffId} have been permanently deleted.` });
+    } catch (error: any) {
+      console.error("Deletion error:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to complete deletion process." });
+      try { await deleteApp(secondaryApp); } catch {}
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCleanupGhost = async () => {
+    if (!cleanupId) return;
+    const staffId = cleanupId.toUpperCase();
+    const email = `${staffId.toLowerCase()}@citydriving.in`;
+    const password = "City123";
+
+    setIsSubmitting(true);
+    toast({ title: "Cleanup Started", description: `Attempting to force-delete login account for ${staffId}...` });
+
+    const secondaryAppName = `cleanup-${staffId}-${Date.now()}`;
+    const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+      const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      await deleteUser(cred.user);
+      await deleteApp(secondaryApp);
+      toast({ title: "Cleanup Successful", description: `Login account for ${staffId} has been removed.` });
+      setCleanupId("");
+    } catch (error: any) {
+      console.error("Cleanup error:", error);
+      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone." });
+      try { await deleteApp(secondaryApp); } catch {}
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -189,7 +234,10 @@ export default function InstructorsPage() {
               </div>
               <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
                 setIsAddDialogOpen(open);
-                if (!open) setFormData({ id: '', status: 'Active', name: '', phone: '' });
+                if (!open) {
+                  setFormData({ id: '', status: 'Active', name: '', phone: '' });
+                  setCleanupId("");
+                }
               }}>
                 <DialogTrigger asChild>
                   <Button>
@@ -200,11 +248,11 @@ export default function InstructorsPage() {
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Add New Staff Member</DialogTitle>
-                    <DialogDescription>Assign a unique ID. Default password is City123.</DialogDescription>
+                    <DialogDescription>Assign a unique ID. Account deletion is now permanent.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="staffId">Staff ID (Changeable)</Label>
+                      <Label htmlFor="staffId">Staff ID</Label>
                       <Input 
                         id="staffId" 
                         placeholder="e.g. SID01" 
@@ -241,15 +289,25 @@ export default function InstructorsPage() {
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="flex-col gap-2">
                     <Button onClick={handleAddInstructor} className="w-full" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <div className="flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          Creating Account...
-                        </div>
-                      ) : "Confirm & Register"}
+                      {isSubmitting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Confirm & Register
                     </Button>
+                    <div className="w-full pt-4 border-t mt-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Cleanup Ghost Accounts (SID01, SID02 etc)</p>
+                      <div className="flex gap-2">
+                        <Input 
+                          placeholder="Enter orphaned ID" 
+                          className="text-xs h-8" 
+                          value={cleanupId} 
+                          onChange={(e) => setCleanupId(e.target.value)} 
+                        />
+                        <Button size="sm" variant="outline" className="h-8 text-[10px]" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                          <Eraser className="h-3 w-3 mr-1" /> Force Delete Auth
+                        </Button>
+                      </div>
+                    </div>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -316,8 +374,12 @@ export default function InstructorsPage() {
                             <DropdownMenuItem>View Profile</DropdownMenuItem>
                             <DropdownMenuItem>Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInstructor(instructor.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Remove Instructor
+                            <DropdownMenuItem 
+                              className="text-destructive" 
+                              onClick={() => handleDeleteInstructor(instructor)}
+                              disabled={isSubmitting}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete Staff & Login
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
