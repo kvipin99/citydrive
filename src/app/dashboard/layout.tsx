@@ -4,15 +4,17 @@
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import SidebarNav from '@/components/sidebar-nav';
 import DashboardHeader from '@/components/dashboard-header';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { AutoBackupTrigger } from '@/components/dashboard/auto-backup-trigger';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
+  const db = useFirestore();
   const router = useRouter();
   const logo = PlaceHolderImages.find(p => p.id === 'app-logo');
 
@@ -20,7 +22,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+    
+    // Track Activity
+    if (user && db) {
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, { updatedAt: serverTimestamp() }).catch(() => {});
+    }
+  }, [user, isUserLoading, router, db]);
 
   if (isUserLoading) {
     return (

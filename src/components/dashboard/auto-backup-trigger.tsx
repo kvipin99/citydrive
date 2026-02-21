@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -12,7 +13,7 @@ const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "cou
 
 /**
  * This component runs silently in the background. 
- * For Admins, it checks if a backup is due (twice a week = every 3.5 days).
+ * For Admins, it checks if a backup is due based on settings.
  */
 export function AutoBackupTrigger() {
   const db = useFirestore();
@@ -20,17 +21,21 @@ export function AutoBackupTrigger() {
   const { toast } = useToast();
   const [hasRunThisSession, setHasRunThisSession] = useState(false);
 
-  // Check Admin Status and Settings
+  // Check Admin Status
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
+
+  // Fetch Automation Settings
+  const settingsRef = useMemoFirebase(() => (db ? doc(db, "settings", "backup") : null), [db]);
+  const { data: autoSettings } = useDoc(settingsRef);
   
   useEffect(() => {
     async function checkAndRunBackup() {
-      // Only proceed if we have an admin profile and haven't run this session
+      // Logic checks
       if (!db || !user || !profile || profile.role !== 'Admin' || hasRunThisSession) return;
+      if (autoSettings?.enabled === false) return;
 
       try {
-        // Fetch last backup from history manually to determine if a new one is needed
         const q = query(collection(db, "backupMetadata"), orderBy("timestamp", "desc"), limit(1));
         const snap = await getDocs(q);
         const lastBackup = snap.docs[0]?.data();
@@ -57,8 +62,7 @@ export function AutoBackupTrigger() {
             totalRecords += docs.length;
           }
 
-          // Simulate Sending Email via Genkit Flow
-          const emailRecipient = profile.email || "admin@citydriving.in";
+          const emailRecipient = autoSettings?.email || "ezydriveapp@gmail.com";
           const summary = `Full Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
           
           await sendBackupEmail({
@@ -88,7 +92,7 @@ export function AutoBackupTrigger() {
     }
 
     checkAndRunBackup();
-  }, [db, user, profile, hasRunThisSession, toast]);
+  }, [db, user, profile, autoSettings, hasRunThisSession, toast]);
 
   return null;
 }
