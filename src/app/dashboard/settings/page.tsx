@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,11 +20,29 @@ import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { toast } = useToast();
   const db = useFirestore();
   const { user } = useUser();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab Sync Logic
+  const defaultTab = searchParams.get("tab") || "general";
+  const [activeTab, setActiveTab] = useState(defaultTab);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    router.push(`/dashboard/settings?tab=${value}`);
+  };
 
   // Data Fetching
   const usersQuery = useMemoFirebase(() => (db ? collection(db, "users") : null), [db]);
@@ -66,7 +85,6 @@ export default function SettingsPage() {
 
   const handleResetUserPassword = (targetUser: any) => {
     const targetRef = doc(db, "users", targetUser.id);
-    // In a prototype environment, we simulate a password reset flag
     updateDocumentNonBlocking(targetRef, { 
       passwordResetRequested: true,
       updatedAt: serverTimestamp() 
@@ -110,7 +128,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <Tabs defaultValue="general" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-md">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -199,7 +217,9 @@ export default function SettingsPage() {
                 <div className="relative">
                   <Avatar className="h-32 w-32 border-4 border-primary/20">
                     <AvatarImage src={profile?.avatarUrl} alt="User" />
-                    <AvatarFallback><UserIcon className="h-12 w-12 text-muted-foreground" /></AvatarFallback>
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      <UserIcon className="h-12 w-12" />
+                    </AvatarFallback>
                   </Avatar>
                   <Button 
                     size="icon" 
@@ -295,5 +315,17 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center py-12">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

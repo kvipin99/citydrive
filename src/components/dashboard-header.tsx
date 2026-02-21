@@ -1,4 +1,3 @@
-
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -78,11 +77,10 @@ export default function DashboardHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10 border">
+                <Avatar className="h-10 w-10 border border-primary/20">
                   <AvatarImage 
-                    src={profile?.avatarUrl || avatarPlaceholder?.imageUrl} 
+                    src={profile?.avatarUrl} 
                     alt="User Avatar" 
-                    data-ai-hint={avatarPlaceholder?.imageHint} 
                   />
                   <AvatarFallback className="bg-primary/10 text-primary font-bold">
                     {user?.email?.charAt(0).toUpperCase() || 'A'}
@@ -94,23 +92,23 @@ export default function DashboardHeader() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-bold leading-none">
+                    {user?.email?.split('@')[0]}
+                  </p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     {profile?.role === 'Admin' ? 'Administrator' : 
                      profile?.role === 'BranchManager' ? 'Branch Manager' : 'Staff User'}
-                  </p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user?.email}
                   </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/dashboard/settings" className="flex items-center w-full">
+                <Link href="/dashboard/settings?tab=profile" className="flex items-center w-full">
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/dashboard/settings" className="flex items-center w-full">
+                <Link href="/dashboard/settings?tab=general" className="flex items-center w-full">
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </Link>
