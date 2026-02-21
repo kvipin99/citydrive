@@ -101,25 +101,17 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Citydrive Portal</CardTitle>
           <CardDescription>
-            Enter your User ID to manage your branch
+            Enter your User ID
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-            {setupError ? (
+            {setupError && (
               <Alert variant="destructive" className="bg-destructive/10">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Configuration Required</AlertTitle>
                 <AlertDescription className="text-xs">
                   Please go to <b>Firebase Console</b> &rarr; <b>Authentication</b> &rarr; <b>Sign-in method</b> and enable <b>Email/Password</b> to allow auto-creation of accounts.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert className="bg-primary/5 border-primary/20">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <AlertTitle className="text-sm font-semibold">Instant Access Enabled</AlertTitle>
-                <AlertDescription className="text-xs mt-1">
-                  System accounts (admin, Branch1-5) are automatically created on first login with password <b>{DEFAULT_PASSWORD}</b>.
                 </AlertDescription>
               </Alert>
             )}
