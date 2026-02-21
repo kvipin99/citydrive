@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, arrayUnion } from "firebase/firestore";
+import { collection, doc, serverTimestamp, arrayUnion, Timestamp } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
 import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -66,7 +66,8 @@ export default function StudentsPage() {
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     receiptNo: '',
-    method: 'Cash' as const
+    method: 'Cash' as const,
+    date: new Date().toISOString().split('T')[0]
   });
 
   const [formData, setFormData] = useState<Partial<Student>>({
@@ -259,12 +260,14 @@ export default function StudentsPage() {
     const paymentRef = doc(db, 'payments', payId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
+    const transactionDate = new Date(paymentData.date);
+
     const paymentRecord = {
       id: payId,
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
       amount: paymentData.amount,
-      date: serverTimestamp(),
+      date: Timestamp.fromDate(transactionDate),
       receiptNo: paymentData.receiptNo,
       method: paymentData.method,
       branch: selectedStudent.branch,
@@ -275,7 +278,7 @@ export default function StudentsPage() {
     updateDocumentNonBlocking(studentRef, {
       payments: arrayUnion({
         amount: paymentData.amount,
-        date: new Date().toISOString(),
+        date: transactionDate.toISOString(),
         receiptNo: paymentData.receiptNo,
         method: paymentData.method,
       }),
@@ -283,6 +286,12 @@ export default function StudentsPage() {
     });
 
     setIsPaymentDialogOpen(false);
+    setPaymentData({ 
+      amount: 0, 
+      receiptNo: '', 
+      method: 'Cash',
+      date: new Date().toISOString().split('T')[0]
+    });
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} saved.` });
   };
 
@@ -619,7 +628,7 @@ export default function StudentsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash' }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => deleteDocumentNonBlocking(doc(db, 'students', student.id))}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
@@ -646,8 +655,18 @@ export default function StudentsPage() {
                <span className="font-bold text-destructive">₹{selectedStudent ? calculateBalanceDue(selectedStudent).toLocaleString() : 0}</span>
             </div>
             <div className="grid gap-2">
+              <Label>Payment Date</Label>
+              <Input 
+                type="date" 
+                value={paymentData.date} 
+                disabled={!isAdmin}
+                onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
+              />
+              {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
+            </div>
+            <div className="grid gap-2">
               <Label>Amount Received (₹)</Label>
-              <Input type="number" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
+              <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -10,9 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, ArrowDownCircle } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { collection, doc, serverTimestamp, arrayUnion, Timestamp } from 'firebase/firestore';
+import { PlusCircle, Search, CreditCard, Receipt, User, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -42,6 +41,13 @@ export default function PaymentsPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
+  const userProfileRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid);
+  }, [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'payments');
@@ -62,6 +68,7 @@ export default function PaymentsPage() {
     amount: 0,
     receiptNo: '',
     method: 'Cash' as const,
+    date: new Date().toISOString().split('T')[0],
   });
 
   const filteredStudents = useMemo(() => {
@@ -88,12 +95,15 @@ export default function PaymentsPage() {
     const paymentRef = doc(db, 'payments', paymentId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
+    // Create a proper JS Date from the input string
+    const transactionDate = new Date(paymentData.date);
+    
     const fullPaymentRecord = {
       id: paymentId,
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
       amount: paymentData.amount,
-      date: serverTimestamp(),
+      date: Timestamp.fromDate(transactionDate),
       receiptNo: paymentData.receiptNo,
       method: paymentData.method,
       branch: selectedStudent.branch,
@@ -107,7 +117,7 @@ export default function PaymentsPage() {
     updateDocumentNonBlocking(studentRef, {
       payments: arrayUnion({
         amount: paymentData.amount,
-        date: new Date().toISOString(),
+        date: transactionDate.toISOString(),
         receiptNo: paymentData.receiptNo,
         method: paymentData.method,
       }),
@@ -117,7 +127,12 @@ export default function PaymentsPage() {
     setIsDialogOpen(false);
     setSelectedStudent(null);
     setSearchTerm('');
-    setPaymentData({ amount: 0, receiptNo: '', method: 'Cash' });
+    setPaymentData({ 
+      amount: 0, 
+      receiptNo: '', 
+      method: 'Cash',
+      date: new Date().toISOString().split('T')[0]
+    });
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
   };
 
@@ -200,10 +215,20 @@ export default function PaymentsPage() {
                   </div>
                   <div className="grid gap-4 pt-2">
                     <div className="grid gap-2">
+                      <Label>Payment Date</Label>
+                      <Input 
+                        type="date" 
+                        value={paymentData.date} 
+                        disabled={!isAdmin}
+                        onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
+                      />
+                      {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
+                    </div>
+                    <div className="grid gap-2">
                       <Label>Amount Received (₹)</Label>
                       <Input 
                         type="number" 
-                        value={paymentData.amount} 
+                        value={paymentData.amount || ''} 
                         onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
                       />
                     </div>
