@@ -154,6 +154,7 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": { "type": "string" },
               "amount": { "type": "number" },
               "date": { "type": "string", "format": "date-time" },
               "receiptNo": { "type": "string" },
@@ -172,6 +173,7 @@
         "id": { "type": "string" },
         "studentId": { "type": "string" },
         "studentName": { "type": "string" },
+        "studentPhone": { "type": "string" },
         "amount": { "type": "number" },
         "date": { "type": "string", "format": "date-time" },
         "receiptNo": { "type": "string" },
@@ -197,6 +199,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "date", "category", "amount", "branch"]
+    },
+    "ScheduledClass": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ScheduledClass",
+      "type": "object",
+      "description": "Represents a scheduled driving class.",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Canceled"] }
+      }
     }
   },
   "auth": {
@@ -255,6 +273,16 @@
             "$ref": "#/backend/entities/Expense"
           },
           "description": "Business expense records."
+        }
+      },
+      {
+        "path": "/classes/{classId}",
+        "definition": {
+          "entityName": "ScheduledClass",
+          "schema": {
+            "$ref": "#/backend/entities/ScheduledClass"
+          },
+          "description": "Driving class schedules."
         }
       }
     ]
