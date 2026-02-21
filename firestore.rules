@@ -34,7 +34,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Allow Branch Managers to create student/staff profiles during registration
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
       allow delete: if isAdmin();
     }
 
