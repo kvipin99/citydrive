@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 const EXPENSE_CATEGORIES = ["Fuel", "Salaries", "Maintenance", "Rent", "Utility", "Others"] as const;
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface ExpenseRecord {
   id: string;
@@ -56,6 +57,7 @@ export default function ExpensesPage() {
     category: 'Fuel' as typeof EXPENSE_CATEGORIES[number],
     amount: 0,
     description: '',
+    branch: 'Branch 1',
   });
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
@@ -66,6 +68,7 @@ export default function ExpensesPage() {
         category: expense.category,
         amount: expense.amount,
         description: expense.description || '',
+        branch: expense.branch || profile?.branch || 'Branch 1',
       });
     } else {
       setSelectedExpense(null);
@@ -74,14 +77,15 @@ export default function ExpensesPage() {
         category: 'Fuel',
         amount: 0,
         description: '',
+        branch: profile?.branch || 'Branch 1',
       });
     }
     setIsDialogOpen(true);
   };
 
   const handleSaveExpense = () => {
-    if (formData.amount <= 0 || !formData.date) {
-      toast({ variant: "destructive", title: "Error", description: "Please enter a valid amount and date." });
+    if (formData.amount <= 0 || !formData.date || !formData.branch) {
+      toast({ variant: "destructive", title: "Error", description: "Please enter a valid amount, date, and branch." });
       return;
     }
 
@@ -91,7 +95,6 @@ export default function ExpensesPage() {
     const expenseData = {
       ...formData,
       id: expenseId,
-      branch: selectedExpense?.branch || profile?.branch || 'HeadOffice',
       createdBy: selectedExpense?.createdBy || user?.uid,
       updatedAt: serverTimestamp(),
       ...(selectedExpense ? {} : { createdAt: serverTimestamp() }),
@@ -102,7 +105,7 @@ export default function ExpensesPage() {
     setIsDialogOpen(false);
     toast({ 
       title: selectedExpense ? "Expense Updated" : "Expense Recorded", 
-      description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category}.` 
+      description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category} at ${formData.branch}.` 
     });
   };
 
@@ -174,7 +177,7 @@ export default function ExpensesPage() {
                         {exp.description || '--'}
                       </TableCell>
                       <TableCell>
-                        <span className="text-xs">{exp.branch}</span>
+                        <Badge variant="outline" className="text-xs">{exp.branch}</Badge>
                       </TableCell>
                       <TableCell className="text-right font-bold text-red-600">
                         ₹{exp.amount?.toLocaleString()}
@@ -232,6 +235,15 @@ export default function ExpensesPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Branch</Label>
+              <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}>
+                <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                <SelectContent>
+                  {BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Amount (₹)</Label>
