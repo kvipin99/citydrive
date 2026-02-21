@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from "react";
@@ -20,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -160,7 +159,7 @@ export default function StudentsPage() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         createdBy: user?.uid,
-        photoUrl: `https://picsum.photos/seed/${studentId}/200/200` // Placeholder for Google Drive upload logic
+        photoUrl: `https://picsum.photos/seed/${studentId}/200/200`
       };
 
       const studentRef = doc(db, 'students', studentId);
@@ -312,7 +311,7 @@ export default function StudentsPage() {
       toast({ title: "Importing Students", description: `Processing ${dataLines.length} records...` });
 
       for (const line of dataLines) {
-        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Split by comma but respect quotes
+        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         if (parts.length < 5) continue;
 
         const [id, name, phone, email, parent, address, aadhar, appNo, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
@@ -762,63 +761,88 @@ export default function StudentsPage() {
       </Sheet>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Edit Student Profile</DialogTitle>
             <DialogDescription>Note: The Agreed Amount remains fixed unless manually adjusted here.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <div className="grid gap-6 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Full Name</Label>
-                    <Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Status</Label>
-                    <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                        <SelectItem value="On Hold">On Hold</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Parent/Guardian</Label>
-                    <Input value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Phone</Label>
-                    <Input value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Learners Date</Label>
-                    <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Test Date</Label>
-                    <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
-                  </div>
-                </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
-                  <Label>Agreed Fee (₹)</Label>
-                  <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                  <Label>Branch</Label>
+                  <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-
                 <div className="grid gap-2">
-                  <Label>Remarks</Label>
-                  <Textarea value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+                  <Label>Full Name</Label>
+                  <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                 </div>
+                <div className="grid gap-2">
+                  <Label>Status</Label>
+                  <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Inactive">Inactive</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="On Hold">On Hold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Parent/Guardian Name</Label>
+                  <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Mobile No.</Label>
+                  <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Aadhar No.</Label>
+                  <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Online App No.</Label>
+                  <Input placeholder="APP-1001" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Address</Label>
+                <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Learners Date</Label>
+                  <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Test Date</Label>
+                  <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="text-primary font-bold">Agreed Fee (₹)</Label>
+                <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Remarks</Label>
+                <Textarea placeholder="Any specific requirements or notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+              </div>
             </div>
           </ScrollArea>
           <DialogFooter><Button onClick={handleUpdateStudent}>Save Changes</Button></DialogFooter>
