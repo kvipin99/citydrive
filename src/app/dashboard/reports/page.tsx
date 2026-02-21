@@ -1,15 +1,15 @@
 
 "use client"
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
+import { collection, doc, query, where } from "firebase/firestore";
 import { FileDown, Printer, Filter, DollarSign, Users, Receipt, PieChart } from "lucide-react";
 import { format, parseISO, isSameMonth, isSameYear } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -21,16 +21,40 @@ export default function ReportsPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+
   const [activeTab, setActiveTab] = useState("financial");
   const [selectedBranch, setSelectedBranch] = useState<string>("Full");
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("All");
   const [studentStatus, setStudentStatus] = useState<string>("All");
   const [paymentStatus, setPaymentStatus] = useState<string>("All");
 
+  // Sync selected branch with user profile for non-admins
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranch(profile.branch);
+    }
+  }, [profile, isAdmin]);
+
   // Data Fetching
-  const studentsQuery = useMemoFirebase(() => (db && user ? collection(db, 'students') : null), [db, user]);
-  const paymentsQuery = useMemoFirebase(() => (db && user ? collection(db, 'payments') : null), [db, user]);
-  const expensesQuery = useMemoFirebase(() => (db && user ? collection(db, 'expenses') : null), [db, user]);
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'students');
+    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'payments');
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
+  const expensesQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'expenses');
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
@@ -45,12 +69,12 @@ export default function ReportsPage() {
     let filteredPayments = [...payments];
     let filteredExpenses = [...expenses];
 
-    if (selectedBranch !== "Full") {
+    // Admin can still filter the full list, but managers are locked by query
+    if (isAdmin && selectedBranch !== "Full") {
       filteredPayments = filteredPayments.filter(p => p.branch === selectedBranch);
       filteredExpenses = filteredExpenses.filter(e => e.branch === selectedBranch);
     }
 
-    // Grouping by Month for the table
     const months: Record<string, { income: number; expense: number }> = {};
 
     filteredPayments.forEach(p => {
@@ -75,14 +99,14 @@ export default function ReportsPage() {
         profit: vals.income - vals.expense
       }))
       .sort((a, b) => b.period.localeCompare(a.period));
-  }, [payments, expenses, selectedBranch]);
+  }, [payments, expenses, selectedBranch, isAdmin]);
 
   // --- REPORT LOGIC: STUDENTS ---
   const filteredStudents = useMemo(() => {
     if (!students) return [];
     let result = [...students];
 
-    if (selectedBranch !== "Full") {
+    if (isAdmin && selectedBranch !== "Full") {
       result = result.filter(s => s.branch === selectedBranch);
     }
 
@@ -91,7 +115,7 @@ export default function ReportsPage() {
     }
 
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
-  }, [students, selectedBranch, studentStatus]);
+  }, [students, selectedBranch, studentStatus, isAdmin]);
 
   // --- REPORT LOGIC: PAYMENT DUES ---
   const paymentDuesData = useMemo(() => {
@@ -110,7 +134,7 @@ export default function ReportsPage() {
     });
 
     let result = dues;
-    if (selectedBranch !== "Full") {
+    if (isAdmin && selectedBranch !== "Full") {
       result = result.filter(s => s.branch === selectedBranch);
     }
 
@@ -119,7 +143,7 @@ export default function ReportsPage() {
     }
 
     return result.sort((a, b) => b.balance - a.balance);
-  }, [students, selectedBranch, paymentStatus]);
+  }, [students, selectedBranch, paymentStatus, isAdmin]);
 
   // --- EXPORT TOOLS ---
   const handleExportCSV = (type: string) => {
@@ -157,11 +181,10 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 print:p-0">
-      {/* Header & Controls - Hidden on Print */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Reports</h2>
-          <p className="text-muted-foreground">Generate and export financial and operational summaries.</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Generate financial and operational summaries.' : `Performance reports for ${profile?.branch}`}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handlePrint}>
@@ -185,7 +208,7 @@ export default function ReportsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Branch View</label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Branch" />
                 </SelectTrigger>
@@ -194,6 +217,7 @@ export default function ReportsPage() {
                   {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to your branch.</p>}
             </div>
 
             {activeTab === 'students' && (
@@ -244,7 +268,6 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent className="pt-6">
               
-              {/* FINANCIAL REPORT */}
               <TabsContent value="financial" className="m-0">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -287,7 +310,6 @@ export default function ReportsPage() {
                 </div>
               </TabsContent>
 
-              {/* ENROLLMENT REPORT */}
               <TabsContent value="students" className="m-0">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -335,7 +357,6 @@ export default function ReportsPage() {
                 </div>
               </TabsContent>
 
-              {/* PAYMENT DUES REPORT */}
               <TabsContent value="dues" className="m-0">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -395,7 +416,6 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Print View Styling */}
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }

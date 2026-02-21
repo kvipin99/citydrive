@@ -4,27 +4,34 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, DollarSign, Activity, Wallet } from "lucide-react";
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
+import { collection, query, where, doc } from "firebase/firestore";
 
 export default function StatsCards() {
     const db = useFirestore();
     const { user } = useUser();
 
+    const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+    const { data: profile } = useDoc(userProfileRef);
+    const isAdmin = profile?.role === 'Admin';
+
     const studentsQuery = useMemoFirebase(() => {
-        if (!db || !user) return null;
-        return collection(db, 'students');
-    }, [db, user]);
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'students');
+        return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
 
     const paymentsQuery = useMemoFirebase(() => {
-        if (!db || !user) return null;
-        return collection(db, 'payments');
-    }, [db, user]);
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'payments');
+        return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
 
     const expensesQuery = useMemoFirebase(() => {
-        if (!db || !user) return null;
-        return collection(db, 'expenses');
-    }, [db, user]);
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'expenses');
+        return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
 
     const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
     const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
@@ -38,12 +45,12 @@ export default function StatsCards() {
         const netProfit = totalRevenue - totalExpenses;
 
         return [
-            { title: "Total Students", value: totalStudents.toLocaleString(), icon: <Users className="h-4 w-4 text-muted-foreground" />, change: "All recorded registrations" },
+            { title: "Total Students", value: totalStudents.toLocaleString(), icon: <Users className="h-4 w-4 text-muted-foreground" />, change: isAdmin ? "All recorded registrations" : `At ${profile?.branch}` },
             { title: "Active Students", value: activeStudents.toLocaleString(), icon: <Activity className="h-4 w-4 text-muted-foreground" />, change: "Currently in training" },
             { title: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-muted-foreground" />, change: "Total fees collected" },
             { title: "Net Profit", value: `₹${netProfit.toLocaleString()}`, icon: <Wallet className="h-4 w-4 text-muted-foreground" />, change: "Revenue minus expenses" }
         ];
-    }, [students, payments, expenses]);
+    }, [students, payments, expenses, isAdmin, profile]);
 
     if (isStudentsLoading || isPaymentsLoading || isExpensesLoading) {
         return (

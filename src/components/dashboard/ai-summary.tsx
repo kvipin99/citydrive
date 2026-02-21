@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAdminPerformanceSummary } from "@/ai/flows/admin-performance-summary-flow";
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
+import { collection, query, where, doc } from "firebase/firestore";
 import { Sparkles, Lightbulb } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, isSameDay } from 'date-fns';
 
@@ -17,10 +17,33 @@ export default function AiSummary() {
     const [summary, setSummary] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const studentsQuery = useMemoFirebase(() => (db && user ? collection(db, 'students') : null), [db, user]);
-    const paymentsQuery = useMemoFirebase(() => (db && user ? collection(db, 'payments') : null), [db, user]);
-    const expensesQuery = useMemoFirebase(() => (db && user ? collection(db, 'expenses') : null), [db, user]);
-    const classesQuery = useMemoFirebase(() => (db && user ? collection(db, 'classes') : null), [db, user]);
+    const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+    const { data: profile } = useDoc(userProfileRef);
+    const isAdmin = profile?.role === 'Admin';
+
+    const studentsQuery = useMemoFirebase(() => {
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'students');
+        return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
+
+    const paymentsQuery = useMemoFirebase(() => {
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'payments');
+        return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
+
+    const expensesQuery = useMemoFirebase(() => {
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'expenses');
+        return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
+
+    const classesQuery = useMemoFirebase(() => {
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'classes');
+        return query(collection(db, 'classes'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
 
     const { data: students } = useCollection(studentsQuery);
     const { data: payments } = useCollection(paymentsQuery);
@@ -84,7 +107,7 @@ export default function AiSummary() {
         }).length || 0;
 
         return {
-            reportingPeriod: format(today, 'MMMM yyyy'),
+            reportingPeriod: `${isAdmin ? 'Full School' : profile?.branch} - ${format(today, 'MMMM yyyy')}`,
             totalStudents: students.length,
             activeStudents: students.filter(s => s.status === 'Active').length,
             monthlyRevenue: currentMonthRevenue,
@@ -99,7 +122,7 @@ export default function AiSummary() {
             monthlyProfitTrend: profitTrend,
             expenseBreakdown: Object.entries(catMap).map(([category, amount]) => ({ category, amount }))
         };
-    }, [students, payments, expenses, classes]);
+    }, [students, payments, expenses, classes, isAdmin, profile]);
 
     const handleGenerateSummary = async () => {
         if (!performanceData) return;

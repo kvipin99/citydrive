@@ -5,18 +5,23 @@ import { useMemo } from 'react'
 import { Bar, BarChart, Line, LineChart, Pie, PieChart, CartesianGrid, XAxis, YAxis, Cell } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase"
-import { collection } from "firebase/firestore"
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase"
+import { collection, query, where, doc } from "firebase/firestore"
 import { format, subMonths, startOfMonth, isWithinInterval, endOfMonth } from 'date-fns'
 
 export function RevenueChart() {
   const db = useFirestore();
   const { user } = useUser();
 
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+
   const paymentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'payments');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'payments');
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const { data: payments } = useCollection(paymentsQuery);
 
@@ -55,7 +60,7 @@ export function RevenueChart() {
     <Card>
       <CardHeader>
         <CardTitle>Monthly Revenue</CardTitle>
-        <CardDescription>Last 6 Months</CardDescription>
+        <CardDescription>{isAdmin ? 'Full School' : profile?.branch} • Last 6 Months</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="h-[250px] w-full">
@@ -76,8 +81,21 @@ export function ProfitChart() {
   const db = useFirestore();
   const { user } = useUser();
 
-  const paymentsQuery = useMemoFirebase(() => (db && user ? collection(db, 'payments') : null), [db, user]);
-  const expensesQuery = useMemoFirebase(() => (db && user ? collection(db, 'expenses') : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'payments');
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
+  const expensesQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'expenses');
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const { data: payments } = useCollection(paymentsQuery);
   const { data: expenses } = useCollection(expensesQuery);
@@ -119,7 +137,7 @@ export function ProfitChart() {
     <Card>
       <CardHeader>
         <CardTitle>Profit Trend</CardTitle>
-        <CardDescription>Last 6 Months</CardDescription>
+        <CardDescription>{isAdmin ? 'Full School' : profile?.branch} • Last 6 Months</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="h-[250px] w-full">
@@ -140,7 +158,16 @@ export function ExpensesChart() {
   const db = useFirestore();
   const { user } = useUser();
 
-  const expensesQuery = useMemoFirebase(() => (db && user ? collection(db, 'expenses') : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+
+  const expensesQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'expenses');
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
   const { data: expenses } = useCollection(expensesQuery);
 
   const expenseData = useMemo(() => {
@@ -167,7 +194,7 @@ export function ExpensesChart() {
     <Card>
       <CardHeader>
         <CardTitle>Expense Breakdown</CardTitle>
-        <CardDescription>All Time Expenditure</CardDescription>
+        <CardDescription>{isAdmin ? 'Total' : profile?.branch} Expenditure</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="mx-auto aspect-square h-[250px]">

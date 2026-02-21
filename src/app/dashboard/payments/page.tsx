@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
-import { collection, doc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Search, CreditCard, Receipt, User, Phone, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -51,14 +52,16 @@ export default function PaymentsPage() {
   const isAdmin = profile?.role === 'Admin';
 
   const paymentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'payments');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'payments');
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'students');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'students');
+    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection<PaymentRecord>(paymentsQuery);
   const { data: students } = useCollection<Student>(studentsQuery);
@@ -161,15 +164,12 @@ export default function PaymentsPage() {
     const paymentRef = doc(db, 'payments', payment.id);
     const studentRef = doc(db, 'students', payment.studentId);
 
-    // 1. Delete from central payments collection
     deleteDocumentNonBlocking(paymentRef);
 
-    // 2. Remove from student's profile payments array
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
-        // Match by either ID (new system) or receiptNo (fallback for older records)
         const updatedPayments = currentPayments.filter((p: any) => p.id !== payment.id && p.receiptNo !== payment.receiptNo);
         
         updateDocumentNonBlocking(studentRef, {
@@ -215,7 +215,7 @@ export default function PaymentsPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Fee Collection</h2>
-          <p className="text-muted-foreground">Manage student payments and track outstanding balances.</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Global school collection log.' : `Collection log for ${profile?.branch}`}</p>
         </div>
         <div className="flex items-center gap-2">
            <div className="relative">
@@ -351,7 +351,7 @@ export default function PaymentsPage() {
             <Receipt className="h-5 w-5 text-primary" />
             Recent Transactions
           </CardTitle>
-          <CardDescription>A complete log of all student fee collections across branches.</CardDescription>
+          <CardDescription>Fee collections for {isAdmin ? 'all branches' : profile?.branch}.</CardDescription>
         </CardHeader>
         <CardContent>
           {isPaymentsLoading ? (

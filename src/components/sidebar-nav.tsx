@@ -24,12 +24,12 @@ const navItems = [
   { href: '/dashboard/students', icon: Users, label: 'Students' },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Payments' },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses' },
-  { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors' },
-  { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles' },
+  { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
+  { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles', adminOnly: true },
   { href: '/dashboard/courses', icon: Tags, label: 'Courses', adminOnly: true },
-  { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting' },
+  { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', adminOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports' },
-  { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup' },
+  { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup', adminOnly: true },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -50,6 +50,7 @@ export default function SidebarNav() {
     <div className="flex h-full flex-col justify-between p-2">
       <SidebarMenu>
         {navItems.map((item) => {
+          // Hide adminOnly items from Branch Managers
           if (item.adminOnly && !isAdmin) return null;
           
           return (
