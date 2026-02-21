@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -9,16 +10,18 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2 } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from "@/firebase";
-import { collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
+
+const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
 function SettingsContent() {
   const { toast } = useToast();
@@ -57,6 +60,7 @@ function SettingsContent() {
   // Form States
   const [newPassword, setNewPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,6 +118,52 @@ function SettingsContent() {
     if (!settingsRef) return;
     setDocumentNonBlocking(settingsRef, values, { merge: true });
     toast({ title: "Automation Saved", description: "Backup settings updated." });
+  };
+
+  const handleManualBackupTrigger = async () => {
+    if (!db || !user) return;
+    setIsBackingUpManual(true);
+    toast({ title: "Backup Started", description: "Aggregating system data for email report..." });
+
+    try {
+      const backupData: Record<string, any[]> = {};
+      let totalRecords = 0;
+
+      for (const colName of BACKUP_COLLECTIONS) {
+        const colRef = collection(db, colName);
+        const snapshot = await getDocs(colRef);
+        const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+        backupData[colName] = docs;
+        totalRecords += docs.length;
+      }
+
+      const emailRecipient = autoSettings?.email || "ezydriveapp@gmail.com";
+      const summary = `Manual Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
+      
+      const result = await sendBackupEmail({
+        email: emailRecipient,
+        backupSummary: summary,
+        timestamp: new Date().toLocaleString(),
+      });
+
+      if (result.success) {
+        const metadataRef = doc(db, "backupMetadata", `MANUAL-${Date.now()}`);
+        setDocumentNonBlocking(metadataRef, {
+          id: metadataRef.id,
+          timestamp: serverTimestamp(),
+          performedBy: user.email,
+          status: "Successful",
+          type: "Manual Email Backup"
+        }, { merge: true });
+
+        toast({ title: "Backup Sent", description: `Report sent to ${emailRecipient}.` });
+      }
+    } catch (error: any) {
+      console.error("Manual backup failed:", error);
+      toast({ variant: "destructive", title: "Backup Failed", description: error.message });
+    } finally {
+      setIsBackingUpManual(false);
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -304,6 +354,28 @@ function SettingsContent() {
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground italic">Default: ezydriveapp@gmail.com</p>
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
+                <div className="grid gap-1">
+                  <p className="text-sm font-bold">Manual Email Backup</p>
+                  <p className="text-xs text-muted-foreground">Need a snapshot right now? Trigger a report manually.</p>
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={handleManualBackupTrigger} 
+                  disabled={isBackingUpManual}
+                  className="w-full sm:w-auto"
+                >
+                  {isBackingUpManual ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {isBackingUpManual ? "Sending..." : "Send Backup Now"}
+                </Button>
               </div>
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
