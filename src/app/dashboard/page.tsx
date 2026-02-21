@@ -2,6 +2,7 @@ import AiSummary from "@/components/dashboard/ai-summary";
 import { RevenueChart, ProfitChart, ExpensesChart } from "@/components/dashboard/charts";
 import StatsCards from "@/components/dashboard/stats-cards";
 import UpcomingClasses from "@/components/dashboard/upcoming-classes";
+import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
 
 export default function DashboardPage() {
   return (
@@ -20,7 +21,10 @@ export default function DashboardPage() {
            <AiSummary />
         </div>
         <div className="lg:col-span-2">
-          <ExpensesChart />
+          <div className="flex flex-col gap-6">
+            <VehicleValidityAlerts />
+            <ExpensesChart />
+          </div>
         </div>
       </div>
       <UpcomingClasses />
