@@ -16,15 +16,21 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { LogOut, User, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useUser, useAuth } from "@/firebase";
+import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
+import { doc } from "firebase/firestore";
+import Link from "next/link";
 
 export default function DashboardHeader() {
-  const avatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
+  const avatarPlaceholder = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
   const pathname = usePathname();
   const { user } = useUser();
   const auth = useAuth();
+  const db = useFirestore();
   const router = useRouter();
+
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -72,17 +78,24 @@ export default function DashboardHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10">
-                  {avatar && <AvatarImage src={avatar.imageUrl} alt="User Avatar" data-ai-hint={avatar.imageHint} />}
-                  <AvatarFallback>{user?.email?.charAt(0).toUpperCase() || 'A'}</AvatarFallback>
+                <Avatar className="h-10 w-10 border">
+                  <AvatarImage 
+                    src={profile?.avatarUrl || avatarPlaceholder?.imageUrl} 
+                    alt="User Avatar" 
+                    data-ai-hint={avatarPlaceholder?.imageHint} 
+                  />
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                    {user?.email?.charAt(0).toUpperCase() || 'A'}
+                  </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {user?.email?.split('@')[0] === 'admin' ? 'Administrator' : 'User'}
+                  <p className="text-sm font-bold leading-none">
+                    {profile?.role === 'Admin' ? 'Administrator' : 
+                     profile?.role === 'BranchManager' ? 'Branch Manager' : 'Staff User'}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
                     {user?.email}
@@ -90,16 +103,20 @@ export default function DashboardHeader() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/dashboard/settings" className="flex items-center w-full">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/dashboard/settings" className="flex items-center w-full">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
