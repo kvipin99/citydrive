@@ -71,6 +71,17 @@ export default function PaymentsPage() {
     date: new Date().toISOString().split('T')[0],
   });
 
+  const resetForm = () => {
+    setSelectedStudent(null);
+    setSearchTerm('');
+    setPaymentData({ 
+      amount: 0, 
+      receiptNo: '', 
+      method: 'Cash',
+      date: new Date().toISOString().split('T')[0]
+    });
+  };
+
   const filteredStudents = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
     return students?.filter(s => 
@@ -95,7 +106,6 @@ export default function PaymentsPage() {
     const paymentRef = doc(db, 'payments', paymentId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
-    // Create a proper JS Date from the input string
     const transactionDate = new Date(paymentData.date);
     
     const fullPaymentRecord = {
@@ -110,10 +120,8 @@ export default function PaymentsPage() {
       receivedBy: user?.uid,
     };
 
-    // Save to global payments collection
     setDocumentNonBlocking(paymentRef, fullPaymentRecord, { merge: true });
 
-    // Append to student's history
     updateDocumentNonBlocking(studentRef, {
       payments: arrayUnion({
         amount: paymentData.amount,
@@ -125,14 +133,7 @@ export default function PaymentsPage() {
     });
 
     setIsDialogOpen(false);
-    setSelectedStudent(null);
-    setSearchTerm('');
-    setPaymentData({ 
-      amount: 0, 
-      receiptNo: '', 
-      method: 'Cash',
-      date: new Date().toISOString().split('T')[0]
-    });
+    resetForm();
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
   };
 
@@ -151,7 +152,7 @@ export default function PaymentsPage() {
           <h2 className="text-2xl font-bold tracking-tight">Fee Collection</h2>
           <p className="text-muted-foreground">Manage student payments and track outstanding balances.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="lg">
               <PlusCircle className="mr-2 h-5 w-5" />

@@ -643,7 +643,7 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Receive Payment</DialogTitle>
