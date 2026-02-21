@@ -173,6 +173,7 @@ export default function PaymentsPage() {
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
         const updatedPayments = currentPayments.filter((p: any) => {
+          // Robust check using both ID and receipt number for compatibility
           if (p.id) return p.id !== payment.id;
           return p.receiptNo !== payment.receiptNo;
         });
@@ -224,7 +225,7 @@ export default function PaymentsPage() {
            <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Search payments..." 
+              placeholder="Search Name, Phone, Date..." 
               className="pl-8 w-[200px] lg:w-[300px]" 
               value={listSearchTerm} 
               onChange={(e) => setListSearchTerm(e.target.value)} 

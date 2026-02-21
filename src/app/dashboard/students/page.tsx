@@ -312,7 +312,11 @@ export default function StudentsPage() {
   };
 
   const handleDeletePayment = async (payId: string, receiptNo: string) => {
-    if (!isAdmin || !selectedStudent) return;
+    if (!isAdmin || !selectedStudent) {
+      toast({ variant: "destructive", title: "Access Denied", description: "Only administrators can delete payments." });
+      return;
+    }
+    
     if (!confirm(`Delete receipt #${receiptNo}? This cannot be undone.`)) return;
 
     const paymentRef = doc(db, 'payments', payId);
