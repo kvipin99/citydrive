@@ -1,3 +1,4 @@
+
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -44,6 +45,12 @@ export default function DashboardHeader() {
         return 'Scheduling';
       case '/dashboard/accounting':
         return 'Accounting';
+      case '/dashboard/expenses':
+        return 'Expenses';
+      case '/dashboard/payments':
+        return 'Fee Collection';
+      case '/dashboard/courses':
+        return 'Course Catalog';
       case '/dashboard/reports':
         return 'Reports';
       case '/dashboard/backup':
