@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,10 +48,28 @@ export default function InstructorsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState<Partial<Instructor>>({
+    id: '',
     status: 'Active',
     name: '',
     phone: '',
   });
+
+  // Pre-calculate the next available SID
+  const nextAvailableId = useMemo(() => {
+    const lastIdNum = instructors?.reduce((max, inst) => {
+      const numPart = inst.id.replace('SID', '');
+      const num = parseInt(numPart, 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, 0) || 0;
+    return `SID${String(lastIdNum + 1).padStart(2, '0')}`;
+  }, [instructors]);
+
+  // Set default ID when dialog opens
+  useEffect(() => {
+    if (isAddDialogOpen && !formData.id) {
+      setFormData(prev => ({ ...prev, id: nextAvailableId }));
+    }
+  }, [isAddDialogOpen, nextAvailableId, formData.id]);
 
   const filteredInstructors = instructors?.filter(i => 
     i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -90,72 +108,48 @@ export default function InstructorsPage() {
   };
 
   const handleAddInstructor = async () => {
-    if (!formData.name || !formData.phone) {
-      toast({ variant: "destructive", title: "Missing Information", description: "Name and Phone are required." });
+    const staffId = formData.id?.trim().toUpperCase();
+    if (!staffId || !formData.name || !formData.phone) {
+      toast({ variant: "destructive", title: "Missing Information", description: "ID, Name, and Phone are required." });
       return;
     }
 
     setIsSubmitting(true);
-
-    // Calculate initial SID base
-    const lastIdNum = instructors?.reduce((max, inst) => {
-      const numPart = inst.id.replace('SID', '');
-      const num = parseInt(numPart, 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0) || 0;
-    
-    let currentIdNum = lastIdNum + 1;
     let success = false;
-    let attempts = 0;
-    const maxAttempts = 5;
 
-    while (!success && attempts < maxAttempts) {
-      const staffId = `SID${String(currentIdNum).padStart(2, '0')}`;
-      try {
-        toast({ title: "Registering Staff", description: `Attempting registration for ${staffId}...` });
-        
-        const authUid = await createInstructorAuth(staffId);
-        
-        const newInstructorData = {
-          ...formData,
-          id: staffId,
-          userId: authUid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: user?.uid,
-          avatarUrl: `https://picsum.photos/seed/${staffId}/40/40`
-        };
+    try {
+      toast({ title: "Registering Staff", description: `Attempting registration for ${staffId}...` });
+      
+      const authUid = await createInstructorAuth(staffId);
+      
+      const newInstructorData = {
+        ...formData,
+        id: staffId,
+        userId: authUid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: user?.uid,
+        avatarUrl: `https://picsum.photos/seed/${staffId}/40/40`
+      };
 
-        const instructorRef = doc(db, 'instructors', staffId);
-        setDocumentNonBlocking(instructorRef, newInstructorData, { merge: true });
+      const instructorRef = doc(db, 'instructors', staffId);
+      setDocumentNonBlocking(instructorRef, newInstructorData, { merge: true });
 
-        setIsAddDialogOpen(false);
-        setFormData({ status: 'Active', name: '', phone: '' });
-        toast({ title: "Success", description: `Staff ${staffId} registered. Login: ${staffId.toLowerCase()}, Pass: City123` });
-        success = true;
-      } catch (error: any) {
-        if (error.code === 'auth/email-already-in-use') {
-          console.warn(`Collision detected for ${staffId}, skipping to next ID...`);
-          currentIdNum++;
-          attempts++;
-        } else {
-          console.error("Staff registration error:", error);
-          let errorMsg = error.message || "Could not create account.";
-          if (error.code === 'auth/operation-not-allowed') {
-            errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
-          }
-          toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
-          break;
-        }
+      setIsAddDialogOpen(false);
+      setFormData({ id: '', status: 'Active', name: '', phone: '' });
+      toast({ title: "Success", description: `Staff ${staffId} registered. Login: ${staffId.toLowerCase()}, Pass: City123` });
+      success = true;
+    } catch (error: any) {
+      console.error("Staff registration error:", error);
+      let errorMsg = error.message || "Could not create account.";
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = `The ID "${staffId}" is already registered in the login system. Please use a different ID or contact the administrator.`;
+      } else if (error.code === 'auth/operation-not-allowed') {
+        errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
       }
-    }
-
-    if (!success && attempts >= maxAttempts) {
-      toast({ 
-        variant: "destructive", 
-        title: "Registration Error", 
-        description: "Multiple Staff IDs are already in use in the authentication system. Please contact the administrator to clean up old accounts." 
-      });
+      
+      toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     }
 
     setIsSubmitting(false);
@@ -167,7 +161,7 @@ export default function InstructorsPage() {
     toast({ 
       variant: "destructive", 
       title: "Staff Removed", 
-      description: `Staff record ${id} has been deleted from the database.` 
+      description: `Staff record ${id} has been deleted from the database. Note: The login account remains active in the authentication system.` 
     });
   };
 
@@ -193,7 +187,10 @@ export default function InstructorsPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+                setIsAddDialogOpen(open);
+                if (!open) setFormData({ id: '', status: 'Active', name: '', phone: '' });
+              }}>
                 <DialogTrigger asChild>
                   <Button>
                     <PlusCircle className="mr-2 h-4 w-4" />
@@ -203,16 +200,35 @@ export default function InstructorsPage() {
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Add New Staff Member</DialogTitle>
-                    <DialogDescription>ID will be generated automatically. Default password: City123</DialogDescription>
+                    <DialogDescription>Review or change the auto-generated ID. Default password: City123</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
+                      <Label htmlFor="staffId">Staff ID</Label>
+                      <Input 
+                        id="staffId" 
+                        placeholder="e.g. SID01" 
+                        value={formData.id || ''} 
+                        onChange={(e) => setFormData({...formData, id: e.target.value.toUpperCase()})} 
+                      />
+                    </div>
+                    <div className="grid gap-2">
                       <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" placeholder="John Doe" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                      <Input 
+                        id="name" 
+                        placeholder="John Doe" 
+                        value={formData.name || ''} 
+                        onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="phone">Mobile Number</Label>
-                      <Input id="phone" placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                      <Input 
+                        id="phone" 
+                        placeholder="555-0101" 
+                        value={formData.phone || ''} 
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label>Status</Label>
