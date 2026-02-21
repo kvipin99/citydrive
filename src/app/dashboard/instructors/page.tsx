@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -14,8 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase";
-import { collection, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
+import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -192,8 +193,8 @@ export default function InstructorsPage() {
         console.warn("Auth cleanup failed (possibly already deleted or password changed):", authErr);
       }
 
-      await deleteDoc(doc(db, 'instructors', staffId));
-      await deleteDoc(doc(db, 'users', instructor.userId));
+      deleteDocumentNonBlocking(doc(db, 'instructors', staffId));
+      deleteDocumentNonBlocking(doc(db, 'users', instructor.userId));
 
       await deleteApp(secondaryApp);
       toast({ title: "Staff Removed", description: `Records and login account for ${staffId} have been permanently deleted.` });
@@ -429,7 +430,7 @@ export default function InstructorsPage() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
+        </CardHeader>
       </Card>
 
       {/* Edit Dialog */}

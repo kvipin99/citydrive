@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -12,8 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2 } from "lucide-react";
-import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from "@/firebase";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2 } from "lucide-react";
+import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
@@ -99,6 +100,16 @@ function SettingsContent() {
     });
   };
 
+  const handleDeleteUserRecord = (targetUser: any) => {
+    const targetRef = doc(db, "users", targetUser.id);
+    deleteDocumentNonBlocking(targetRef);
+    toast({
+      variant: "destructive",
+      title: "Account Removed",
+      description: `${targetUser.email} has been deleted from the login database.`,
+    });
+  };
+
   const handleUpdatePassword = async () => {
     if (!user || !newPassword) return;
     setIsSaving(true);
@@ -174,11 +185,25 @@ function SettingsContent() {
 
   const filteredUsers = useMemo(() => {
     if (!allUsers) return [];
-    if (!userSearchTerm) return allUsers;
+    
+    // Deduplicate by email to handle "Repeatly same user id" issue
+    const uniqueUsers: any[] = [];
+    const seenEmails = new Set();
+    
+    allUsers.forEach((u: any) => {
+      const emailKey = u.email?.toLowerCase() || u.id?.toLowerCase();
+      if (!seenEmails.has(emailKey)) {
+        seenEmails.add(emailKey);
+        uniqueUsers.push(u);
+      }
+    });
+
+    if (!userSearchTerm) return uniqueUsers;
     const term = userSearchTerm.toLowerCase();
-    return allUsers.filter(u => 
+    return uniqueUsers.filter(u => 
       u.email?.toLowerCase().includes(term) || 
-      u.role?.toLowerCase().includes(term)
+      u.role?.toLowerCase().includes(term) ||
+      u.id?.toLowerCase().includes(term)
     );
   }, [allUsers, userSearchTerm]);
 
@@ -199,7 +224,7 @@ function SettingsContent() {
                   <Users className="h-5 w-5 text-primary" />
                   User Control
                 </CardTitle>
-                <CardDescription>Manage staff accounts and monitor activity across all branches.</CardDescription>
+                <CardDescription>Manage login accounts and clean up orphaned records.</CardDescription>
               </div>
               <div className="relative w-full sm:w-[250px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -234,8 +259,10 @@ function SettingsContent() {
                       <TableRow key={u.id}>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="font-medium">{u.email}</span>
-                            <span className="text-[10px] uppercase text-muted-foreground font-bold">{u.role}</span>
+                            <span className="font-medium">{u.email || u.id}</span>
+                            <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-tight">
+                              {u.role || 'Unassigned Role'}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -244,14 +271,24 @@ function SettingsContent() {
                             : 'Never'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-xs h-8 text-primary"
-                            onClick={() => handleResetUserPassword(u)}
-                          >
-                            <Key className="h-3 w-3 mr-1" /> Reset to Default
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-[10px] h-8 text-primary"
+                              onClick={() => handleResetUserPassword(u)}
+                            >
+                              <Key className="h-3 w-3 mr-1" /> Reset
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteUserRecord(u)}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" /> Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
