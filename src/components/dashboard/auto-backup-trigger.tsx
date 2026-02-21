@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFirestore, useUser, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, getDocs, doc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import { sendBackupEmail } from '@/ai/flows/backup-email-flow';
 import { useToast } from '@/hooks/use-toast';
 import { differenceInDays } from 'date-fns';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses"];
 
@@ -22,21 +23,14 @@ export function AutoBackupTrigger() {
   // Check Admin Status and Settings
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
-
-  // Get Last Backup Metadata
-  const lastBackupQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return query(collection(db, "backupMetadata"), orderBy("timestamp", "desc"), limit(1));
-  }, [db, user]);
-  const { data: lastBackups } = useDoc(lastBackupQuery ? (lastBackups as any)?.[0] : null); 
-  // Note: we use useCollection usually for queries, but let's simplify logic:
   
   useEffect(() => {
     async function checkAndRunBackup() {
+      // Only proceed if we have an admin profile and haven't run this session
       if (!db || !user || !profile || profile.role !== 'Admin' || hasRunThisSession) return;
 
       try {
-        // Fetch last backup from history
+        // Fetch last backup from history manually to determine if a new one is needed
         const q = query(collection(db, "backupMetadata"), orderBy("timestamp", "desc"), limit(1));
         const snap = await getDocs(q);
         const lastBackup = snap.docs[0]?.data();
@@ -94,7 +88,7 @@ export function AutoBackupTrigger() {
     }
 
     checkAndRunBackup();
-  }, [db, user, profile, hasRunThisSession]);
+  }, [db, user, profile, hasRunThisSession, toast]);
 
   return null;
 }
