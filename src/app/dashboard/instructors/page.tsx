@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -430,7 +429,7 @@ export default function InstructorsPage() {
               </TableBody>
             </Table>
           )}
-        </CardHeader>
+        </CardContent>
       </Card>
 
       {/* Edit Dialog */}
