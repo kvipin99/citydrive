@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from "react";
@@ -431,7 +430,7 @@ export default function StudentsPage() {
                         <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
                         <div className="relative">
                           <Avatar className="h-32 w-32 border-4 border-primary/20">
-                            <AvatarImage src={formData.photoUrl} alt="Preview" />
+                            <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
                             <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
                           </Avatar>
                           <Button 
@@ -596,7 +595,7 @@ export default function StudentsPage() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={student.photoUrl} alt={student.name} />
+                          <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
                           <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="grid gap-0.5">
@@ -685,7 +684,7 @@ export default function StudentsPage() {
                  <div className="flex flex-col items-center text-center">
                     <div className="relative mb-4">
                       <Avatar className="h-32 w-32 border-4 border-primary/20">
-                        <AvatarImage src={selectedStudent.photoUrl} alt={selectedStudent.name} />
+                        <AvatarImage src={selectedStudent.photoUrl || undefined} alt={selectedStudent.name} />
                         <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                     </div>
@@ -822,7 +821,7 @@ export default function StudentsPage() {
                 <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
                 <div className="relative">
                   <Avatar className="h-32 w-32 border-4 border-primary/20">
-                    <AvatarImage src={formData.photoUrl} alt="Preview" />
+                    <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
                     <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
                   </Avatar>
                   <Button 
