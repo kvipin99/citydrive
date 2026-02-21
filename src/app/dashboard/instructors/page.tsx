@@ -95,16 +95,22 @@ export default function InstructorsPage() {
       return;
     }
 
+    if (isLoading) {
+      toast({ title: "System Busy", description: "Please wait for current records to load." });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Logic to find next SID
-    const lastId = instructors?.reduce((max, inst) => {
+    // SMARTER SID LOGIC: Find highest number and increment
+    // This avoids reused IDs that might still exist in Firebase Auth
+    const lastIdNum = instructors?.reduce((max, inst) => {
       const numPart = inst.id.replace('SID', '');
       const num = parseInt(numPart, 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0) || 0;
     
-    const staffId = `SID${String(lastId + 1).padStart(2, '0')}`;
+    const staffId = `SID${String(lastIdNum + 1).padStart(2, '0')}`;
     
     try {
       toast({ title: "Registering Staff", description: `Setting up ID ${staffId}...` });
@@ -134,7 +140,7 @@ export default function InstructorsPage() {
       if (error.code === 'auth/operation-not-allowed') {
         errorMsg = "System configuration required: Please enable 'Email/Password' in Firebase Console > Authentication.";
       } else if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `A staff account with ID ${staffId} already exists.`;
+        errorMsg = `Staff ID ${staffId} was previously used and still exists in the security system. Please contact the administrator to manually remove the old account.`;
       }
 
       toast({ 
@@ -150,7 +156,11 @@ export default function InstructorsPage() {
   const handleDeleteInstructor = (id: string) => {
     const instructorRef = doc(db, 'instructors', id);
     deleteDocumentNonBlocking(instructorRef);
-    toast({ variant: "destructive", title: "Staff Removed", description: `Record for ${id} has been deleted.` });
+    toast({ 
+      variant: "destructive", 
+      title: "Staff Removed", 
+      description: `Database record for ${id} deleted. Note: The login account remains active in the authentication system.` 
+    });
   };
 
   return (
@@ -185,7 +195,7 @@ export default function InstructorsPage() {
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Add New Staff Member</DialogTitle>
-                    <DialogDescription>ID will be generated as SIDXX. Default password: City123</DialogDescription>
+                    <DialogDescription>ID will be generated automatically. Default password: City123</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
