@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload, ArrowDownCircle } from "lucide-react";
+import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -75,6 +75,16 @@ export default function StudentsPage() {
     discount: 0,
     specialCourseFee: 0,
     specialCourseName: "",
+    name: "",
+    phone: "",
+    address: "",
+    parentName: "",
+    aadharNo: "",
+    onlineAppNo: "",
+    learnersDate: "",
+    testDate: "",
+    remarks: "",
+    photoUrl: ""
   });
 
   const coursePriceMap = useMemo(() => {
@@ -149,14 +159,15 @@ export default function StudentsPage() {
         payments: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        createdBy: user?.uid
+        createdBy: user?.uid,
+        photoUrl: `https://picsum.photos/seed/${studentId}/200/200` // Placeholder for Google Drive upload logic
       };
 
       const studentRef = doc(db, 'students', studentId);
       setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
 
       setIsAddDialogOpen(false);
-      setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0, specialCourseFee: 0, specialCourseName: "" });
+      resetForm();
       toast({ title: "Success", description: `Account created for ${studentId}.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed", description: error.message });
@@ -175,6 +186,28 @@ export default function StudentsPage() {
     updateDocumentNonBlocking(studentRef, updatedData);
     setIsEditDialogOpen(false);
     toast({ title: "Student Updated" });
+  };
+
+  const resetForm = () => {
+    setFormData({ 
+      branch: "Branch 1", 
+      status: "Active", 
+      courses: [], 
+      discount: 0, 
+      specialCourseFee: 0, 
+      specialCourseName: "", 
+      amount: 0,
+      name: "",
+      phone: "",
+      address: "",
+      parentName: "",
+      aadharNo: "",
+      onlineAppNo: "",
+      learnersDate: "",
+      testDate: "",
+      remarks: "",
+      photoUrl: ""
+    });
   };
 
   const handleCourseToggle = (course: string) => {
@@ -237,12 +270,16 @@ export default function StudentsPage() {
       toast({ variant: "destructive", title: "Export Failed", description: "No student data available to export." });
       return;
     }
-    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Registration Date", "Courses", "Total Amount", "Discount"];
+    const headers = ["ID", "Name", "Phone", "Email", "Parent Name", "Address", "Aadhar No", "App No", "Branch", "Status", "Registration Date", "Courses", "Total Amount", "Discount"];
     const rows = students.map(s => [
       s.id,
       s.name,
       s.phone,
       s.email || '',
+      s.parentName || '',
+      `"${s.address?.replace(/"/g, '""')}"`,
+      s.aadharNo || '',
+      s.onlineAppNo || '',
       s.branch,
       s.status,
       s.registrationDate,
@@ -278,7 +315,7 @@ export default function StudentsPage() {
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Split by comma but respect quotes
         if (parts.length < 5) continue;
 
-        const [id, name, phone, email, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
+        const [id, name, phone, email, parent, address, aadhar, appNo, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
         
         const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
         const studentId = id || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -289,6 +326,10 @@ export default function StudentsPage() {
           name: name || "Unknown",
           phone: phone || "",
           email: email || `${studentId.toLowerCase()}@citydriving.in`,
+          parentName: parent || "",
+          address: address || "",
+          aadharNo: aadhar || "",
+          onlineAppNo: appNo || "",
           branch: branch || "Branch 1",
           status: status || "Active",
           registrationDate: regDate || new Date().toISOString().split('T')[0],
@@ -317,7 +358,7 @@ export default function StudentsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Students Database</CardTitle>
-              <CardDescription>Live pricing sourced from Course Catalog.</CardDescription>
+              <CardDescription>Comprehensive student profiles and course management.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -350,21 +391,21 @@ export default function StudentsPage() {
                 </div>
               )}
 
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
                 <DialogTrigger asChild>
-                  <Button onClick={() => setFormData({ branch: "Branch 1", status: "Active", courses: [], discount: 0, specialCourseFee: 0, specialCourseName: "", amount: 0 })}>
+                  <Button onClick={resetForm}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Register Student
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-4xl">
                   <DialogHeader>
-                    <DialogTitle>New Registration</DialogTitle>
-                    <DialogDescription>Fees are auto-calculated based on current master pricing.</DialogDescription>
+                    <DialogTitle>New Student Registration</DialogTitle>
+                    <DialogDescription>Fill in all details. Photos will be backed up to the secure drive.</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label>Branch</Label>
                           <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})}>
@@ -376,12 +417,48 @@ export default function StudentsPage() {
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
-                          <Input placeholder="Enter student name" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                          <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Mobile No.</Label>
+                          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Parent/Guardian Name</Label>
+                          <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Aadhar No.</Label>
+                          <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label>Address</Label>
+                        <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Online App No.</Label>
+                          <Input placeholder="APP-1001" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Learners Date</Label>
+                          <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Test Date</Label>
+                          <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
+                        </div>
+                      </div>
+
                       <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
                         <Label className="font-bold">Courses Selection</Label>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {masterCourses?.map(course => (
                             <div key={course.id} className="flex items-center space-x-2">
                               <Checkbox 
@@ -405,7 +482,7 @@ export default function StudentsPage() {
                           <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
                             <div className="grid gap-2">
                               <Label>Special Course Name</Label>
-                              <Input placeholder="Enter course name" value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
+                              <Input placeholder="e.g. Defensive Driving" value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
                             </div>
                             <div className="grid gap-2">
                               <Label>Special Course Fee (₹)</Label>
@@ -417,7 +494,8 @@ export default function StudentsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Discount (₹)</Label>
                           <Input type="number" value={formData.discount} onChange={(e) => {
@@ -431,6 +509,11 @@ export default function StudentsPage() {
                             ₹{formData.amount?.toLocaleString() || '0'}
                           </div>
                         </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label>Remarks</Label>
+                        <Textarea placeholder="Any specific requirements or notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
                       </div>
                     </div>
                   </ScrollArea>
@@ -453,6 +536,7 @@ export default function StudentsPage() {
                 <TableRow>
                   <TableHead>Student ID & Name</TableHead>
                   <TableHead>Branch</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Agreed Fee (₹)</TableHead>
                   <TableHead>Balance Due (₹)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -473,6 +557,7 @@ export default function StudentsPage() {
                       </div>
                     </TableCell>
                     <TableCell>{student.branch}</TableCell>
+                    <TableCell className="text-sm">{student.phone}</TableCell>
                     <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
                     <TableCell>
                       <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
@@ -543,54 +628,132 @@ export default function StudentsPage() {
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
           <SheetHeader>
-            <SheetTitle>Student Profile</SheetTitle>
+            <SheetTitle>Student Profile Details</SheetTitle>
           </SheetHeader>
           {selectedStudent && (
              <ScrollArea className="h-full mt-6 pr-4">
-               <div className="space-y-6 pb-10">
-                 <div className="text-center">
-                    <Avatar className="h-20 w-20 mx-auto mb-4">
-                      <AvatarFallback>{selectedStudent.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <h2 className="text-xl font-bold">{selectedStudent.name}</h2>
-                    <p className="text-sm text-muted-foreground">{selectedStudent.id}</p>
+               <div className="space-y-6 pb-20">
+                 <div className="flex flex-col items-center text-center">
+                    <div className="relative mb-4">
+                      <Avatar className="h-32 w-32 border-4 border-primary/20">
+                        <AvatarImage src={selectedStudent.photoUrl || `https://picsum.photos/seed/${selectedStudent.id}/200/200`} alt={selectedStudent.name} />
+                        <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
+                    <Badge variant="outline" className="mt-1 font-mono">{selectedStudent.id}</Badge>
+                    <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> {selectedStudent.branch}
+                    </p>
                  </div>
+
                  <Separator />
-                 <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div><p className="font-semibold">Phone</p><p>{selectedStudent.phone}</p></div>
-                    <div><p className="font-semibold">Branch</p><p>{selectedStudent.branch}</p></div>
-                    <div><p className="font-semibold">Registered</p><p>{selectedStudent.registrationDate}</p></div>
-                    <div><p className="font-semibold">Status</p><p>{selectedStudent.status}</p></div>
-                 </div>
-                 <div className="space-y-2">
-                    <p className="text-sm font-semibold">Enrolled Courses</p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedStudent.courses.map(c => <Badge key={c} variant="outline">{c}</Badge>)}
-                    </div>
-                 </div>
-                 <div className="p-4 border rounded-lg bg-primary/5 space-y-3">
-                    <div className="flex justify-between font-bold"><span>Total Agreed Fee</span><span>₹{selectedStudent.amount.toLocaleString()}</span></div>
-                    <div className="flex justify-between text-destructive font-bold"><span>Remaining Balance</span><span>₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
-                 </div>
-                 <div className="space-y-3">
-                    <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
-                    <div className="border rounded-md overflow-hidden">
-                      <Table>
-                        <TableBody>
-                          {selectedStudent.payments?.map((p, idx) => (
-                            <TableRow key={idx} className="text-xs">
-                              <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
-                              <TableCell className="font-bold">₹{p.amount?.toLocaleString()}</TableCell>
-                              <TableCell>{p.method}</TableCell>
-                              <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
-                            </TableRow>
-                          ))}
-                          {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
-                            <TableRow><TableCell className="text-center text-muted-foreground py-4">No payments recorded.</TableCell></TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
+
+                 <div className="grid grid-cols-1 gap-6">
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                        <User className="h-4 w-4" /> Personal Information
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Mobile Number</p>
+                          <p className="font-medium flex items-center gap-1"><Phone className="h-3 w-3" /> {selectedStudent.phone}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Parent/Guardian</p>
+                          <p className="font-medium">{selectedStudent.parentName || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Aadhar Number</p>
+                          <p className="font-medium flex items-center gap-1"><Hash className="h-3 w-3" /> {selectedStudent.aadharNo || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Email</p>
+                          <p className="font-medium flex items-center gap-1 text-xs truncate"><Mail className="h-3 w-3" /> {selectedStudent.email}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Permanent Address</p>
+                        <p className="text-sm italic">{selectedStudent.address || 'No address provided.'}</p>
+                      </div>
+                    </section>
+
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4" /> Application & Status
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Application No.</p>
+                          <p className="font-medium">{selectedStudent.onlineAppNo || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Status</p>
+                          <Badge variant={selectedStudent.status === 'Active' ? 'default' : 'secondary'}>{selectedStudent.status}</Badge>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Learners Date</p>
+                          <p className="font-medium">{selectedStudent.learnersDate || 'TBD'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Test Date</p>
+                          <p className="font-medium">{selectedStudent.testDate || 'TBD'}</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="space-y-3">
+                      <p className="text-sm font-semibold">Enrolled Courses</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedStudent.courses.map(c => (
+                          <Badge key={c} variant="secondary">
+                            {c === 'Other Special Course' ? (selectedStudent.specialCourseName || 'Other Special') : c}
+                          </Badge>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Total Fees (Agreed)</span>
+                        <span className="text-xl font-bold">₹{selectedStudent.amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-destructive">
+                        <span className="text-sm font-medium">Remaining Balance</span>
+                        <span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span>
+                      </div>
+                      {selectedStudent.discount > 0 && (
+                        <p className="text-xs text-muted-foreground text-right italic">Includes ₹{selectedStudent.discount.toLocaleString()} discount</p>
+                      )}
+                    </section>
+
+                    <section className="space-y-3">
+                      <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableBody>
+                            {selectedStudent.payments?.map((p, idx) => (
+                              <TableRow key={idx} className="text-xs">
+                                <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
+                                <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
+                                <TableCell>{p.method}</TableCell>
+                                <TableCell className="text-muted-foreground italic text-right">#{p.receiptNo}</TableCell>
+                              </TableRow>
+                            ))}
+                            {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
+                              <TableRow><TableCell className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </section>
+
+                    <section className="space-y-2">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Office Remarks</p>
+                      <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                        {selectedStudent.remarks || 'No specific remarks for this student.'}
+                      </div>
+                    </section>
                  </div>
                </div>
              </ScrollArea>
@@ -598,27 +761,66 @@ export default function StudentsPage() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Edit Student</DialogTitle>
-            <DialogDescription>Note: Historical fees (Agreed Amount) are preserved unless updated manually.</DialogDescription>
+            <DialogTitle>Edit Student Profile</DialogTitle>
+            <DialogDescription>Note: The Agreed Amount remains fixed unless manually adjusted here.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2"><Label>Full Name</Label><Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} /></div>
-                <div className="grid gap-2"><Label>Status</Label>
-                  <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Completed">Completed</SelectItem></SelectContent>
-                  </Select>
+          <ScrollArea className="max-h-[70vh] pr-4">
+            <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Full Name</Label>
+                    <Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Status</Label>
+                    <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Inactive">Inactive</SelectItem>
+                        <SelectItem value="Completed">Completed</SelectItem>
+                        <SelectItem value="On Hold">On Hold</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Total Agreed Fee (₹)</Label>
-                <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
-              </div>
-          </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Parent/Guardian</Label>
+                    <Input value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Phone</Label>
+                    <Input value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Learners Date</Label>
+                    <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Test Date</Label>
+                    <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
+                  </div>
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label>Agreed Fee (₹)</Label>
+                  <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Remarks</Label>
+                  <Textarea value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+                </div>
+            </div>
+          </ScrollArea>
           <DialogFooter><Button onClick={handleUpdateStudent}>Save Changes</Button></DialogFooter>
         </DialogContent>
       </Dialog>

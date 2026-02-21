@@ -93,12 +93,47 @@
         "phone": {
           "type": "string"
         },
+        "email": {
+          "type": "string"
+        },
         "branch": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "parentName": {
+          "type": "string"
+        },
+        "aadharNo": {
+          "type": "string"
+        },
+        "onlineAppNo": {
+          "type": "string"
+        },
+        "learnersDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "testDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "remarks": {
+          "type": "string"
+        },
+        "photoUrl": {
           "type": "string"
         },
         "courses": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "specialCourseName": {
+          "type": "string"
+        },
+        "specialCourseFee": {
+          "type": "number"
         },
         "amount": {
           "type": "number",
