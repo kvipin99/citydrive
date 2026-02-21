@@ -23,11 +23,10 @@ export default function SettingsPage() {
 
   return (
     <Tabs defaultValue="general" className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
+      <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="profile">Profile</TabsTrigger>
         <TabsTrigger value="automation">Automation</TabsTrigger>
-        <TabsTrigger value="billing">Billing</TabsTrigger>
       </TabsList>
 
       <TabsContent value="general">
@@ -130,32 +129,6 @@ export default function SettingsPage() {
             <Separator />
             
             <Button onClick={() => handleSaveChanges('Automation')}>Update Automation Settings</Button>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="billing">
-        <Card>
-          <CardHeader>
-            <CardTitle>Billing</CardTitle>
-            <CardDescription>Manage your subscription and payment methods.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p>You are currently on the <strong>Pro Plan</strong>.</p>
-            <p className="text-muted-foreground">Your next bill for ₹9,900 is on August 1, 2024.</p>
-            <div className="flex gap-2">
-                <Button>Upgrade Plan</Button>
-                <Button variant="outline">View Billing History</Button>
-            </div>
-            <Separator/>
-            <div className="space-y-2">
-                <h3 className="text-lg font-medium">Payment Method</h3>
-                <div className="rounded-lg border p-4">
-                    <p>Visa ending in 1234</p>
-                    <p className="text-muted-foreground">Expires 12/2026</p>
-                </div>
-                <Button variant="outline">Update Payment Method</Button>
-            </div>
           </CardContent>
         </Card>
       </TabsContent>
