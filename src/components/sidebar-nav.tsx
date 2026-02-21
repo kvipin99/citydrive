@@ -14,6 +14,7 @@ import {
   DatabaseBackup,
   Settings,
   Tags,
+  CreditCard,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -21,6 +22,7 @@ import { doc } from 'firebase/firestore';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/students', icon: Users, label: 'Students' },
+  { href: '/dashboard/payments', icon: CreditCard, label: 'Payments' },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors' },
   { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles' },
   { href: '/dashboard/schedule', icon: Calendar, label: 'Scheduling' },

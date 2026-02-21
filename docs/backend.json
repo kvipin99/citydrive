@@ -113,8 +113,38 @@
         "registrationDate": {
           "type": "string",
           "format": "date"
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount": { "type": "number" },
+              "date": { "type": "string", "format": "date-time" },
+              "receiptNo": { "type": "string" },
+              "method": { "type": "string" }
+            }
+          }
         }
       }
+    },
+    "Payment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Payment",
+      "type": "object",
+      "description": "Represents a single payment transaction received from a student.",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "receiptNo": { "type": "string" },
+        "method": { "type": "string", "enum": ["Cash", "Online", "Cheque"] },
+        "receivedBy": { "type": "string" },
+        "branch": { "type": "string" }
+      },
+      "required": ["id", "studentId", "amount", "date", "receiptNo", "method"]
     }
   },
   "auth": {
@@ -153,6 +183,16 @@
             "$ref": "#/backend/entities/Student"
           },
           "description": "Student enrollment data."
+        }
+      },
+      {
+        "path": "/payments/{paymentId}",
+        "definition": {
+          "entityName": "Payment",
+          "schema": {
+            "$ref": "#/backend/entities/Payment"
+          },
+          "description": "Records of all received payments."
         }
       }
     ]

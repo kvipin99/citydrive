@@ -18,9 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload } from "lucide-react";
+import { MoreHorizontal, FileText, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, CreditCard, Download, Upload, ArrowDownCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -58,7 +58,14 @@ export default function StudentsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  const [paymentData, setPaymentData] = useState({
+    amount: 0,
+    receiptNo: '',
+    method: 'Cash' as const
+  });
 
   const [formData, setFormData] = useState<Partial<Student>>({
     branch: "Branch 1",
@@ -183,8 +190,45 @@ export default function StudentsPage() {
   };
 
   const calculateBalanceDue = (student: Student) => {
-    const paid = student.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
     return Math.max(0, (student.amount || 0) - paid);
+  };
+
+  const handleReceivePayment = () => {
+    if (!selectedStudent || paymentData.amount <= 0 || !paymentData.receiptNo) {
+      toast({ variant: "destructive", title: "Error", description: "Complete all fields." });
+      return;
+    }
+
+    const payId = `PAY-${Date.now()}`;
+    const paymentRef = doc(db, 'payments', payId);
+    const studentRef = doc(db, 'students', selectedStudent.id);
+
+    const paymentRecord = {
+      id: payId,
+      studentId: selectedStudent.id,
+      studentName: selectedStudent.name,
+      amount: paymentData.amount,
+      date: serverTimestamp(),
+      receiptNo: paymentData.receiptNo,
+      method: paymentData.method,
+      branch: selectedStudent.branch,
+      receivedBy: user?.uid,
+    };
+
+    setDocumentNonBlocking(paymentRef, paymentRecord, { merge: true });
+    updateDocumentNonBlocking(studentRef, {
+      payments: arrayUnion({
+        amount: paymentData.amount,
+        date: new Date().toISOString(),
+        receiptNo: paymentData.receiptNo,
+        method: paymentData.method,
+      }),
+      updatedAt: serverTimestamp(),
+    });
+
+    setIsPaymentDialogOpen(false);
+    toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} saved.` });
   };
 
   const handleExportCSV = () => {
@@ -441,6 +485,7 @@ export default function StudentsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash' }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => deleteDocumentNonBlocking(doc(db, 'students', student.id))}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
@@ -454,6 +499,45 @@ export default function StudentsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Receive Payment</DialogTitle>
+            <DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="p-3 border rounded-lg bg-muted/50 flex justify-between">
+               <span className="text-sm">Balance Due:</span>
+               <span className="font-bold text-destructive">₹{selectedStudent ? calculateBalanceDue(selectedStudent).toLocaleString() : 0}</span>
+            </div>
+            <div className="grid gap-2">
+              <Label>Amount Received (₹)</Label>
+              <Input type="number" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Receipt No.</Label>
+                <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Method</Label>
+                <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Online">Online</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
@@ -483,6 +567,26 @@ export default function StudentsPage() {
                  <div className="p-4 border rounded-lg bg-primary/5 space-y-3">
                     <div className="flex justify-between font-bold"><span>Total Agreed Fee</span><span>₹{selectedStudent.amount.toLocaleString()}</span></div>
                     <div className="flex justify-between text-destructive font-bold"><span>Remaining Balance</span><span>₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
+                 </div>
+                 <div className="space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
+                    <div className="border rounded-md overflow-hidden">
+                      <Table>
+                        <TableBody>
+                          {selectedStudent.payments?.map((p, idx) => (
+                            <TableRow key={idx} className="text-xs">
+                              <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
+                              <TableCell className="font-bold">₹{p.amount?.toLocaleString()}</TableCell>
+                              <TableCell>{p.method}</TableCell>
+                              <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
+                            </TableRow>
+                          ))}
+                          {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
+                            <TableRow><TableCell className="text-center text-muted-foreground py-4">No payments recorded.</TableCell></TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                  </div>
                </div>
              </ScrollArea>
