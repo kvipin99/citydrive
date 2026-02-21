@@ -164,6 +164,24 @@
         }
       }
     },
+    "Instructor": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Instructor",
+      "type": "object",
+      "description": "Represents a staff member or instructor at the driving school.",
+      "properties": {
+        "id": { "type": "string", "description": "Staff ID (e.g., SID01)" },
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Deactive"] },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
     "Payment": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Payment",
@@ -253,6 +271,16 @@
             "$ref": "#/backend/entities/Student"
           },
           "description": "Student enrollment data."
+        }
+      },
+      {
+        "path": "/instructors/{instructorId}",
+        "definition": {
+          "entityName": "Instructor",
+          "schema": {
+            "$ref": "#/backend/entities/Instructor"
+          },
+          "description": "Staff and instructor records."
         }
       },
       {
