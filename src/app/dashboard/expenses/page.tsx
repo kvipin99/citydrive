@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -42,11 +42,13 @@ export default function ExpensesPage() {
     return doc(db, 'users', user.uid);
   }, [db, user]);
   const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'expenses');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'expenses');
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
 
   const { data: expenses, isLoading } = useCollection<ExpenseRecord>(expensesQuery);
 
@@ -59,6 +61,13 @@ export default function ExpensesPage() {
     description: '',
     branch: 'Branch 1',
   });
+
+  useEffect(() => {
+    if (profile && !selectedExpense && isDialogOpen) {
+      const defaultBranch = profile.role === 'Admin' ? "Branch 1" : (profile.branch || "Branch 1");
+      setFormData(prev => ({ ...prev, branch: defaultBranch }));
+    }
+  }, [profile, selectedExpense, isDialogOpen]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -124,7 +133,7 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">Track overheads, fuel, and operational costs.</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branch}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()}>
           <PlusCircle className="mr-2 h-5 w-5" />
@@ -138,7 +147,7 @@ export default function ExpensesPage() {
             <Wallet className="h-5 w-5 text-primary" />
             Expenditure Log
           </CardTitle>
-          <CardDescription>A list of recent expenses recorded across branches.</CardDescription>
+          <CardDescription>A list of recent expenses recorded for {isAdmin ? 'all branches' : profile?.branch}.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -238,7 +247,11 @@ export default function ExpensesPage() {
             </div>
             <div className="grid gap-2">
               <Label>Branch</Label>
-              <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}>
+              <Select 
+                value={formData.branch} 
+                onValueChange={(v) => setFormData({...formData, branch: v})}
+                disabled={!isAdmin}
+              >
                 <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
                 <SelectContent>
                   {BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
