@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -138,7 +138,7 @@ export default function InstructorsPage() {
       console.error("Staff registration error:", error);
       let errorMsg = error.message || "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID "${staffId}" is still in the system login database. Use "Cleanup Ghost Account" below to clear it.`;
+        errorMsg = `ID "${staffId}" is still blocked by a previous login account. Use the "Force Delete Auth" tool below to clear it.`;
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -184,7 +184,7 @@ export default function InstructorsPage() {
 
   const handleCleanupGhost = async () => {
     if (!cleanupId) return;
-    const staffId = cleanupId.toUpperCase();
+    const staffId = cleanupId.trim().toUpperCase();
     const email = `${staffId.toLowerCase()}@citydriving.in`;
     const password = "City123";
 
@@ -199,11 +199,11 @@ export default function InstructorsPage() {
       const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
       await deleteUser(cred.user);
       await deleteApp(secondaryApp);
-      toast({ title: "Cleanup Successful", description: `Login account for ${staffId} has been removed.` });
+      toast({ title: "Cleanup Successful", description: `Login account for ${staffId} has been removed. You can now reuse this ID.` });
       setCleanupId("");
     } catch (error: any) {
       console.error("Cleanup error:", error);
-      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone." });
+      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone or uses a non-default password." });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
@@ -248,11 +248,11 @@ export default function InstructorsPage() {
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Add New Staff Member</DialogTitle>
-                    <DialogDescription>Assign a unique ID. Account deletion is now permanent.</DialogDescription>
+                    <DialogDescription>Assign a unique ID. Accounts are automatically provisioned with password: <b>City123</b>.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="staffId">Staff ID</Label>
+                      <Label htmlFor="staffId">Staff ID (Changeable)</Label>
                       <Input 
                         id="staffId" 
                         placeholder="e.g. SID01" 
@@ -289,22 +289,29 @@ export default function InstructorsPage() {
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter className="flex-col gap-2">
+                  <DialogFooter className="flex-col gap-4">
                     <Button onClick={handleAddInstructor} className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
                       Confirm & Register
                     </Button>
-                    <div className="w-full pt-4 border-t mt-4">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Cleanup Ghost Accounts (SID01, SID02 etc)</p>
+                    
+                    <div className="w-full pt-4 border-t mt-2">
+                      <div className="flex items-center gap-1.5 mb-2 text-orange-600">
+                        <AlertCircle className="h-3 w-3" />
+                        <p className="text-[10px] font-bold uppercase tracking-tight">Fix "Email already in use" Error</p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
+                        If SID01 or SID02 was deleted before, their login might still exist. Enter the ID below to force-clear it.
+                      </p>
                       <div className="flex gap-2">
                         <Input 
-                          placeholder="Enter orphaned ID" 
-                          className="text-xs h-8" 
+                          placeholder="Orphaned ID (e.g. SID01)" 
+                          className="text-xs h-9" 
                           value={cleanupId} 
                           onChange={(e) => setCleanupId(e.target.value)} 
                         />
-                        <Button size="sm" variant="outline" className="h-8 text-[10px]" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                          <Eraser className="h-3 w-3 mr-1" /> Force Delete Auth
+                        <Button size="sm" variant="outline" className="h-9 text-[10px] px-3 font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                          <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Auth
                         </Button>
                       </div>
                     </div>
@@ -375,7 +382,7 @@ export default function InstructorsPage() {
                             <DropdownMenuItem>Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
-                              className="text-destructive" 
+                              className="text-destructive font-bold" 
                               onClick={() => handleDeleteInstructor(instructor)}
                               disabled={isSubmitting}
                             >
