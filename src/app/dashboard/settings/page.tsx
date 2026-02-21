@@ -12,13 +12,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2 } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, AlertCircle } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
@@ -122,7 +123,7 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Backup Started", description: "Aggregating system data for email delivery..." });
+    toast({ title: "Processing Backup", description: "Aggregating system data for email delivery..." });
 
     try {
       const backupData: Record<string, any[]> = {};
@@ -158,11 +159,15 @@ function SettingsContent() {
 
         toast({ title: "Backup Sent", description: result.message });
       } else {
-        toast({ variant: "destructive", title: "Email Failed", description: result.message });
+        toast({ 
+          variant: "destructive", 
+          title: "Email Error", 
+          description: result.message 
+        });
       }
     } catch (error: any) {
       console.error("Manual backup failed:", error);
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Internal Error", description: "Failed to process backup request." });
     } finally {
       setIsBackingUpManual(false);
     }
@@ -331,6 +336,14 @@ function SettingsContent() {
               <CardDescription>Configure automatic email snapshots of your entire database.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <Alert className="bg-orange-50 border-orange-200">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertTitle className="text-orange-800">Email Delivery Requirements</AlertTitle>
+                <AlertDescription className="text-xs text-orange-700">
+                  Real emails require a <b>RESEND_API_KEY</b> in your environment. Free tier accounts can only send to the email address registered with Resend.
+                </AlertDescription>
+              </Alert>
+
               <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                 <div className="space-y-0.5">
                   <Label className="text-base">Enable Auto-Backup</Label>
