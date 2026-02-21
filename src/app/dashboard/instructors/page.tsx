@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -8,17 +7,21 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking } from "@/firebase";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, MapPin, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
+import { format } from "date-fns";
 
 interface Instructor {
   id: string; // SID01, SID02 etc
@@ -45,6 +48,9 @@ export default function InstructorsPage() {
   const { data: instructors, isLoading } = useCollection<Instructor>(instructorsQuery);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+  const [selectedInstructor, setSelectedInstructor] = useState<Instructor | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cleanupId, setCleanupId] = useState("");
   
@@ -125,7 +131,7 @@ export default function InstructorsPage() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         createdBy: user?.uid,
-        avatarUrl: `https://picsum.photos/seed/${staffId}/40/40`
+        avatarUrl: `https://picsum.photos/seed/${staffId}/100/100`
       };
 
       const instructorRef = doc(db, 'instructors', staffId);
@@ -144,6 +150,26 @@ export default function InstructorsPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleUpdateInstructor = () => {
+    if (!selectedInstructor || !formData.name || !formData.phone) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Name and Phone are required." });
+      return;
+    }
+
+    const instructorRef = doc(db, 'instructors', selectedInstructor.id);
+    const updatedData = {
+      name: formData.name,
+      phone: formData.phone,
+      status: formData.status,
+      updatedAt: serverTimestamp(),
+    };
+
+    updateDocumentNonBlocking(instructorRef, updatedData);
+    setIsEditDialogOpen(false);
+    setSelectedInstructor(null);
+    toast({ title: "Profile Updated", description: "Instructor details have been saved." });
   };
 
   const handleDeleteInstructor = async (instructor: Instructor) => {
@@ -378,8 +404,16 @@ export default function InstructorsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Staff Actions</DropdownMenuLabel>
-                            <DropdownMenuItem>View Profile</DropdownMenuItem>
-                            <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedInstructor(instructor); setIsViewSheetOpen(true); }}>
+                              <Eye className="mr-2 h-4 w-4" /> View Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { 
+                              setSelectedInstructor(instructor); 
+                              setFormData({ name: instructor.name, phone: instructor.phone, status: instructor.status });
+                              setIsEditDialogOpen(true); 
+                            }}>
+                              <Edit2 className="mr-2 h-4 w-4" /> Edit Details
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               className="text-destructive font-bold" 
@@ -399,6 +433,133 @@ export default function InstructorsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) {
+          setSelectedInstructor(null);
+          setFormData({ id: '', status: 'Active', name: '', phone: '' });
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Instructor Profile</DialogTitle>
+            <DialogDescription>Update the information for {selectedInstructor?.id}.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Full Name</Label>
+              <Input 
+                id="edit-name" 
+                value={formData.name || ''} 
+                onChange={(e) => setFormData({...formData, name: e.target.value})} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-phone">Mobile Number</Label>
+              <Input 
+                id="edit-phone" 
+                value={formData.phone || ''} 
+                onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Deactive">Deactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleUpdateInstructor} className="w-full">
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Profile Sheet */}
+      <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Instructor Profile</SheetTitle>
+          </SheetHeader>
+          {selectedInstructor && (
+            <ScrollArea className="h-full mt-6 pr-4">
+              <div className="space-y-6 pb-20">
+                <div className="flex flex-col items-center text-center">
+                  <Avatar className="h-24 w-24 border-4 border-primary/20 mb-4">
+                    <AvatarImage src={selectedInstructor.avatarUrl} alt={selectedInstructor.name} />
+                    <AvatarFallback className="text-2xl">{selectedInstructor.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <h2 className="text-xl font-bold">{selectedInstructor.name}</h2>
+                  <Badge variant="outline" className="mt-1 font-mono">{selectedInstructor.id}</Badge>
+                  <Badge className="mt-2" variant={selectedInstructor.status === 'Active' ? 'default' : 'secondary'}>
+                    {selectedInstructor.status}
+                  </Badge>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                      <User className="h-4 w-4" /> Personal Information
+                    </h3>
+                    <div className="grid gap-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <Phone className="h-3.5 w-3.5" /> Mobile
+                        </span>
+                        <span className="font-medium">{selectedInstructor.phone}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <Mail className="h-3.5 w-3.5" /> Email
+                        </span>
+                        <span className="font-medium lowercase text-xs">{selectedInstructor.id}@citydriving.in</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                      <Calendar className="h-4 w-4" /> System Details
+                    </h3>
+                    <div className="grid gap-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Member Since</span>
+                        <span>{selectedInstructor.createdAt?.seconds ? format(new Date(selectedInstructor.createdAt.seconds * 1000), 'MMM dd, yyyy') : 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Last Updated</span>
+                        <span>{selectedInstructor.updatedAt?.seconds ? format(new Date(selectedInstructor.updatedAt.seconds * 1000), 'MMM dd, yyyy') : 'Recently'}</span>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div className="pt-4">
+                  <Button variant="outline" className="w-full" onClick={() => {
+                    setIsViewSheetOpen(false);
+                    setFormData({ name: selectedInstructor.name, phone: selectedInstructor.phone, status: selectedInstructor.status });
+                    setIsEditDialogOpen(true);
+                  }}>
+                    <Edit2 className="mr-2 h-4 w-4" /> Edit Details
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
