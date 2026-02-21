@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -170,6 +171,24 @@
       },
       "required": ["id", "date", "category", "amount", "branch"]
     },
+    "Class": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Class",
+      "type": "object",
+      "description": "Represents a scheduled driving lesson.",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Canceled"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "studentId", "instructorId", "startTime", "endTime", "status"]
+    },
     "BackupMetadata": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BackupMetadata",
@@ -238,6 +257,14 @@
           "entityName": "Expense",
           "schema": { "$ref": "#/backend/entities/Expense" },
           "description": "Business expense records."
+        }
+      },
+      {
+        "path": "/classes/{classId}",
+        "definition": {
+          "entityName": "Class",
+          "schema": { "$ref": "#/backend/entities/Class" },
+          "description": "Scheduled driving lessons and attendance."
         }
       },
       {

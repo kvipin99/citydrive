@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from "react";
@@ -17,9 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, CheckCircle2, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -88,6 +89,13 @@ export default function StudentsPage() {
     remarks: "",
     photoUrl: ""
   });
+
+  // Query for classes associated with the selected student
+  const classesQuery = useMemoFirebase(() => {
+    if (!db || !user || !selectedStudent) return null;
+    return query(collection(db, 'classes'), where('studentId', '==', selectedStudent.id));
+  }, [db, user, selectedStudent]);
+  const { data: studentClasses } = useCollection<any>(classesQuery);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -647,7 +655,7 @@ export default function StudentsPage() {
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => deleteDocumentNonBlocking(doc(db, 'students', student.id))}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}><Trash2 className="mr-2 h-4 w-4" /> Deactivate</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -785,16 +793,52 @@ export default function StudentsPage() {
                       </div>
                     </section>
 
+                    <Separator />
+
                     <section className="space-y-3">
-                      <p className="text-sm font-semibold">Enrolled Courses</p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedStudent.courses.map(c => (
-                          <Badge key={c} variant="secondary">
-                            {c === 'Other Special Course' ? (selectedStudent.specialCourseName || 'Other Special') : c}
-                          </Badge>
-                        ))}
+                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" /> Class Attendance & Schedule
+                      </h3>
+                      <div className="border rounded-lg overflow-hidden bg-muted/10">
+                        <Table>
+                          <TableHeader className="bg-muted/30">
+                            <TableRow className="text-[10px] uppercase">
+                              <TableHead className="h-8">Date & Time</TableHead>
+                              <TableHead className="h-8">Instructor</TableHead>
+                              <TableHead className="h-8">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {studentClasses && studentClasses.length > 0 ? (
+                              studentClasses.sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).map((cls: any) => (
+                                <TableRow key={cls.id} className="text-xs">
+                                  <TableCell>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{format(new Date(cls.startTime), 'MMM dd, yyyy')}</span>
+                                      <span className="text-muted-foreground text-[10px]">{format(new Date(cls.startTime), 'p')} - {format(new Date(cls.endTime), 'p')}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-[10px] font-medium">{cls.instructorName}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={cls.status === 'Completed' ? 'default' : cls.status === 'Scheduled' ? 'outline' : 'destructive'} className="text-[9px] px-1.5 py-0">
+                                      {cls.status}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-xs italic">
+                                  No classes recorded for this student.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
                       </div>
                     </section>
+
+                    <Separator />
 
                     <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
                       <div className="flex justify-between items-center">
