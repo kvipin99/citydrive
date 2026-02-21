@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ export default function StudentsPage() {
   });
 
   const [formData, setFormData] = useState<Partial<Student>>({
-    branch: profile?.branch || "Branch 1",
+    branch: "",
     status: "Active",
     courses: [],
     discount: 0,
@@ -93,6 +93,14 @@ export default function StudentsPage() {
     remarks: "",
     photoUrl: ""
   });
+
+  // Effect to initialize default branch when profile loads
+  useEffect(() => {
+    if (profile && !formData.branch) {
+      const defaultBranch = profile.role === 'Admin' ? "Branch 1" : (profile.branch || "Branch 1");
+      setFormData(prev => ({ ...prev, branch: defaultBranch }));
+    }
+  }, [profile, formData.branch]);
 
   // Query for classes associated with the selected student
   const classesQuery = useMemoFirebase(() => {
@@ -177,9 +185,8 @@ export default function StudentsPage() {
     }
 
     const branchPrefix = formData.branch.split(' ')[1];
-    const branchStudents = students?.filter(s => s.branch === formData.branch) || [];
-    const nextNumber = branchStudents.length + 1;
-    const studentId = `B${branchPrefix}-${String(nextNumber).padStart(5, '0')}`;
+    // Need to count all students globally or per branch to avoid ID collision
+    const studentId = `${branchPrefix}-${Date.now().toString().slice(-6)}`;
     
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
@@ -225,8 +232,9 @@ export default function StudentsPage() {
   };
 
   const resetForm = () => {
+    const defaultBranch = profile?.role === 'Admin' ? "Branch 1" : (profile?.branch || "Branch 1");
     setFormData({ 
-      branch: profile?.branch || "Branch 1", 
+      branch: defaultBranch, 
       status: "Active", 
       courses: [], 
       discount: 0, 
@@ -381,6 +389,9 @@ export default function StudentsPage() {
         const studentId = id || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         const studentRef = doc(db, 'students', studentId);
         
+        // Ensure Admin imports default to a specific branch if not provided
+        const finalBranch = branch || (profile?.role === 'Admin' ? "Branch 1" : profile?.branch || "Branch 1");
+
         const newStudentData = {
           id: studentId,
           name: name || "Unknown",
@@ -390,7 +401,7 @@ export default function StudentsPage() {
           address: address || "",
           aadharNo: aadhar || "",
           onlineAppNo: appNo || "",
-          branch: branch || profile?.branch || "Branch 1",
+          branch: finalBranch,
           status: status || "Active",
           registrationDate: regDate || new Date().toISOString().split('T')[0],
           courses: courses,
@@ -501,7 +512,7 @@ export default function StudentsPage() {
                             onValueChange={(v) => setFormData({...formData, branch: v as any})}
                             disabled={!isAdmin}
                           >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                             </SelectContent>
@@ -950,7 +961,7 @@ export default function StudentsPage() {
                     onValueChange={(v) => setFormData({...formData, branch: v as any})}
                     disabled={!isAdmin}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
                     <SelectContent>
                       {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                     </SelectContent>
