@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -184,14 +183,15 @@ export default function StudentsPage() {
       return;
     }
 
-    const branchPrefix = formData.branch.split(' ')[1];
-    // Need to count all students globally or per branch to avoid ID collision
-    const studentId = `${branchPrefix}-${Date.now().toString().slice(-6)}`;
+    // Safety check for branch selection
+    const branchName = formData.branch;
+    const branchPart = branchName.split(' ')[1] || "X";
+    const studentId = `${branchPart}-${Date.now().toString().slice(-6)}`;
     
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
-      toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
+      toast({ title: "Registering Student", description: `Generating ID ${studentId} for ${branchName}...` });
       const authUid = await createStudentAuth(studentId);
       
       const newStudentData = {
@@ -211,7 +211,7 @@ export default function StudentsPage() {
 
       setIsAddDialogOpen(false);
       resetForm();
-      toast({ title: "Success", description: `Account created for ${studentId}.` });
+      toast({ title: "Success", description: `Student ${studentId} registered at ${branchName}.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed", description: error.message });
     }
@@ -506,17 +506,18 @@ export default function StudentsPage() {
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
-                          <Label>Branch</Label>
+                          <Label className="text-primary font-bold">Branch Assignment</Label>
                           <Select 
                             value={formData.branch} 
                             onValueChange={(v) => setFormData({...formData, branch: v as any})}
                             disabled={!isAdmin}
                           >
-                            <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                            <SelectTrigger className="border-primary/50"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          {isAdmin && <p className="text-[10px] text-muted-foreground italic">Important: Select the correct branch for the student.</p>}
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
