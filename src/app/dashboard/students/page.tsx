@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, arrayUnion, Timestamp } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDoc, Timestamp } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
 import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -250,7 +250,7 @@ export default function StudentsPage() {
     return Math.max(0, (student.amount || 0) - paid);
   };
 
-  const handleReceivePayment = () => {
+  const handleReceivePayment = async () => {
     if (!selectedStudent || paymentData.amount <= 0 || !paymentData.receiptNo) {
       toast({ variant: "destructive", title: "Error", description: "Complete all fields." });
       return;
@@ -275,15 +275,30 @@ export default function StudentsPage() {
     };
 
     setDocumentNonBlocking(paymentRef, paymentRecord, { merge: true });
-    updateDocumentNonBlocking(studentRef, {
-      payments: arrayUnion({
-        amount: paymentData.amount,
-        date: transactionDate.toISOString(),
-        receiptNo: paymentData.receiptNo,
-        method: paymentData.method,
-      }),
-      updatedAt: serverTimestamp(),
-    });
+    
+    try {
+      const studentSnap = await getDoc(studentRef);
+      if (studentSnap.exists()) {
+        const currentPayments = studentSnap.data().payments || [];
+        const updatedPayments = [
+          ...currentPayments,
+          {
+            id: payId,
+            amount: paymentData.amount,
+            date: transactionDate.toISOString(),
+            receiptNo: paymentData.receiptNo,
+            method: paymentData.method,
+          }
+        ];
+
+        updateDocumentNonBlocking(studentRef, {
+          payments: updatedPayments,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to update student payments array:", e);
+    }
 
     setIsPaymentDialogOpen(false);
     setPaymentData({ 
@@ -800,7 +815,7 @@ export default function StudentsPage() {
                         <Table>
                           <TableBody>
                             {selectedStudent.payments?.map((p, idx) => (
-                              <TableRow key={idx} className="text-xs">
+                              <TableRow key={p.id || idx} className="text-xs">
                                 <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
                                 <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
                                 <TableCell>{p.method}</TableCell>
