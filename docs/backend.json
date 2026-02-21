@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -81,74 +80,27 @@
       "type": "object",
       "description": "Represents a student enrolled in the driving school.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "userId": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "phone": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "branch": {
-          "type": "string"
-        },
-        "address": {
-          "type": "string"
-        },
-        "parentName": {
-          "type": "string"
-        },
-        "aadharNo": {
-          "type": "string"
-        },
-        "onlineAppNo": {
-          "type": "string"
-        },
-        "learnersDate": {
-          "type": "string",
-          "format": "date"
-        },
-        "testDate": {
-          "type": "string",
-          "format": "date"
-        },
-        "remarks": {
-          "type": "string"
-        },
-        "photoUrl": {
-          "type": "string"
-        },
-        "courses": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "specialCourseName": {
-          "type": "string"
-        },
-        "specialCourseFee": {
-          "type": "number"
-        },
-        "amount": {
-          "type": "number",
-          "description": "The total fee agreed upon at registration."
-        },
-        "discount": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string"
-        },
-        "registrationDate": {
-          "type": "string",
-          "format": "date"
-        },
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "branch": { "type": "string" },
+        "address": { "type": "string" },
+        "parentName": { "type": "string" },
+        "aadharNo": { "type": "string" },
+        "onlineAppNo": { "type": "string" },
+        "learnersDate": { "type": "string", "format": "date" },
+        "testDate": { "type": "string", "format": "date" },
+        "remarks": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "courses": { "type": "array", "items": { "type": "string" } },
+        "specialCourseName": { "type": "string" },
+        "specialCourseFee": { "type": "number" },
+        "amount": { "type": "number" },
+        "discount": { "type": "number" },
+        "status": { "type": "string" },
+        "registrationDate": { "type": "string", "format": "date" },
         "payments": {
           "type": "array",
           "items": {
@@ -170,8 +122,8 @@
       "type": "object",
       "description": "Represents a staff member or instructor at the driving school.",
       "properties": {
-        "id": { "type": "string", "description": "Staff ID (e.g., SID01)" },
-        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
         "name": { "type": "string" },
         "phone": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Deactive"] },
@@ -218,20 +170,17 @@
       },
       "required": ["id", "date", "category", "amount", "branch"]
     },
-    "ScheduledClass": {
+    "BackupMetadata": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ScheduledClass",
+      "title": "BackupMetadata",
       "type": "object",
-      "description": "Represents a scheduled driving class.",
+      "description": "Audit logs for data export operations.",
       "properties": {
         "id": { "type": "string" },
-        "studentId": { "type": "string" },
-        "studentName": { "type": "string" },
-        "instructorId": { "type": "string" },
-        "instructorName": { "type": "string" },
-        "startTime": { "type": "string", "format": "date-time" },
-        "endTime": { "type": "string", "format": "date-time" },
-        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Canceled"] }
+        "timestamp": { "type": "string", "format": "date-time" },
+        "performedBy": { "type": "string" },
+        "status": { "type": "string" },
+        "type": { "type": "string" }
       }
     }
   },
@@ -247,9 +196,7 @@
         "path": "/users/{userId}",
         "definition": {
           "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
+          "schema": { "$ref": "#/backend/entities/User" },
           "description": "User profiles and roles."
         }
       },
@@ -257,9 +204,7 @@
         "path": "/courses/{courseId}",
         "definition": {
           "entityName": "Course",
-          "schema": {
-            "$ref": "#/backend/entities/Course"
-          },
+          "schema": { "$ref": "#/backend/entities/Course" },
           "description": "Master list of courses and pricing."
         }
       },
@@ -267,9 +212,7 @@
         "path": "/students/{studentId}",
         "definition": {
           "entityName": "Student",
-          "schema": {
-            "$ref": "#/backend/entities/Student"
-          },
+          "schema": { "$ref": "#/backend/entities/Student" },
           "description": "Student enrollment data."
         }
       },
@@ -277,9 +220,7 @@
         "path": "/instructors/{instructorId}",
         "definition": {
           "entityName": "Instructor",
-          "schema": {
-            "$ref": "#/backend/entities/Instructor"
-          },
+          "schema": { "$ref": "#/backend/entities/Instructor" },
           "description": "Staff and instructor records."
         }
       },
@@ -287,9 +228,7 @@
         "path": "/payments/{paymentId}",
         "definition": {
           "entityName": "Payment",
-          "schema": {
-            "$ref": "#/backend/entities/Payment"
-          },
+          "schema": { "$ref": "#/backend/entities/Payment" },
           "description": "Records of all received payments."
         }
       },
@@ -297,20 +236,16 @@
         "path": "/expenses/{expenseId}",
         "definition": {
           "entityName": "Expense",
-          "schema": {
-            "$ref": "#/backend/entities/Expense"
-          },
+          "schema": { "$ref": "#/backend/entities/Expense" },
           "description": "Business expense records."
         }
       },
       {
-        "path": "/classes/{classId}",
+        "path": "/backupMetadata/{backupId}",
         "definition": {
-          "entityName": "ScheduledClass",
-          "schema": {
-            "$ref": "#/backend/entities/ScheduledClass"
-          },
-          "description": "Driving class schedules."
+          "entityName": "BackupMetadata",
+          "schema": { "$ref": "#/backend/entities/BackupMetadata" },
+          "description": "Audit logs for backups."
         }
       }
     ]
