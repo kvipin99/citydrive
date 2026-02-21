@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
+import { format } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -541,6 +542,9 @@ export default function StudentsPage() {
 
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Student Profile</SheetTitle>
+          </SheetHeader>
           {selectedStudent && (
              <ScrollArea className="h-full mt-6 pr-4">
                <div className="space-y-6 pb-10">
