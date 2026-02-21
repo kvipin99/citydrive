@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from "react";
@@ -19,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -33,6 +34,8 @@ export default function StudentsPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const editPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const userProfileRef = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -98,6 +101,27 @@ export default function StudentsPage() {
     s.phone?.includes(searchQuery)
   ) || [];
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'image/jpeg') {
+      toast({ variant: "destructive", title: "Invalid File Type", description: "Please upload a JPEG image." });
+      return;
+    }
+
+    if (file.size > 200 * 1024) {
+      toast({ variant: "destructive", title: "File Too Large", description: "Image must be less than 200 KB." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setFormData({ ...formData, photoUrl: event.target?.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const createStudentAuth = async (studentId: string) => {
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
@@ -159,7 +183,6 @@ export default function StudentsPage() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         createdBy: user?.uid,
-        photoUrl: `https://picsum.photos/seed/${studentId}/200/200`
       };
 
       const studentRef = doc(db, 'students', studentId);
@@ -400,10 +423,36 @@ export default function StudentsPage() {
                 <DialogContent className="max-w-4xl">
                   <DialogHeader>
                     <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. Photos will be backed up to the secure drive.</DialogDescription>
+                    <DialogDescription>Fill in all details. JPEG photo must be under 200 KB.</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
+                      <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
+                        <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
+                        <div className="relative">
+                          <Avatar className="h-32 w-32 border-4 border-primary/20">
+                            <AvatarImage src={formData.photoUrl} alt="Preview" />
+                            <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+                          </Avatar>
+                          <Button 
+                            size="icon" 
+                            variant="secondary" 
+                            className="absolute bottom-0 right-0 rounded-full shadow-lg"
+                            onClick={() => photoInputRef.current?.click()}
+                          >
+                            <PlusCircle className="h-5 w-5" />
+                          </Button>
+                          <input 
+                            type="file" 
+                            ref={photoInputRef} 
+                            className="hidden" 
+                            accept="image/jpeg" 
+                            onChange={handlePhotoUpload} 
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Format: JPEG | Limit: 200KB</p>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label>Branch</Label>
@@ -547,6 +596,7 @@ export default function StudentsPage() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
+                          <AvatarImage src={student.photoUrl} alt={student.name} />
                           <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="grid gap-0.5">
@@ -635,7 +685,7 @@ export default function StudentsPage() {
                  <div className="flex flex-col items-center text-center">
                     <div className="relative mb-4">
                       <Avatar className="h-32 w-32 border-4 border-primary/20">
-                        <AvatarImage src={selectedStudent.photoUrl || `https://picsum.photos/seed/${selectedStudent.id}/200/200`} alt={selectedStudent.name} />
+                        <AvatarImage src={selectedStudent.photoUrl} alt={selectedStudent.name} />
                         <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                     </div>
@@ -768,6 +818,32 @@ export default function StudentsPage() {
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <div className="grid gap-6 py-4">
+              <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
+                <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
+                <div className="relative">
+                  <Avatar className="h-32 w-32 border-4 border-primary/20">
+                    <AvatarImage src={formData.photoUrl} alt="Preview" />
+                    <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+                  </Avatar>
+                  <Button 
+                    size="icon" 
+                    variant="secondary" 
+                    className="absolute bottom-0 right-0 rounded-full shadow-lg"
+                    onClick={() => editPhotoInputRef.current?.click()}
+                  >
+                    <PlusCircle className="h-5 w-5" />
+                  </Button>
+                  <input 
+                    type="file" 
+                    ref={editPhotoInputRef} 
+                    className="hidden" 
+                    accept="image/jpeg" 
+                    onChange={handlePhotoUpload} 
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Format: JPEG | Limit: 200KB</p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
                   <Label>Branch</Label>
