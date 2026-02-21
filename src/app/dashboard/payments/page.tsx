@@ -9,10 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, MoreHorizontal, Trash2, Phone } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt, User, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -153,41 +152,6 @@ export default function PaymentsPage() {
     setIsDialogOpen(false);
     resetForm();
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
-  };
-
-  const handleDeletePayment = async (payment: PaymentRecord) => {
-    if (!isAdmin) {
-      toast({ variant: "destructive", title: "Access Denied", description: "Only administrators can delete payments." });
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to delete receipt #${payment.receiptNo}? This will also remove it from the student's profile.`)) return;
-
-    const paymentRef = doc(db, 'payments', payment.id);
-    const studentRef = doc(db, 'students', payment.studentId);
-
-    deleteDocumentNonBlocking(paymentRef);
-
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = currentPayments.filter((p: any) => {
-          // Robust check using both ID and receipt number for compatibility
-          if (p.id) return p.id !== payment.id;
-          return p.receiptNo !== payment.receiptNo;
-        });
-        
-        updateDocumentNonBlocking(studentRef, {
-          payments: updatedPayments,
-          updatedAt: serverTimestamp(),
-        });
-      }
-      toast({ title: "Payment Deleted", description: `Receipt #${payment.receiptNo} has been removed.` });
-    } catch (e) {
-      console.error("Failed to remove payment from student record:", e);
-      toast({ variant: "destructive", title: "Error", description: "Failed to update student profile." });
-    }
   };
 
   const sortedPayments = useMemo(() => {
@@ -371,13 +335,12 @@ export default function PaymentsPage() {
                   <TableHead>Branch</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPayments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       {listSearchTerm ? 'No payments match your search.' : 'No payment transactions found.'}
                     </TableCell>
                   </TableRow>
@@ -411,22 +374,6 @@ export default function PaymentsPage() {
                       </TableCell>
                       <TableCell className="text-right font-bold text-green-600">
                         ₹{p.amount?.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isAdmin && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeletePayment(p)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
                       </TableCell>
                     </TableRow>
                   ))

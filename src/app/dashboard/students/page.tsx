@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, Timestamp } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
 import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
@@ -309,45 +309,6 @@ export default function StudentsPage() {
       date: new Date().toISOString().split('T')[0]
     });
     toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} saved.` });
-  };
-
-  const handleDeletePayment = async (payId: string, receiptNo: string) => {
-    if (!isAdmin || !selectedStudent) {
-      toast({ variant: "destructive", title: "Access Denied", description: "Only administrators can delete payments." });
-      return;
-    }
-    
-    if (!confirm(`Delete receipt #${receiptNo}? This cannot be undone.`)) return;
-
-    const paymentRef = doc(db, 'payments', payId);
-    const studentRef = doc(db, 'students', selectedStudent.id);
-
-    deleteDocumentNonBlocking(paymentRef);
-
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = currentPayments.filter((p: any) => {
-          if (p.id) return p.id !== payId;
-          return p.receiptNo !== receiptNo;
-        });
-        
-        updateDocumentNonBlocking(studentRef, {
-          payments: updatedPayments,
-          updatedAt: serverTimestamp(),
-        });
-        
-        setSelectedStudent({
-          ...selectedStudent,
-          payments: updatedPayments
-        });
-      }
-      toast({ title: "Payment Deleted", description: `Receipt #${receiptNo} removed.` });
-    } catch (e) {
-      console.error("Failed to remove payment from student record:", e);
-      toast({ variant: "destructive", title: "Error", description: "Failed to update student profile." });
-    }
   };
 
   const handleExportCSV = () => {
@@ -860,22 +821,10 @@ export default function StudentsPage() {
                                 <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
                                 <TableCell>{p.method}</TableCell>
                                 <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
-                                <TableCell className="text-right">
-                                  {isAdmin && (p.id || p.receiptNo) && (
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-6 w-6 text-destructive" 
-                                      onClick={() => handleDeletePayment(p.id || '', p.receiptNo)}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                </TableCell>
                               </TableRow>
                             ))}
                             {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
-                              <TableRow><TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
+                              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
                             )}
                           </TableBody>
                         </Table>
