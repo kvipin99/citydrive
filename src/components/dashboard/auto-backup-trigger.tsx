@@ -5,14 +5,14 @@ import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, getDocs, doc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import { sendBackupEmail } from '@/ai/flows/backup-email-flow';
 import { useToast } from '@/hooks/use-toast';
-import { differenceInDays } from 'date-fns';
+import { startOfWeek } from 'date-fns';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
 /**
  * This component runs silently in the background. 
- * For Admins, it checks if a backup is due based on settings.
+ * For Admins, it checks if a backup is due (Every Sunday 12:00 AM).
  */
 export function AutoBackupTrigger() {
   const db = useFirestore();
@@ -43,11 +43,12 @@ export function AutoBackupTrigger() {
           ? new Date(lastBackup.timestamp.seconds * 1000) 
           : new Date(0);
         
-        const daysSinceLast = differenceInDays(new Date(), lastDate);
+        // Schedule: Every Sunday at 12:00 AM
+        const currentSunday = startOfWeek(new Date(), { weekStartsOn: 0 }); // Current week's Sunday midnight
 
-        // Schedule: Twice a week (~ every 3.5 days)
-        if (daysSinceLast >= 3) {
-          console.log("[AUTO-BACKUP] Backup is due. Starting automated process...");
+        // If the last recorded backup was BEFORE this Sunday, and we are ON or AFTER this Sunday, trigger it.
+        if (lastDate < currentSunday) {
+          console.log("[AUTO-BACKUP] New weekly backup is due. Starting automated process...");
           setHasRunThisSession(true);
           
           const backupData: Record<string, any[]> = {};
@@ -62,7 +63,7 @@ export function AutoBackupTrigger() {
           }
 
           const emailRecipient = autoSettings?.email || "ezydriveapp@gmail.com";
-          const summary = `Scheduled Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
+          const summary = `Weekly Sunday Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
           
           const result = await sendBackupEmail({
             email: emailRecipient,
@@ -77,14 +78,14 @@ export function AutoBackupTrigger() {
             setDocumentNonBlocking(metadataRef, {
               id: metadataRef.id,
               timestamp: serverTimestamp(),
-              performedBy: "SYSTEM (Automated)",
+              performedBy: "SYSTEM (Automated Sunday)",
               status: "Successful",
               type: "Scheduled Email Backup"
             }, { merge: true });
 
             toast({
-              title: "Automated Backup Sent",
-              description: `A scheduled backup of ${totalRecords} records was sent to ${emailRecipient}.`,
+              title: "Weekly Backup Sent",
+              description: `The Sunday automated backup was successfully sent to ${emailRecipient}.`,
             });
           } else {
             console.error("[AUTO-BACKUP] Email failed:", result.message);

@@ -12,14 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, AlertCircle } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2 } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
@@ -336,18 +335,10 @@ function SettingsContent() {
               <CardDescription>Configure automatic email snapshots of your entire database.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Alert className="bg-orange-50 border-orange-200">
-                <AlertCircle className="h-4 w-4 text-orange-600" />
-                <AlertTitle className="text-orange-800">Email Delivery Requirements</AlertTitle>
-                <AlertDescription className="text-xs text-orange-700">
-                  Real emails require a <b>RESEND_API_KEY</b> in your environment. Free tier accounts can only send to the email address registered with Resend.
-                </AlertDescription>
-              </Alert>
-
               <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                 <div className="space-y-0.5">
                   <Label className="text-base">Enable Auto-Backup</Label>
-                  <p className="text-sm text-muted-foreground">Automatically send database reports twice a week.</p>
+                  <p className="text-sm text-muted-foreground">Automatically send database reports every Sunday at 12:00 AM.</p>
                 </div>
                 <Switch 
                   checked={autoSettings?.enabled ?? true} 
@@ -395,7 +386,7 @@ function SettingsContent() {
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-                Backup schedule is active. Data is aggregated every 3.5 days.
+                Backup schedule is active. Data is aggregated every Sunday.
               </div>
             </CardContent>
           </Card>
