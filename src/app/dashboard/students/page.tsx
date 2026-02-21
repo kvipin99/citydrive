@@ -266,6 +266,7 @@ export default function StudentsPage() {
       id: payId,
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
+      studentPhone: selectedStudent.phone,
       amount: paymentData.amount,
       date: Timestamp.fromDate(transactionDate),
       receiptNo: paymentData.receiptNo,
@@ -317,10 +318,8 @@ export default function StudentsPage() {
     const paymentRef = doc(db, 'payments', payId);
     const studentRef = doc(db, 'students', selectedStudent.id);
 
-    // 1. Delete the central record
     deleteDocumentNonBlocking(paymentRef);
 
-    // 2. Update the student's internal payment array
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
@@ -335,7 +334,6 @@ export default function StudentsPage() {
           updatedAt: serverTimestamp(),
         });
         
-        // Update local UI state for the sheet if needed
         setSelectedStudent({
           ...selectedStudent,
           payments: updatedPayments

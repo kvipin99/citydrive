@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, MoreHorizontal, Trash2 } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt, User, MoreHorizontal, Trash2, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -29,6 +29,7 @@ interface PaymentRecord {
   id: string;
   studentId: string;
   studentName: string;
+  studentPhone?: string;
   amount: number;
   date: any;
   receiptNo: string;
@@ -64,6 +65,7 @@ export default function PaymentsPage() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [listSearchTerm, setListSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -109,10 +111,11 @@ export default function PaymentsPage() {
 
     const transactionDate = new Date(paymentData.date);
     
-    const fullPaymentRecord = {
+    const fullPaymentRecord: PaymentRecord = {
       id: paymentId,
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
+      studentPhone: selectedStudent.phone,
       amount: paymentData.amount,
       date: Timestamp.fromDate(transactionDate),
       receiptNo: paymentData.receiptNo,
@@ -163,15 +166,12 @@ export default function PaymentsPage() {
     const paymentRef = doc(db, 'payments', payment.id);
     const studentRef = doc(db, 'students', payment.studentId);
 
-    // 1. Delete the central record
     deleteDocumentNonBlocking(paymentRef);
 
-    // 2. Update the student's internal payment array
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
         const currentPayments = studentSnap.data().payments || [];
-        // Match by ID if available, otherwise by receipt number for legacy records
         const updatedPayments = currentPayments.filter((p: any) => {
           if (p.id) return p.id !== payment.id;
           return p.receiptNo !== payment.receiptNo;
@@ -197,6 +197,22 @@ export default function PaymentsPage() {
     }) || [];
   }, [payments]);
 
+  const filteredPayments = useMemo(() => {
+    if (!listSearchTerm) return sortedPayments;
+    const term = listSearchTerm.toLowerCase();
+    return sortedPayments.filter(p => {
+      const dateStr = p.date?.seconds 
+        ? format(new Date(p.date.seconds * 1000), 'MMM d, yyyy').toLowerCase() 
+        : '';
+      return (
+        p.studentName.toLowerCase().includes(term) ||
+        p.receiptNo.toLowerCase().includes(term) ||
+        p.studentPhone?.includes(term) ||
+        dateStr.includes(term)
+      );
+    });
+  }, [sortedPayments, listSearchTerm]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -204,121 +220,132 @@ export default function PaymentsPage() {
           <h2 className="text-2xl font-bold tracking-tight">Fee Collection</h2>
           <p className="text-muted-foreground">Manage student payments and track outstanding balances.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button size="lg" onClick={resetForm}>
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Receive Payment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Receive New Payment</DialogTitle>
-              <DialogDescription>
-                Search for a student and record the amount received.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-6 py-4">
-              {!selectedStudent ? (
-                <div className="grid gap-2">
-                  <Label>Search Student (ID/Name/Mobile)</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Start typing..." 
-                      className="pl-8" 
-                      value={searchTerm} 
-                      onChange={(e) => setSearchTerm(e.target.value)} 
-                    />
-                  </div>
-                  {filteredStudents.length > 0 && (
-                    <div className="border rounded-md mt-1 divide-y bg-background">
-                      {filteredStudents.map(s => (
-                        <div 
-                          key={s.id} 
-                          className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center"
-                          onClick={() => setSelectedStudent(s)}
-                        >
-                          <div>
-                            <p className="font-medium text-sm">{s.name}</p>
-                            <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
+        <div className="flex items-center gap-2">
+           <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search payments..." 
+              className="pl-8 w-[200px] lg:w-[300px]" 
+              value={listSearchTerm} 
+              onChange={(e) => setListSearchTerm(e.target.value)} 
+            />
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Receive Payment
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Receive New Payment</DialogTitle>
+                <DialogDescription>
+                  Search for a student and record the amount received.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                {!selectedStudent ? (
+                  <div className="grid gap-2">
+                    <Label>Search Student (ID/Name/Mobile)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        placeholder="Start typing..." 
+                        className="pl-8" 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)} 
+                      />
+                    </div>
+                    {filteredStudents.length > 0 && (
+                      <div className="border rounded-md mt-1 divide-y bg-background">
+                        {filteredStudents.map(s => (
+                          <div 
+                            key={s.id} 
+                            className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center"
+                            onClick={() => setSelectedStudent(s)}
+                          >
+                            <div>
+                              <p className="font-medium text-sm">{s.name}</p>
+                              <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
+                            </div>
+                            <Badge variant="outline">Select</Badge>
                           </div>
-                          <Badge variant="outline">Select</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center">
-                    <div>
-                      <p className="font-bold text-primary">{selectedStudent.name}</p>
-                      <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="p-2 border rounded bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Total Fee</p>
-                      <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-primary">{selectedStudent.name}</p>
+                        <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
                     </div>
-                    <div className="p-2 border rounded bg-destructive/5">
-                      <p className="text-xs text-muted-foreground">Balance Due</p>
-                      <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="p-2 border rounded bg-muted/30">
+                        <p className="text-xs text-muted-foreground">Total Fee</p>
+                        <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
+                      </div>
+                      <div className="p-2 border rounded bg-destructive/5">
+                        <p className="text-xs text-muted-foreground">Balance Due</p>
+                        <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid gap-4 pt-2">
-                    <div className="grid gap-2">
-                      <Label>Payment Date</Label>
-                      <Input 
-                        type="date" 
-                        value={paymentData.date} 
-                        disabled={!isAdmin}
-                        onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
-                      />
-                      {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Amount Received (₹)</Label>
-                      <Input 
-                        type="number" 
-                        value={paymentData.amount || ''} 
-                        onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 pt-2">
                       <div className="grid gap-2">
-                        <Label>Receipt No.</Label>
+                        <Label>Payment Date</Label>
                         <Input 
-                          placeholder="e.g. REC-1001" 
-                          value={paymentData.receiptNo} 
-                          onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} 
+                          type="date" 
+                          value={paymentData.date} 
+                          disabled={!isAdmin}
+                          onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
+                        />
+                        {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Amount Received (₹)</Label>
+                        <Input 
+                          type="number" 
+                          value={paymentData.amount || ''} 
+                          onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label>Method</Label>
-                        <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Cash">Cash</SelectItem>
-                            <SelectItem value="Online">Online</SelectItem>
-                            <SelectItem value="Cheque">Cheque</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Receipt No.</Label>
+                          <Input 
+                            placeholder="e.g. REC-1001" 
+                            value={paymentData.receiptNo} 
+                            onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} 
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Method</Label>
+                          <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Cash">Cash</SelectItem>
+                              <SelectItem value="Online">Online</SelectItem>
+                              <SelectItem value="Cheque">Cheque</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button disabled={!selectedStudent} onClick={handleReceivePayment} className="w-full">
-                Confirm Payment
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                )}
+              </div>
+              <DialogFooter>
+                <Button disabled={!selectedStudent} onClick={handleReceivePayment} className="w-full">
+                  Confirm Payment
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -347,14 +374,14 @@ export default function PaymentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedPayments.length === 0 ? (
+                {filteredPayments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      No payment transactions found.
+                      {listSearchTerm ? 'No payments match your search.' : 'No payment transactions found.'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedPayments.map((p) => (
+                  filteredPayments.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="text-muted-foreground text-xs">
                         {p.date?.seconds ? format(new Date(p.date.seconds * 1000), 'MMM d, yyyy') : 'Pending...'}
@@ -365,6 +392,11 @@ export default function PaymentsPage() {
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <User className="h-3 w-3" /> {p.studentName}
                           </span>
+                          {p.studentPhone && (
+                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-2 w-2" /> {p.studentPhone}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
