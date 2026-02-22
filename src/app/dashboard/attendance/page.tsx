@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -58,7 +57,7 @@ export default function AttendancePage() {
     );
   }, [db, user, profile, isAdmin, selectedDate]);
 
-  const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceRecordsQuery);
+  const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
   const filteredStudents = useMemo(() => {
     return students?.filter(s => 
