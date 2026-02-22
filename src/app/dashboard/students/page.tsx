@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where, orderBy } from "firebase/firestore";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock, BookOpen, Clock, FileText } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock, BookOpen, Clock, FileText, Wallet, Tag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -91,11 +91,10 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Specific query for attendance history when profile is open
+  // Scoped query for attendance history when profile is open
   const attendanceHistoryQuery = useMemoFirebase(() => {
     if (!db || !selectedStudent || !isProfileOpen || !profile) return null;
     
-    // Scoped query: If not admin, always filter by branch to match security rules
     if (isAdmin) {
       return query(
         collection(db, 'attendance'), 
@@ -104,7 +103,6 @@ export default function StudentsPage() {
       );
     }
     
-    // Managers can only list attendance records within their own branch
     return query(
       collection(db, 'attendance'), 
       where('branch', '==', profile.branch),
@@ -791,46 +789,76 @@ export default function StudentsPage() {
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Learners Date</p><p className="font-medium">{selectedStudent.learnersDate || 'N/A'}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Test Date</p><p className="font-medium">{selectedStudent.testDate || 'N/A'}</p></div>
                     </div>
-                    <div className="space-y-1 p-2 rounded border bg-muted/30">
-                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Staff Remarks</p>
-                      <p className="text-xs italic">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
+                    <div className="space-y-1 p-3 rounded-lg border bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Staff Remarks</p>
+                      <p className="text-xs italic mt-1">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
                     </div>
                  </section>
 
                  <Separator />
 
                  <section className="space-y-3">
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><BookOpen className="h-4 w-4" /> Enrolled Courses</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedStudent.courses?.map((course, idx) => (
-                        <Badge key={idx} variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                          {course}
-                        </Badge>
-                      )) || <p className="text-xs text-muted-foreground">No courses enrolled.</p>}
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><BookOpen className="h-4 w-4" /> Course Enrollment & Fees</h3>
+                    <div className="space-y-2">
+                      {selectedStudent.courses?.map((courseName, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-sm p-2 rounded-md bg-muted/20 border border-muted">
+                          <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> {courseName}</span>
+                          <span className="font-medium">₹{(coursePriceMap[courseName] || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      {(!selectedStudent.courses || selectedStudent.courses.length === 0) && (
+                        <p className="text-xs text-muted-foreground italic">No courses enrolled.</p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 p-4 border rounded-xl bg-primary/5 space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Subtotal Fee</span>
+                        <span className="font-medium">₹{(selectedStudent.courses?.reduce((sum, c) => sum + (coursePriceMap[c] || 0), 0) || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Admin Discount</span>
+                        <span className="font-bold">-₹{(selectedStudent.discount || 0).toLocaleString()}</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold flex items-center gap-1.5"><Wallet className="h-4 w-4" /> Net Payable</span>
+                        <span className="text-xl font-black text-primary">₹{(selectedStudent.amount || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-destructive pt-1">
+                        <span className="text-xs font-bold uppercase tracking-tight">Remaining Balance</span>
+                        <span className="text-lg font-black underline decoration-2">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span>
+                      </div>
                     </div>
                  </section>
 
                  <Separator />
 
-                 <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-sm font-medium">Total Fees</span><span className="text-xl font-bold">₹{selectedStudent.amount?.toLocaleString()}</span></div>
-                    <div className="flex justify-between items-center text-destructive"><span className="text-sm font-medium">Remaining Balance</span><span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
-                 </section>
-
                  <section className="space-y-3">
-                    <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
+                    <h3 className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Transaction History</h3>
                     <div className="border rounded-lg overflow-hidden">
                       <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow>
+                            <TableHead className="text-[10px] uppercase">Date</TableHead>
+                            <TableHead className="text-[10px] uppercase">Method</TableHead>
+                            <TableHead className="text-[10px] uppercase text-right">Amount (₹)</TableHead>
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
                           {!selectedStudent.payments || selectedStudent.payments.length === 0 ? (
-                            <TableRow><TableCell className="text-center py-4 text-xs text-muted-foreground">No payments recorded yet.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={3} className="text-center py-4 text-xs text-muted-foreground italic">No payments recorded yet.</TableCell></TableRow>
                           ) : (
                             selectedStudent.payments.map((p, idx) => (
-                              <TableRow key={p.id || idx} className="text-xs">
-                                <TableCell>{p.date ? format(new Date(p.date), 'dd MMM yyyy') : 'N/A'}</TableCell>
-                                <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
-                                <TableCell>{p.method}</TableCell>
-                                <TableCell className="text-muted-foreground italic text-right">#{p.receiptNo}</TableCell>
+                              <TableRow key={p.id || idx} className="text-xs hover:bg-muted/10">
+                                <TableCell>
+                                  <div className="grid">
+                                    <span>{p.date ? format(new Date(p.date), 'dd MMM yyyy') : 'N/A'}</span>
+                                    <span className="text-[9px] text-muted-foreground">#{p.receiptNo}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell><Badge variant="outline" className="text-[9px]">{p.method}</Badge></TableCell>
+                                <TableCell className="font-bold text-green-600 text-right">₹{p.amount?.toLocaleString()}</TableCell>
                               </TableRow>
                             ))
                           )}
@@ -842,15 +870,22 @@ export default function StudentsPage() {
                  <Separator />
 
                  <section className="space-y-3">
-                    <p className="text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4" /> Attendance History</p>
+                    <h3 className="text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4" /> Training Attendance Log</h3>
                     <div className="border rounded-lg overflow-hidden">
                       <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow>
+                            <TableHead className="text-[10px] uppercase">Date</TableHead>
+                            <TableHead className="text-[10px] uppercase">Session Timing</TableHead>
+                            <TableHead className="text-[10px] uppercase text-right">Hrs</TableHead>
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
                           {!attendanceHistory || attendanceHistory.length === 0 ? (
-                            <TableRow><TableCell className="text-center py-8 text-xs text-muted-foreground">No training sessions logged.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={3} className="text-center py-8 text-xs text-muted-foreground italic">No training sessions logged.</TableCell></TableRow>
                           ) : (
                             attendanceHistory.map((log) => (
-                              <TableRow key={log.id} className="text-xs">
+                              <TableRow key={log.id} className="text-xs hover:bg-muted/10">
                                 <TableCell className="font-medium">{log.date ? format(new Date(log.date), 'dd MMM') : 'N/A'}</TableCell>
                                 <TableCell>{log.startTime} - {log.endTime}</TableCell>
                                 <TableCell className="text-right font-bold text-primary">{log.duration}h</TableCell>
