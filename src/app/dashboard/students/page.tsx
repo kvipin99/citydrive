@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -19,10 +20,10 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
 import { format } from "date-fns";
 
@@ -65,6 +66,7 @@ export default function StudentsPage() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -99,12 +101,6 @@ export default function StudentsPage() {
     }
   }, [profile, formData.branch]);
 
-  const classesQuery = useMemoFirebase(() => {
-    if (!db || !user || !selectedStudent) return null;
-    return query(collection(db, 'classes'), where('studentId', '==', selectedStudent.id));
-  }, [db, user, selectedStudent]);
-  const { data: studentClasses } = useCollection<any>(classesQuery);
-
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
     masterCourses?.forEach(c => { map[c.name] = c.amount; });
@@ -123,18 +119,13 @@ export default function StudentsPage() {
   const generateBranchStudentId = (branchName: string) => {
     const branchPart = branchName.split(' ')[1] || "X";
     const prefix = `B${branchPart}-`;
-    
-    // Find all students globally (if admin) or in this branch (if manager) that belong to this branch
-    // Note: If admin, they have the full 'students' list in memory.
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
-    
     const maxNumber = branchStudents.reduce((max, s) => {
       const parts = s.id.split('-');
       if (parts.length < 2) return max;
       const num = parseInt(parts[1], 10);
       return !isNaN(num) && num > max ? num : max;
-    }, 1000); // Start from 1001
-
+    }, 1000); 
     return `${prefix}${maxNumber + 1}`;
   };
 
@@ -147,17 +138,14 @@ export default function StudentsPage() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.type !== 'image/jpeg') {
       toast({ variant: "destructive", title: "Invalid File Type", description: "Please upload a JPEG image." });
       return;
     }
-
     if (file.size > 200 * 1024) {
       toast({ variant: "destructive", title: "File Too Large", description: "Image must be less than 200 KB." });
       return;
     }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       setFormData({ ...formData, photoUrl: event.target?.result as string });
@@ -199,9 +187,9 @@ export default function StudentsPage() {
       return;
     }
 
+    setIsSubmitting(true);
     const branchName = formData.branch;
     const studentId = generateBranchStudentId(branchName);
-    
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
@@ -228,18 +216,18 @@ export default function StudentsPage() {
       toast({ title: "Success", description: `Student ${studentId} registered at ${branchName}.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed", description: error.message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateStudent = () => {
     if (!selectedStudent) return;
     const studentRef = doc(db, 'students', selectedStudent.id);
-    
     const updatedData = { 
       ...formData, 
       updatedAt: serverTimestamp()
     };
-    
     updateDocumentNonBlocking(studentRef, updatedData);
     setIsEditDialogOpen(false);
     toast({ title: "Student Updated" });
@@ -251,28 +239,47 @@ export default function StudentsPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to permanently delete student ${student.name} (#${student.id}) and all their payment records? This action cannot be undone.`)) {
+    if (!confirm(`Permanently Delete ${student.name} (#${student.id})? This will also wipe all their payment records and deactivate their login account.`)) {
       return;
     }
 
+    setIsSubmitting(true);
+    toast({ title: "Deep Deleting Data", description: "Cleaning up database and security accounts..." });
+
     try {
+      // 1. Delete all payments
       const paymentsCol = collection(db, 'payments');
       const q = query(paymentsCol, where('studentId', '==', student.id));
-      const querySnapshot = await getDocs(q);
-      
-      querySnapshot.forEach((docSnap) => {
-        deleteDocumentNonBlocking(doc(db, 'payments', docSnap.id));
-      });
+      const paymentSnaps = await getDocs(q);
+      paymentSnaps.forEach((p) => deleteDocumentNonBlocking(doc(db, 'payments', p.id)));
 
+      // 2. Clean up Auth User (Email login)
+      if (student.id) {
+        const studentEmail = `${student.id.toLowerCase()}@citydriving.in`;
+        const secondaryAppName = `cleanup-${student.id}-${Date.now()}`;
+        const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+        const secondaryAuth = getAuth(secondaryApp);
+        try {
+          const cred = await signInWithEmailAndPassword(secondaryAuth, studentEmail, "City123");
+          await deleteUser(cred.user);
+        } catch (authErr) {
+          console.warn("Auth account already gone or password changed:", authErr);
+        } finally {
+          await deleteApp(secondaryApp);
+        }
+      }
+
+      // 3. Delete Firestore Records
       deleteDocumentNonBlocking(doc(db, 'students', student.id));
-
       if (student.userId) {
         deleteDocumentNonBlocking(doc(db, 'users', student.userId));
       }
 
-      toast({ title: "Student Deleted", description: "All records for the student have been removed." });
+      toast({ title: "Student Wiped", description: "All records and login credentials have been permanently removed." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete records: " + error.message });
+      toast({ variant: "destructive", title: "Delete Failed", description: error.message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -307,7 +314,6 @@ export default function StudentsPage() {
     } else {
       newCourses = [...currentCourses, course];
     }
-    
     const newAmount = calculateFees(newCourses, formData.discount || 0, formData.specialCourseFee || 0);
     setFormData({ ...formData, courses: newCourses, amount: newAmount });
   };
@@ -326,7 +332,6 @@ export default function StudentsPage() {
     const payId = `PAY-${Date.now()}`;
     const paymentRef = doc(db, 'payments', payId);
     const studentRef = doc(db, 'students', selectedStudent.id);
-
     const transactionDate = new Date(paymentData.date);
 
     const paymentRecord = {
@@ -358,7 +363,6 @@ export default function StudentsPage() {
             method: paymentData.method,
           }
         ];
-
         updateDocumentNonBlocking(studentRef, {
           payments: updatedPayments,
           updatedAt: serverTimestamp(),
@@ -385,20 +389,9 @@ export default function StudentsPage() {
     }
     const headers = ["ID", "Name", "Phone", "Email", "Parent Name", "Address", "Aadhar No", "App No", "Branch", "Status", "Registration Date", "Courses", "Total Amount", "Discount"];
     const rows = students.map(s => [
-      s.id,
-      s.name,
-      s.phone,
-      s.email || '',
-      s.parentName || '',
-      `"${s.address?.replace(/"/g, '""')}"`,
-      s.aadharNo || '',
-      s.onlineAppNo || '',
-      s.branch,
-      s.status,
-      s.registrationDate,
-      `"${s.courses?.join('; ')}"`,
-      s.amount,
-      s.discount
+      s.id, s.name, s.phone, s.email || '', s.parentName || '', `"${s.address?.replace(/"/g, '""')}"`,
+      s.aadharNo || '', s.onlineAppNo || '', s.branch, s.status, s.registrationDate, `"${s.courses?.join('; ')}"`,
+      s.amount, s.discount
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -415,51 +408,29 @@ export default function StudentsPage() {
   const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       const lines = text.split("\n").filter(line => line.trim() !== "");
       const dataLines = lines.slice(1);
-      
       toast({ title: "Importing Students", description: `Processing ${dataLines.length} records...` });
-
       for (const line of dataLines) {
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         if (parts.length < 5) continue;
-
         const [id, name, phone, email, parent, address, aadhar, appNo, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
-        
         const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
         const finalBranch = branch || (profile?.role === 'Admin' ? "Branch 1" : profile?.branch || "Branch 1");
         const studentId = id || generateBranchStudentId(finalBranch);
-        
         const studentRef = doc(db, 'students', studentId);
-
         const newStudentData = {
-          id: studentId,
-          name: name || "Unknown",
-          phone: phone || "",
-          email: email || `${studentId.toLowerCase()}@citydriving.in`,
-          parentName: parent || "",
-          address: address || "",
-          aadharNo: aadhar || "",
-          onlineAppNo: appNo || "",
-          branch: finalBranch,
-          status: status || "Active",
-          registrationDate: regDate || new Date().toISOString().split('T')[0],
-          courses: courses,
-          amount: Number(amount) || 0,
-          discount: Number(discount) || 0,
-          payments: [],
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: user?.uid
+          id: studentId, name: name || "Unknown", phone: phone || "", email: email || `${studentId.toLowerCase()}@citydriving.in`,
+          parentName: parent || "", address: address || "", aadharNo: aadhar || "", onlineAppNo: appNo || "",
+          branch: finalBranch, status: status || "Active", registrationDate: regDate || new Date().toISOString().split('T')[0],
+          courses: courses, amount: Number(amount) || 0, discount: Number(discount) || 0, payments: [],
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp(), createdBy: user?.uid
         };
-
         setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
       }
-      
       toast({ title: "Import Complete", description: "Student records have been processed." });
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -498,13 +469,7 @@ export default function StudentsPage() {
                     <Upload className="mr-2 h-4 w-4" />
                     Import
                   </Button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept=".csv"
-                    onChange={handleImportCSV}
-                  />
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImportCSV} />
                 </div>
               )}
 
@@ -529,33 +494,17 @@ export default function StudentsPage() {
                             <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
                             <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
                           </Avatar>
-                          <Button 
-                            size="icon" 
-                            variant="secondary" 
-                            className="absolute bottom-0 right-0 rounded-full shadow-lg"
-                            onClick={() => photoInputRef.current?.click()}
-                          >
+                          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => photoInputRef.current?.click()}>
                             <PlusCircle className="h-5 w-5" />
                           </Button>
-                          <input 
-                            type="file" 
-                            ref={photoInputRef} 
-                            className="hidden" 
-                            accept="image/jpeg" 
-                            onChange={handlePhotoUpload} 
-                          />
+                          <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
                         </div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Format: JPEG | Limit: 200KB</p>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label className="text-primary font-bold">Branch Assignment</Label>
-                          <Select 
-                            value={formData.branch} 
-                            onValueChange={(v) => setFormData({...formData, branch: v as any})}
-                            disabled={!isAdmin}
-                          >
+                          <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})} disabled={!isAdmin}>
                             <SelectTrigger className="border-primary/50"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
@@ -608,20 +557,12 @@ export default function StudentsPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {masterCourses?.map(course => (
                             <div key={course.id} className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`add-course-${course.id}`} 
-                                checked={formData.courses?.includes(course.name)} 
-                                onCheckedChange={() => handleCourseToggle(course.name)}
-                              />
+                              <Checkbox id={`add-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
                               <Label htmlFor={`add-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
                             </div>
                           ))}
                           <div className="flex items-center space-x-2">
-                            <Checkbox 
-                              id="add-course-special" 
-                              checked={formData.courses?.includes("Other Special Course")} 
-                              onCheckedChange={() => handleCourseToggle("Other Special Course")}
-                            />
+                            <Checkbox id="add-course-special" checked={formData.courses?.includes("Other Special Course")} onCheckedChange={() => handleCourseToggle("Other Special Course")} />
                             <Label htmlFor="add-course-special" className="text-sm cursor-pointer text-primary font-medium">Other Special Course</Label>
                           </div>
                         </div>
@@ -629,7 +570,7 @@ export default function StudentsPage() {
                           <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
                             <div className="grid gap-2">
                               <Label>Special Course Name</Label>
-                              <Input placeholder="e.g. Defensive Driving" value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
+                              <Input value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
                             </div>
                             <div className="grid gap-2">
                               <Label>Special Course Fee (₹)</Label>
@@ -657,15 +598,13 @@ export default function StudentsPage() {
                           </div>
                         </div>
                       </div>
-
-                      <div className="grid gap-2">
-                        <Label>Remarks</Label>
-                        <Textarea placeholder="Any specific requirements or notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
-                      </div>
                     </div>
                   </ScrollArea>
                   <DialogFooter>
-                    <Button onClick={handleAddStudent}>Confirm Registration</Button>
+                    <Button onClick={handleAddStudent} disabled={isSubmitting}>
+                      {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Confirm Registration
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -674,9 +613,7 @@ export default function StudentsPage() {
         </CardHeader>
         <CardContent>
           {isStudentsLoading || isCoursesLoading ? (
-             <div className="flex justify-center py-8">
-               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-             </div>
+             <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
               <TableHeader>
@@ -691,11 +628,7 @@ export default function StudentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredStudents.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                      No student records found.
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
                 ) : (
                   filteredStudents.map((student) => (
                     <TableRow key={student.id}>
@@ -722,7 +655,7 @@ export default function StudentsPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
@@ -734,9 +667,6 @@ export default function StudentsPage() {
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Full Data
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="text-muted-foreground" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}>
-                              <Hash className="mr-2 h-4 w-4" /> Mark Inactive
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -751,10 +681,7 @@ export default function StudentsPage() {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Receive Payment</DialogTitle>
-            <DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Receive Payment</DialogTitle><DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="p-3 border rounded-lg bg-muted/50 flex justify-between">
                <span className="text-sm">Balance Due:</span>
@@ -762,12 +689,7 @@ export default function StudentsPage() {
             </div>
             <div className="grid gap-2">
               <Label>Payment Date</Label>
-              <Input 
-                type="date" 
-                value={paymentData.date} 
-                disabled={!isAdmin}
-                onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
-              />
+              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
             </div>
             <div className="grid gap-2">
               <Label>Amount Received (₹)</Label>
@@ -782,135 +704,58 @@ export default function StudentsPage() {
                 <Label>Method</Label>
                 <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Online">Online</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                  </SelectContent>
+                  <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button>
-          </DialogFooter>
+          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
         <SheetContent side="right" className="sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Student Profile Details</SheetTitle>
-          </SheetHeader>
+          <SheetHeader><SheetTitle>Student Profile Details</SheetTitle></SheetHeader>
           {selectedStudent && (
              <ScrollArea className="h-full mt-6 pr-4">
                <div className="space-y-6 pb-20">
                  <div className="flex flex-col items-center text-center">
-                    <div className="relative mb-4">
-                      <Avatar className="h-32 w-32 border-4 border-primary/20">
-                        <AvatarImage src={selectedStudent.photoUrl || undefined} alt={selectedStudent.name} />
-                        <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                    </div>
+                    <Avatar className="h-32 w-32 border-4 border-primary/20 mb-4">
+                      <AvatarImage src={selectedStudent.photoUrl || undefined} alt={selectedStudent.name} />
+                      <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
                     <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
                     <Badge variant="outline" className="mt-1 font-mono">{selectedStudent.id}</Badge>
-                    <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> {selectedStudent.branch}
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedStudent.branch}</p>
                  </div>
-
                  <Separator />
-
-                 <div className="grid grid-cols-1 gap-6">
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
-                        <User className="h-4 w-4" /> Personal Information
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Mobile Number</p>
-                          <p className="font-medium flex items-center gap-1"><Phone className="h-3 w-3" /> {selectedStudent.phone}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Parent/Guardian</p>
-                          <p className="font-medium">{selectedStudent.parentName || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Aadhar Number</p>
-                          <p className="font-medium flex items-center gap-1"><Hash className="h-3 w-3" /> {selectedStudent.aadharNo || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p className="font-medium flex items-center gap-1 text-xs truncate"><Mail className="h-3 w-3" /> {selectedStudent.email}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Permanent Address</p>
-                        <p className="text-sm italic">{selectedStudent.address || 'No address provided.'}</p>
-                      </div>
-                    </section>
-
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
-                        <ClipboardList className="h-4 w-4" /> Application & Status
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Application No.</p>
-                          <p className="font-medium">{selectedStudent.onlineAppNo || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Status</p>
-                          <Badge variant={selectedStudent.status === 'Active' ? 'default' : 'secondary'}>{selectedStudent.status}</Badge>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Learners Date</p>
-                          <p className="font-medium">{selectedStudent.learnersDate || 'TBD'}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Test Date</p>
-                          <p className="font-medium">{selectedStudent.testDate || 'TBD'}</p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <Separator />
-
-                    <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Total Fees (Agreed)</span>
-                        <span className="text-xl font-bold">₹{selectedStudent.amount.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-destructive">
-                        <span className="text-sm font-medium">Remaining Balance</span>
-                        <span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span>
-                      </div>
-                      {selectedStudent.discount > 0 && (
-                        <p className="text-xs text-muted-foreground text-right italic">Includes ₹{selectedStudent.discount.toLocaleString()} discount</p>
-                      )}
-                    </section>
-
-                    <section className="space-y-3">
-                      <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
-                      <div className="border rounded-lg overflow-hidden">
-                        <Table>
-                          <TableBody>
-                            {selectedStudent.payments?.map((p, idx) => (
-                              <TableRow key={p.id || idx} className="text-xs">
-                                <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
-                                <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
-                                <TableCell>{p.method}</TableCell>
-                                <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
-                              </TableRow>
-                            ))}
-                            {(!selectedStudent.payments || selectedStudent.payments.length === 0) && (
-                              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No payments received yet.</TableCell></TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </section>
-                 </div>
+                 <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><User className="h-4 w-4" /> Personal Information</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium">{selectedStudent.phone}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Parent/Guardian</p><p className="font-medium">{selectedStudent.parentName || 'N/A'}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Aadhar</p><p className="font-medium">{selectedStudent.aadharNo || 'N/A'}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Email</p><p className="font-medium text-xs">{selectedStudent.email}</p></div>
+                    </div>
+                 </section>
+                 <Separator />
+                 <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
+                    <div className="flex justify-between items-center"><span className="text-sm font-medium">Total Fees</span><span className="text-xl font-bold">₹{selectedStudent.amount.toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center text-destructive"><span className="text-sm font-medium">Remaining</span><span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
+                 </section>
+                 <section className="space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
+                    <div className="border rounded-lg"><Table><TableBody>
+                      {selectedStudent.payments?.map((p, idx) => (
+                        <TableRow key={p.id || idx} className="text-xs">
+                          <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
+                          <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
+                          <TableCell>{p.method}</TableCell>
+                          <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody></Table></div>
+                 </section>
                </div>
              </ScrollArea>
           )}
@@ -919,131 +764,53 @@ export default function StudentsPage() {
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Edit Student Profile</DialogTitle>
-            <DialogDescription>Update information, courses, and pricing.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update information, courses, and pricing.</DialogDescription></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <div className="grid gap-6 py-4">
               <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
-                <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
+                <Label className="font-bold">Student Photo</Label>
                 <div className="relative">
                   <Avatar className="h-32 w-32 border-4 border-primary/20">
                     <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
                     <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
                   </Avatar>
-                  <Button 
-                    size="icon" 
-                    variant="secondary" 
-                    className="absolute bottom-0 right-0 rounded-full shadow-lg"
-                    onClick={() => editPhotoInputRef.current?.click()}
-                  >
-                    <PlusCircle className="h-5 w-5" />
-                  </Button>
-                  <input 
-                    type="file" 
-                    ref={editPhotoInputRef} 
-                    className="hidden" 
-                    accept="image/jpeg" 
-                    onChange={handlePhotoUpload} 
-                  />
+                  <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => editPhotoInputRef.current?.click()}><PlusCircle className="h-5 w-5" /></Button>
+                  <input type="file" ref={editPhotoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
                 </div>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
                   <Label>Branch</Label>
-                  <Select 
-                    value={formData.branch} 
-                    onValueChange={(v) => setFormData({...formData, branch: v as any})}
-                    disabled={!isAdmin}
-                  >
+                  <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})} disabled={!isAdmin}>
                     <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
-                    <SelectContent>
-                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Full Name</Label>
-                  <Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                </div>
+                <div className="grid gap-2"><Label>Full Name</Label><Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} /></div>
                 <div className="grid gap-2">
                   <Label>Status</Label>
                   <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                      <SelectItem value="Completed">Completed</SelectItem>
-                      <SelectItem value="On Hold">On Hold</SelectItem>
-                    </SelectContent>
+                    <SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Parent/Guardian</Label>
-                  <Input value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Mobile No.</Label>
-                  <Input value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                </div>
-              </div>
-
               <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
                 <Label className="font-bold">Courses & Pricing</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {masterCourses?.map(course => (
                     <div key={course.id} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`edit-course-${course.id}`} 
-                        checked={formData.courses?.includes(course.name)} 
-                        onCheckedChange={() => handleCourseToggle(course.name)}
-                      />
+                      <Checkbox id={`edit-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
                       <Label htmlFor={`edit-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
                     </div>
                   ))}
                 </div>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
-                  <div className="grid gap-2">
-                    <Label>Discount (₹)</Label>
-                    <Input type="number" value={formData.discount} onChange={(e) => {
-                       const disc = Number(e.target.value);
-                       setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
-                    }} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label className="text-primary font-bold">Calculated Agreed Fee (₹)</Label>
-                    <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
-                    <p className="text-[10px] text-muted-foreground italic">You can manually override this value if needed.</p>
-                  </div>
+                  <div className="grid gap-2"><Label>Discount (₹)</Label><Input type="number" value={formData.discount} onChange={(e) => { const disc = Number(e.target.value); setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)}); }} /></div>
+                  <div className="grid gap-2"><Label className="text-primary font-bold">Total Agreed Fee (₹)</Label><Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div>
                 </div>
               </div>
-
-              <div className="grid gap-2">
-                <Label>Address</Label>
-                <Textarea value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Learners Date</Label>
-                  <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Test Date</Label>
-                  <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Remarks</Label>
-                <Textarea value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
-              </div>
+              <div className="grid gap-2"><Label>Address</Label><Textarea value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
             </div>
           </ScrollArea>
           <DialogFooter><Button onClick={handleUpdateStudent}>Save Changes</Button></DialogFooter>
