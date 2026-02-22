@@ -9,32 +9,36 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getUserData() {
+    function getProfile() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function hasRole(role) {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return isSignedIn() && profile != null && profile.data.role == role;
+    }
+
     function isAdmin() {
-      return isSignedIn() && getUserData().role == 'Admin';
+      return hasRole('Admin');
     }
 
     function isBranchManager() {
-      return isSignedIn() && getUserData().role == 'BranchManager';
+      return hasRole('BranchManager');
     }
 
     function isStaff() {
-      let role = getUserData().role;
-      return isSignedIn() && (role == 'Admin' || role == 'BranchManager');
+      return isAdmin() || isBranchManager();
     }
 
     function isStudent() {
-      return isSignedIn() && getUserData().role == 'Student';
+      return hasRole('Student');
     }
 
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isStaff();
       allow create, update: if isSignedIn() && (request.auth.uid == userId || isStaff());
       allow delete: if isAdmin();
     }
@@ -45,8 +49,10 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Allow read if user is staff (isolation handled by queries) or if the student record belongs to the user
-      allow read: if isSignedIn() && (isStaff() || (isStudent() && resource.data.userId == request.auth.uid));
+      // Get: individual doc access
+      allow get: if isSignedIn() && (isStaff() || (isStudent() && resource.data.userId == request.auth.uid));
+      // List: collection-level access (managers list their branch, students list their self-record)
+      allow list: if isSignedIn() && (isStaff() || isStudent());
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
@@ -63,22 +69,23 @@ service cloud.firestore {
 
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isStaff() || getUserData().role == 'Instructor';
+      allow write: if isStaff() || hasRole('Instructor');
     }
 
     match /attendance/{attendanceId} {
-      // Allow listing for staff. Students should query with studentId filter.
-      allow read: if isSignedIn();
+      allow get: if isSignedIn() && (isStaff() || (isStudent() && resource.data.studentId != null));
+      allow list: if isSignedIn() && (isStaff() || isStudent());
       allow write: if isStaff();
     }
 
     match /payments/{paymentId} {
-      allow read: if isSignedIn();
+      allow get: if isSignedIn() && (isStaff() || (isStudent() && resource.data.studentId != null));
+      allow list: if isSignedIn() && (isStaff() || isStudent());
       allow write: if isStaff();
     }
 
     match /expenses/{expenseId} {
-      allow read: if isSignedIn();
+      allow read: if isStaff();
       allow write: if isStaff();
     }
 

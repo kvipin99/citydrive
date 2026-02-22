@@ -18,18 +18,21 @@ export default function StatsCards() {
     const studentsQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'students');
+        if (!profile.branch) return null;
         return query(collection(db, 'students'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
     const paymentsQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'payments');
+        if (!profile.branch) return null;
         return query(collection(db, 'payments'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
     const expensesQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'expenses');
+        if (!profile.branch) return null;
         return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
@@ -52,7 +55,7 @@ export default function StatsCards() {
         ];
     }, [students, payments, expenses, isAdmin, profile]);
 
-    if (isStudentsLoading || isPaymentsLoading || isExpensesLoading) {
+    if (isStudentsLoading || isPaymentsLoading || isExpensesLoading || !profile) {
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (

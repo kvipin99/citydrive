@@ -20,6 +20,7 @@ export function RevenueChart() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
+    if (!profile.branch) return null;
     return query(collection(db, 'payments'), where('branch', '==', profile.branch));
   }, [db, user, profile, isAdmin]);
 
@@ -88,12 +89,14 @@ export function ProfitChart() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
+    if (!profile.branch) return null;
     return query(collection(db, 'payments'), where('branch', '==', profile.branch));
   }, [db, user, profile, isAdmin]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'expenses');
+    if (!profile.branch) return null;
     return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
   }, [db, user, profile, isAdmin]);
 
@@ -165,6 +168,7 @@ export function ExpensesChart() {
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'expenses');
+    if (!profile.branch) return null;
     return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
   }, [db, user, profile, isAdmin]);
 

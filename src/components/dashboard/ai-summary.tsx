@@ -24,24 +24,28 @@ export default function AiSummary() {
     const studentsQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'students');
+        if (!profile.branch) return null;
         return query(collection(db, 'students'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
     const paymentsQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'payments');
+        if (!profile.branch) return null;
         return query(collection(db, 'payments'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
     const expensesQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'expenses');
+        if (!profile.branch) return null;
         return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
     const classesQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
         if (isAdmin) return collection(db, 'classes');
+        if (!profile.branch) return null;
         return query(collection(db, 'classes'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 

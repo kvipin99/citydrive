@@ -49,6 +49,7 @@ export default function AttendancePage() {
     if (!db || !user || !profile) return null;
     if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
     if (isAdmin) return collection(db, 'students');
+    if (!profile.branch) return null;
     return query(
       collection(db, 'students'), 
       where('branch', '==', profile.branch)
@@ -66,6 +67,7 @@ export default function AttendancePage() {
       return query(collection(db, 'attendance'), where('studentId', '==', studentId));
     }
     if (isAdmin) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
+    if (!profile.branch) return null;
     return query(
       collection(db, 'attendance'), 
       where('branch', '==', profile.branch),
@@ -144,7 +146,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch}.`}
+            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch || 'Loading...'}.`}
           </p>
         </div>
         {!isStudent && (
