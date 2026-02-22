@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useUser, useDoc, useMemoFirebase, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, query, orderBy, where } from "firebase/firestore";
-import { ClipboardCheck, PlusCircle, Trash2, PlayCircle, Clock, CheckCircle2, AlertTriangle, Sparkles, RefreshCw, Trophy, History } from "lucide-react";
+import { ClipboardCheck, PlusCircle, Trash2, PlayCircle, Clock, CheckCircle2, AlertTriangle, Sparkles, RefreshCw, Trophy, History, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateQuizQuestions } from "@/ai/flows/generate-quiz-flow";
 
@@ -40,7 +40,7 @@ export default function QuizzesPage() {
   const { toast } = useToast();
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
-  const { data: profile } = useDoc(userProfileRef);
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
   const isAdmin = profile?.role === 'Admin';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
@@ -49,12 +49,8 @@ export default function QuizzesPage() {
   const { data: quizzes, isLoading: isQuizzesLoading } = useCollection<Quiz>(quizzesQuery);
 
   const attemptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null; 
-    // Staff can see all attempts, students only their own
-    if (isStaff) {
-      return query(collection(db, "quizAttempts"), orderBy("completedAt", "desc"));
-    }
-    return query(collection(db, "quizAttempts"), where("studentUid", "==", user.uid), orderBy("completedAt", "desc"));
+    if (!db || !user || !profile || !isStaff) return null; 
+    return query(collection(db, "quizAttempts"), orderBy("completedAt", "desc"));
   }, [db, user, profile, isStaff]);
   
   const { data: attempts } = useCollection(attemptsQuery);
@@ -102,6 +98,26 @@ export default function QuizzesPage() {
     }
   };
 
+  if (isProfileLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (profile && !isStaff) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center text-center space-y-4">
+        <ShieldAlert className="h-16 w-16 text-destructive opacity-20" />
+        <h2 className="text-2xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground max-w-md">
+          The Quiz and Examination module is currently available only for instructors and administrative staff.
+        </p>
+      </div>
+    );
+  }
+
   if (activeQuiz) {
     return <QuizPlayer quiz={activeQuiz} onComplete={() => setActiveQuiz(null)} user={user} db={db} />;
   }
@@ -111,7 +127,7 @@ export default function QuizzesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Examinations & Quizzes</h2>
-          <p className="text-muted-foreground text-sm">Test your knowledge of road signs and safety rules.</p>
+          <p className="text-muted-foreground text-sm">Manage road safety tests and knowledge assessments.</p>
         </div>
         {isAdmin && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -184,7 +200,7 @@ export default function QuizzesPage() {
         <div className="xl:col-span-3 space-y-6">
           <h3 className="text-lg font-bold flex items-center gap-2">
             <PlayCircle className="h-5 w-5 text-primary" />
-            Available Quizzes
+            Live Quizzes
           </h3>
           {isQuizzesLoading ? (
             <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" /></div>
@@ -214,8 +230,8 @@ export default function QuizzesPage() {
                     <div className="flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5" /> Passing: {quiz.passingMarks}</div>
                   </CardContent>
                   <CardFooter>
-                    <Button className="w-full rounded-xl" onClick={() => setActiveQuiz(quiz)}>
-                      Start Quiz Attempt
+                    <Button variant="outline" className="w-full rounded-xl" disabled>
+                      Available for Students
                     </Button>
                   </CardFooter>
                 </Card>
@@ -227,7 +243,7 @@ export default function QuizzesPage() {
         <div className="space-y-6">
           <h3 className="text-lg font-bold flex items-center gap-2">
             <History className="h-5 w-5 text-primary" />
-            {isStaff ? "Global Performance" : "My Attempts"}
+            Global Performance
           </h3>
           <div className="space-y-4">
             {attempts?.slice(0, 10).map((att: any) => (
@@ -238,14 +254,14 @@ export default function QuizzesPage() {
                     {att.passed ? "Passed" : "Failed"}
                   </Badge>
                 </div>
-                {isStaff && <p className="text-[10px] font-bold text-primary mb-1">Student: {att.userName}</p>}
+                <p className="text-[10px] font-bold text-primary mb-1">Student: {att.userName}</p>
                 <div className="flex items-center justify-between text-sm">
                   <div className="font-black text-lg">{att.score} / {att.total}</div>
                   <span className="text-[10px] text-muted-foreground">{att.completedAt?.seconds ? new Date(att.completedAt.seconds * 1000).toLocaleDateString() : 'Just now'}</span>
                 </div>
               </Card>
             ))}
-            {(!attempts || attempts.length === 0) && <p className="text-xs text-muted-foreground italic text-center py-8">No attempts recorded.</p>}
+            {(!attempts || attempts.length === 0) && <p className="text-xs text-muted-foreground italic text-center py-8">No attempts recorded yet.</p>}
           </div>
         </div>
       </div>

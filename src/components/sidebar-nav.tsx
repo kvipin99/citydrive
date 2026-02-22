@@ -37,7 +37,7 @@ const navItems = [
   { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', adminOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports', staffOnly: true },
   { href: '/dashboard/resources', icon: FileVideo, label: 'Resources' },
-  { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes' },
+  { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes', staffOnly: true },
   { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup', adminOnly: true },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
