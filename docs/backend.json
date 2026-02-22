@@ -20,6 +20,10 @@
           "type": "string",
           "description": "The role of the user within the system (e.g., Admin, Instructor, Accountant, BranchManager)."
         },
+        "branch": {
+          "type": "string",
+          "description": "The branch assigned to the user."
+        },
         "createdAt": {
           "type": "string",
           "description": "Timestamp when the user record was created.",
@@ -189,6 +193,24 @@
       },
       "required": ["id", "studentId", "instructorId", "startTime", "endTime", "status"]
     },
+    "Attendance": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Attendance",
+      "type": "object",
+      "description": "Represents a record of student attendance for a driving session.",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Present", "Absent"] },
+        "branch": { "type": "string" },
+        "remarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "studentId", "date", "status", "branch"]
+    },
     "BackupMetadata": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BackupMetadata",
@@ -265,6 +287,14 @@
           "entityName": "Class",
           "schema": { "$ref": "#/backend/entities/Class" },
           "description": "Scheduled driving lessons and attendance."
+        }
+      },
+      {
+        "path": "/attendance/{attendanceId}",
+        "definition": {
+          "entityName": "Attendance",
+          "schema": { "$ref": "#/backend/entities/Attendance" },
+          "description": "Daily student attendance records."
         }
       },
       {

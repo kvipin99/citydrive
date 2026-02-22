@@ -15,6 +15,7 @@ import {
   Tags,
   CreditCard,
   Wallet,
+  CalendarCheck,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -22,6 +23,7 @@ import { doc } from 'firebase/firestore';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/students', icon: Users, label: 'Students' },
+  { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Payments' },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses' },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
