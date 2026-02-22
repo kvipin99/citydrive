@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -417,16 +417,16 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      {!isStudent && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <CardTitle>Students Database</CardTitle>
-                <CardDescription>
-                  {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
-                </CardDescription>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Students Database</CardTitle>
+              <CardDescription>
+                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+              </CardDescription>
+            </div>
+            {!isStudent && (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -479,52 +479,54 @@ export default function StudentsPage() {
                   </DialogContent>
                 </Dialog>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isStudentsLoading || isCoursesLoading ? (
-               <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student ID & Name</TableHead>
-                    <TableHead>Branch</TableHead>
-                    <TableHead>Agreed Fee (₹)</TableHead>
-                    <TableHead>Balance Due (₹)</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStudents.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
-                  ) : (
-                    filteredStudents.map((student) => (
-                      <TableRow key={student.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
-                              <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="grid gap-0.5">
-                              <span className="font-bold text-primary">{student.id}</span>
-                              <span className="text-sm">{student.name}</span>
-                            </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isStudentsLoading || isCoursesLoading ? (
+             <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student ID & Name</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Agreed Fee (₹)</TableHead>
+                  <TableHead>Balance Due (₹)</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                ) : (
+                  filteredStudents.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
+                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="grid gap-0.5">
+                            <span className="font-bold text-primary">{student.id}</span>
+                            <span className="text-sm">{student.name}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>{student.branch}</TableCell>
-                        <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                            ₹{calculateBalanceDue(student).toLocaleString()}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setIsProfileSheetOpen(true); }}>
-                              <Eye className="h-4 w-4 text-primary" />
-                            </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>{student.branch}</TableCell>
+                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                          ₹{calculateBalanceDue(student).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setIsProfileSheetOpen(true); }}>
+                            <Eye className="h-4 w-4 text-primary" />
+                          </Button>
+                          {!isStudent && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
@@ -540,17 +542,17 @@ export default function StudentsPage() {
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Profile Detail Sheet */}
       <Sheet open={isProfileSheetOpen} onOpenChange={(open) => { setIsProfileSheetOpen(open); if(!open && !isStudent) setSelectedStudent(null); }}>
@@ -559,7 +561,12 @@ export default function StudentsPage() {
             <SheetTitle>Student Profile Dashboard</SheetTitle>
           </SheetHeader>
           {selectedStudent && (
-            <StudentProfileView student={selectedStudent} db={db} isAdmin={isAdmin} calculateBalanceDue={calculateBalanceDue} />
+            <StudentProfileView 
+              student={selectedStudent} 
+              db={db} 
+              isAdmin={isAdmin} 
+              calculateBalanceDue={calculateBalanceDue} 
+            />
           )}
         </SheetContent>
       </Sheet>
@@ -809,7 +816,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
   }, [attendance]);
 
   const sortedAttendance = useMemo(() => {
-    return attendance?.sort((a, b) => b.date.localeCompare(a.date)) || [];
+    return attendance?.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)) || [];
   }, [attendance]);
 
   const paidAmount = student.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -817,6 +824,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   return (
     <div className="space-y-8 pb-10">
+      {/* Profile Header */}
       <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
         <Avatar className="h-24 w-24 border-4 border-white shadow-xl">
           <AvatarImage src={student.photoUrl} alt={student.name} />
@@ -832,6 +840,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </div>
       </div>
 
+      {/* Financial Summary Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-primary/5 border-primary/10">
           <CardHeader className="p-4 pb-2">
@@ -856,7 +865,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         <Card className="bg-red-50/50 border-red-100">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-red-600 flex items-center gap-2">
-              <ArrowDownCircle className="h-3 w-3" /> Balance
+              <Wallet className="h-3 w-3" /> Balance
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
@@ -875,6 +884,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </Card>
       </div>
 
+      {/* Main Details Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
@@ -914,27 +924,28 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
       <Separator />
 
+      {/* Attendance History Section */}
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-          <Clock className="h-4 w-4" /> Attendance History
+          <Clock className="h-4 w-4" /> Attendance Log
         </h3>
         {isAttendanceLoading ? (
           <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : sortedAttendance.length === 0 ? (
           <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No training sessions recorded yet.</p>
         ) : (
-          <div className="rounded-xl border overflow-hidden">
+          <div className="rounded-xl border overflow-hidden shadow-sm">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Time Slot</TableHead>
-                  <TableHead className="text-right">Hours</TableHead>
+                  <TableHead className="text-right">Duration</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedAttendance.map((a: any) => (
-                  <TableRow key={a.id}>
+                  <TableRow key={a.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs font-medium">{format(new Date(a.date), 'MMM dd, yyyy')}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{a.startTime} - {a.endTime}</TableCell>
                     <TableCell className="text-right font-bold text-primary">{a.duration}h</TableCell>
@@ -946,26 +957,27 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         )}
       </section>
 
+      {/* Payment History Section */}
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-          <CreditCard className="h-4 w-4" /> Payment History
+          <CreditCard className="h-4 w-4" /> Transaction History
         </h3>
         {student.payments?.length === 0 ? (
           <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No payments received yet.</p>
         ) : (
-          <div className="rounded-xl border overflow-hidden">
+          <div className="rounded-xl border overflow-hidden shadow-sm">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Receipt</TableHead>
+                  <TableHead>Receipt No.</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {student.payments?.map((p: any) => (
-                  <TableRow key={p.id}>
+                  <TableRow key={p.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs">{format(new Date(p.date), 'MMM dd, yyyy')}</TableCell>
                     <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
                     <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{p.method}</Badge></TableCell>

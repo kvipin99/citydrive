@@ -9,25 +9,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getProfile() {
+    function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      return isSignedIn() && getProfile().role == 'Admin';
+      return isSignedIn() && getUserData().role == 'Admin';
     }
 
     function isBranchManager() {
-      return isSignedIn() && getProfile().role == 'BranchManager';
+      return isSignedIn() && getUserData().role == 'BranchManager';
     }
 
     function isStaff() {
-      let role = getProfile().role;
+      let role = getUserData().role;
       return isSignedIn() && (role == 'Admin' || role == 'BranchManager');
     }
 
     function isStudent() {
-      return isSignedIn() && getProfile().role == 'Student';
+      return isSignedIn() && getUserData().role == 'Student';
     }
 
     // --- COLLECTION RULES ---
@@ -35,7 +35,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isStaff());
       allow delete: if isAdmin();
     }
 
@@ -45,7 +45,8 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isSignedIn();
+      // Allow read if user is staff (isolation handled by queries) or if the student record belongs to the user
+      allow read: if isSignedIn() && (isStaff() || (isStudent() && resource.data.userId == request.auth.uid));
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
@@ -62,10 +63,11 @@ service cloud.firestore {
 
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isStaff() || getProfile().role == 'Instructor';
+      allow write: if isStaff() || getUserData().role == 'Instructor';
     }
 
     match /attendance/{attendanceId} {
+      // Allow listing for staff. Students should query with studentId filter.
       allow read: if isSignedIn();
       allow write: if isStaff();
     }
