@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2 } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -414,20 +414,6 @@ export default function StudentsPage() {
     document.body.removeChild(link);
     toast({ title: "Export Successful" });
   };
-
-  if (isStudent && students && students.length === 0 && !isStudentsLoading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center text-center">
-        <div className="max-w-md space-y-4">
-          <Avatar className="h-20 w-20 mx-auto border-4 border-muted">
-            <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
-          </Avatar>
-          <h2 className="text-2xl font-bold">Profile Not Found</h2>
-          <p className="text-muted-foreground">We couldn't locate your student record. Please contact your branch administrator.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -846,7 +832,17 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-primary/5 border-primary/10">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
+              <Tags className="h-3 w-3" /> Agreed Fee
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl font-black text-primary">₹{(student.amount || 0).toLocaleString()}</div>
+          </CardContent>
+        </Card>
         <Card className="bg-green-50/50 border-green-100">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-green-600 flex items-center gap-2">
@@ -920,7 +916,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-          <Clock className="h-4 w-4" /> Attendance Log
+          <Clock className="h-4 w-4" /> Attendance History
         </h3>
         {isAttendanceLoading ? (
           <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>

@@ -22,7 +22,8 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      return isAdmin() || isBranchManager();
+      let role = getProfile().role;
+      return isSignedIn() && (role == 'Admin' || role == 'BranchManager');
     }
 
     function isStudent() {
@@ -44,8 +45,7 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
@@ -66,20 +66,17 @@ service cloud.firestore {
     }
 
     match /attendance/{attendanceId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow write: if isStaff();
     }
 
     match /payments/{paymentId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow write: if isStaff();
     }
 
     match /expenses/{expenseId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow write: if isStaff();
     }
 
