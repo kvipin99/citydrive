@@ -237,6 +237,11 @@ export default function StudentsPage() {
       return;
     }
 
+    if (isStudentsLoading) {
+      toast({ variant: "destructive", title: "Database Syncing", description: "Please wait for the student list to load before registering." });
+      return;
+    }
+
     setIsSubmitting(true);
     const branchName = formData.branch!;
     const studentId = generateBranchStudentId(branchName);
@@ -265,11 +270,15 @@ export default function StudentsPage() {
       resetForm();
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
-      console.error("Student registration error:", error);
-      let errorMsg = error.message || "An unexpected error occurred.";
+      // Avoid using console.error directly here as it can trigger dev overlays
+      let errorMsg = "An unexpected error occurred during registration.";
+      
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID "${studentId}" conflict: A login account already exists for this ID in the security database. Use the conflict cleanup tool below to clear it.`;
+        errorMsg = `ID Conflict: Login for "${studentId}" already exists. Use the "Conflict ID" cleanup tool at the bottom of this form.`;
+      } else if (error.message) {
+        errorMsg = error.message;
       }
+      
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
       setIsSubmitting(false);
@@ -335,7 +344,6 @@ export default function StudentsPage() {
       toast({ title: "Cleanup Successful", description: `Login account for ${studentId} has been removed. You can now register this student.` });
       setCleanupId("");
     } catch (error: any) {
-      console.error("Cleanup error:", error);
       toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone or uses a changed password." });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
