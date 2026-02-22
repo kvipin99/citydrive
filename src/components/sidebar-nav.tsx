@@ -16,10 +16,8 @@ import {
   CreditCard,
   Wallet,
   CalendarCheck,
-  User,
-  GraduationCap,
   FileVideo,
-  ClipboardCheck,
+  GraduationCap,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -33,11 +31,10 @@ const navItems = [
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
   { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles', adminOnly: true },
-  { href: '/dashboard/courses', icon: Tags, label: 'Courses', adminOnly: true },
+  { href: '/dashboard/courses', icon: Tags, label: 'Course Catalog', adminOnly: true },
   { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', adminOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports', staffOnly: true },
   { href: '/dashboard/resources', icon: FileVideo, label: 'Resources' },
-  { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes', staffOnly: true },
   { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup', adminOnly: true },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];

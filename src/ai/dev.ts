@@ -4,4 +4,3 @@ config();
 
 import '@/ai/flows/admin-performance-summary-flow.ts';
 import '@/ai/flows/backup-email-flow.ts';
-import '@/ai/flows/generate-quiz-flow.ts';

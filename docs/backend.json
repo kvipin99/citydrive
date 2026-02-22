@@ -11,7 +11,9 @@
         "name": { "type": "string" },
         "role": { "type": "string" },
         "branch": { "type": "string" },
-        "studentId": { "type": "string" }
+        "studentId": { "type": "string" },
+        "staffId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "role"]
     },
@@ -79,6 +81,7 @@
       "properties": {
         "id": { "type": "string" },
         "studentId": { "type": "string" },
+        "studentUid": { "type": "string" },
         "amount": { "type": "number" },
         "receiptNo": { "type": "string" }
       }
@@ -110,24 +113,6 @@
         "type": { "type": "string" },
         "url": { "type": "string" }
       }
-    },
-    "Quiz": {
-      "title": "Quiz",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "title": { "type": "string" },
-        "questions": { "type": "array" }
-      }
-    },
-    "QuizAttempt": {
-      "title": "QuizAttempt",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "studentUid": { "type": "string" },
-        "score": { "type": "number" }
-      }
     }
   },
   "auth": {
@@ -147,8 +132,6 @@
       { "path": "/courses/{id}", "definition": { "entityName": "Course" } },
       { "path": "/classes/{id}", "definition": { "entityName": "Class" } },
       { "path": "/resources/{id}", "definition": { "entityName": "Resource" } },
-      { "path": "/quizzes/{id}", "definition": { "entityName": "Quiz" } },
-      { "path": "/quizAttempts/{id}", "definition": { "entityName": "QuizAttempt" } },
       { "path": "/settings/{id}", "definition": { "description": "System configuration settings." } },
       { "path": "/backupMetadata/{id}", "definition": { "description": "Audit logs for database exports." } }
     ]

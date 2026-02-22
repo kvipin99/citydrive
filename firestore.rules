@@ -4,10 +4,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * DRIVING SCHOOL MANAGEMENT SYSTEM - SECURITY RULES
+     * CDS DRIVING SCHOOL - SECURITY RULES
      */
-
-    // --- GLOBAL HELPER FUNCTIONS ---
 
     function isSignedIn() {
       return request.auth != null;
@@ -17,36 +15,19 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function hasRole(role) {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == role;
-    }
-
-    function isAdmin() {
-      return hasRole('Admin');
-    }
-
-    function isBranchManager() {
-      return hasRole('BranchManager');
-    }
-
-    function isInstructor() {
-      return hasRole('Instructor');
-    }
-
-    function isStudent() {
-      return hasRole('Student');
-    }
-
     function isStaff() {
       return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
              getUserData().role in ['Admin', 'BranchManager', 'Instructor'];
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().role == 'Admin';
     }
 
-    // --- COLLECTION RULES ---
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
 
     match /users/{userId} {
       allow get: if isSignedIn();
@@ -56,8 +37,8 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Allow students to read their own record via userId field
-      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow write: if isStaff();
     }
 
@@ -72,24 +53,10 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
-    match /vehicles/{vehicleId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager();
-    }
-
     match /payments/{paymentId} {
       allow list: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
       allow get: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
-      allow write: if isAdmin() || isBranchManager();
-    }
-
-    match /expenses/{expenseId} {
-      allow read, write: if isAdmin() || isBranchManager();
-    }
-
-    match /courses/{id} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isStaff();
     }
 
     match /classes/{classId} {
@@ -97,21 +64,23 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    match /vehicles/{vehicleId} {
+      allow read: if isSignedIn();
+      allow write: if isStaff();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isStaff();
+    }
+
+    match /courses/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /resources/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
-    }
-
-    match /quizzes/{id} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /quizAttempts/{id} {
-      allow list: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
-      allow get: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
     }
 
     match /settings/{id} {
