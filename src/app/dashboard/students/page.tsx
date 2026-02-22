@@ -20,10 +20,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
 import { format } from "date-fns";
 
@@ -99,6 +99,7 @@ export default function StudentsPage() {
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cleanupId, setCleanupId] = useState("");
 
   // Auto-open self profile for students
   useEffect(() => {
@@ -264,7 +265,12 @@ export default function StudentsPage() {
       resetForm();
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed", description: error.message });
+      console.error("Student registration error:", error);
+      let errorMsg = error.message || "An unexpected error occurred.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = `ID "${studentId}" conflict: A login account already exists for this ID in the security database. Use the conflict cleanup tool below to clear it.`;
+      }
+      toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
       setIsSubmitting(false);
     }
@@ -309,6 +315,34 @@ export default function StudentsPage() {
     }
   };
 
+  const handleCleanupGhost = async () => {
+    if (!cleanupId) return;
+    const studentId = cleanupId.trim().toUpperCase();
+    const email = `${studentId.toLowerCase()}@citydriving.in`;
+    const password = "City123";
+
+    setIsSubmitting(true);
+    toast({ title: "Cleanup Started", description: `Attempting to force-delete student login for ${studentId}...` });
+
+    const secondaryAppName = `cleanup-s-${studentId}-${Date.now()}`;
+    const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+      const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      await deleteUser(cred.user);
+      await deleteApp(secondaryApp);
+      toast({ title: "Cleanup Successful", description: `Login account for ${studentId} has been removed. You can now register this student.` });
+      setCleanupId("");
+    } catch (error: any) {
+      console.error("Cleanup error:", error);
+      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone or uses a changed password." });
+      try { await deleteApp(secondaryApp); } catch {}
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const resetForm = () => {
     const defaultBranch = profile?.role === 'Admin' ? "Branch 1" : (profile?.branch || "Branch 1");
     setFormData({ 
@@ -331,6 +365,7 @@ export default function StudentsPage() {
       specialCourseName: "",
       specialCourseFee: 0
     });
+    setCleanupId("");
   };
 
   const handleCourseToggle = (course: string) => {
@@ -494,6 +529,27 @@ export default function StudentsPage() {
                           handleCourseToggle={handleCourseToggle}
                           generateBranchStudentId={generateBranchStudentId}
                         />
+                        
+                        <div className="mt-8 pt-6 border-t">
+                          <div className="flex items-center gap-2 text-orange-600 mb-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Registration Conflicts</h4>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mb-4">
+                            If you get an "Email already in use" error, it means an old login exists for this ID. Enter the ID below to force-clear it before trying again.
+                          </p>
+                          <div className="flex gap-2 max-w-sm">
+                            <Input 
+                              placeholder="Conflict ID (e.g. B10001)" 
+                              className="h-9 text-xs" 
+                              value={cleanupId} 
+                              onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
+                            />
+                            <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                              <Eraser className="h-3 w-3 mr-1.5" /> Force Delete Auth
+                            </Button>
+                          </div>
+                        </div>
                       </ScrollArea>
                       <DialogFooter>
                         <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
