@@ -20,16 +20,16 @@ export default function StudentProfilePage() {
   const { data: profile } = useDoc(userProfileRef);
 
   const studentQuery = useMemoFirebase(() => {
-    if (!db || !profile?.studentId) return null;
-    return query(collection(db, "students"), where("id", "==", profile.studentId));
-  }, [db, profile]);
+    if (!db || !user?.uid) return null;
+    return query(collection(db, "students"), where("userId", "==", user.uid));
+  }, [db, user]);
   const { data: studentRecords, isLoading: isStudentLoading } = useCollection(studentQuery);
   const student = studentRecords?.[0];
 
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !student?.id) return null;
-    return query(collection(db, "attendance"), where("studentId", "==", student.id));
-  }, [db, student]);
+    if (!db || !user?.uid) return null;
+    return query(collection(db, "attendance"), where("studentUid", "==", user.uid));
+  }, [db, user]);
   const { data: attendance } = useCollection(attendanceQuery);
 
   const paidAmount = useMemo(() => {

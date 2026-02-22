@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -60,7 +61,7 @@ export default function AttendancePage() {
   }, [db, user]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection - Global view for staff per request
+  // Fetch Students for selection
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
@@ -70,17 +71,15 @@ export default function AttendancePage() {
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance records - Global staff view for that date
+  // Fetch Attendance records
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) {
-      const studentId = students?.[0]?.id;
-      if (!studentId) return null;
-      return query(collection(db, 'attendance'), where('studentId', '==', studentId));
+      return query(collection(db, 'attendance'), where('studentUid', '==', user.uid));
     }
     if (isStaff) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
     return null;
-  }, [db, user, profile, isStaff, isStudent, selectedDate, students]);
+  }, [db, user, profile, isStaff, isStudent, selectedDate]);
 
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -111,6 +110,7 @@ export default function AttendancePage() {
     const record = {
       id: attendanceId,
       studentId: selectedStudent.id,
+      studentUid: selectedStudent.userId, // Critical for student access permissions
       studentName: selectedStudent.name,
       date: selectedDate,
       status: 'Present',

@@ -42,12 +42,11 @@ service cloud.firestore {
     }
 
     /** 
-     * Verifies if a record belongs to the student user.
-     * Checks the user's profile for the business studentId.
+     * Verifies if a record belongs to the student user by comparing UIDs.
+     * This is highly efficient for list queries.
      */
-    function isStudentRecord(studentId) {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             getUserData().studentId == studentId;
+    function isStudentRecord(data) {
+      return isSignedIn() && data.studentUid == request.auth.uid;
     }
 
     // --- COLLECTION RULES ---
@@ -60,14 +59,12 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Allow read if staff OR if document's userId matches the requester
-      // Using resource.data.userId allows students to perform list queries filtered by their UID
       allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow write: if isStaff();
     }
 
     match /attendance/{id} {
-      allow read: if isStaff() || isStudentRecord(resource.data.studentId);
+      allow read: if isStaff() || isStudentRecord(resource.data);
       allow write: if isStaff();
     }
 
@@ -77,7 +74,7 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read: if isStaff() || isStudentRecord(resource.data.studentId);
+      allow read: if isStaff() || isStudentRecord(resource.data);
       allow write: if isAdmin() || isBranchManager();
     }
 

@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 
 interface Student {
   id: string;
+  userId: string;
   name: string;
   phone: string;
   branch: string;
@@ -29,6 +30,7 @@ interface Student {
 interface PaymentRecord {
   id: string;
   studentId: string;
+  studentUid?: string; // UID for security rule cross-referencing
   studentName: string;
   studentPhone?: string;
   amount: number;
@@ -117,6 +119,7 @@ export default function PaymentsPage() {
     const fullPaymentRecord: PaymentRecord = {
       id: paymentId,
       studentId: selectedStudent.id,
+      studentUid: selectedStudent.userId, // Storing UID for secure list queries by students
       studentName: selectedStudent.name,
       studentPhone: selectedStudent.phone,
       amount: paymentData.amount,
@@ -124,7 +127,7 @@ export default function PaymentsPage() {
       receiptNo: paymentData.receiptNo,
       method: paymentData.method,
       branch: selectedStudent.branch,
-      receivedBy: user?.uid,
+      receivedBy: user?.uid!,
     };
 
     setDocumentNonBlocking(paymentRef, fullPaymentRecord, { merge: true });

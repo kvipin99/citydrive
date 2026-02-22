@@ -122,7 +122,7 @@ function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: stri
   const student = studentRecords?.[0];
 
   const attendanceQuery = useMemoFirebase(() => 
-    db && student ? query(collection(db, "attendance"), where("studentId", "==", student.id)) : null, [db, student]);
+    db && uid ? query(collection(db, "attendance"), where("studentUid", "==", uid)) : null, [db, uid]);
   const { data: attendance } = useCollection(attendanceQuery);
 
   if (isStudentLoading) return <Skeleton className="h-64 w-full" />;
