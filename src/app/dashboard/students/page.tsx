@@ -20,15 +20,37 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where, orderBy } from "firebase/firestore";
-import { type Student } from "@/lib/mock-data";
 import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock, BookOpen, Clock, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
 import { format } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
+export interface Student {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string;
+  branch: string;
+  address: string;
+  parentName: string;
+  aadharNo: string;
+  onlineAppNo: string;
+  learnersDate: string;
+  testDate: string;
+  remarks: string;
+  photoUrl: string;
+  courses: string[];
+  amount: number;
+  discount: number;
+  status: 'Active' | 'Inactive' | 'Completed' | 'On Hold';
+  registrationDate: string;
+  payments: any[];
+}
 
 export default function StudentsPage() {
   const db = useFirestore();
@@ -71,8 +93,9 @@ export default function StudentsPage() {
 
   // Specific query for attendance history when profile is open
   const attendanceHistoryQuery = useMemoFirebase(() => {
-    if (!db || !selectedStudent || !isProfileOpen) return null;
-    // For admins, we fetch all. For branch managers, we ensure we filter by branch to match security rules
+    if (!db || !selectedStudent || !isProfileOpen || !profile) return null;
+    
+    // Scoped query: If not admin, always filter by branch to match security rules
     if (isAdmin) {
       return query(
         collection(db, 'attendance'), 
@@ -80,13 +103,15 @@ export default function StudentsPage() {
         orderBy('date', 'desc')
       );
     }
+    
+    // Managers can only list attendance records within their own branch
     return query(
       collection(db, 'attendance'), 
+      where('branch', '==', profile.branch),
       where('studentId', '==', selectedStudent.id),
-      where('branch', '==', selectedStudent.branch),
       orderBy('date', 'desc')
     );
-  }, [db, selectedStudent, isProfileOpen, isAdmin]);
+  }, [db, selectedStudent, isProfileOpen, isAdmin, profile]);
 
   const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
@@ -102,8 +127,7 @@ export default function StudentsPage() {
     status: "Active",
     courses: [],
     discount: 0,
-    specialCourseFee: 0,
-    specialCourseName: "",
+    amount: 0,
     name: "",
     phone: "",
     address: "",
@@ -121,7 +145,7 @@ export default function StudentsPage() {
       const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profile.branch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
-  }, [profile, isAddDialogOpen, isAdmin, formData.branch]);
+  }, [profile, isAddDialogOpen, isAdmin]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -156,10 +180,9 @@ export default function StudentsPage() {
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   };
 
-  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
+  const calculateFees = (courses: string[], discount: number) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
-    const totalWithSpecial = baseAmount + (courses.includes("Other Special Course") ? (specialFee || 0) : 0);
-    return Math.max(0, totalWithSpecial - (discount || 0));
+    return Math.max(0, baseAmount - (discount || 0));
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,7 +241,7 @@ export default function StudentsPage() {
     setIsSubmitting(true);
     const branchName = formData.branch;
     const studentId = generateBranchStudentId(branchName);
-    const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
+    const amount = calculateFees(formData.courses || [], formData.discount || 0);
     
     try {
       toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
@@ -295,8 +318,6 @@ export default function StudentsPage() {
       status: "Active", 
       courses: [], 
       discount: 0, 
-      specialCourseFee: 0, 
-      specialCourseName: "", 
       amount: 0,
       name: "",
       phone: "",
@@ -319,7 +340,7 @@ export default function StudentsPage() {
     } else {
       newCourses = [...currentCourses, course];
     }
-    const newAmount = calculateFees(newCourses, formData.discount || 0, formData.specialCourseFee || 0);
+    const newAmount = calculateFees(newCourses, formData.discount || 0);
     setFormData({ ...formData, courses: newCourses, amount: newAmount });
   };
 
@@ -524,7 +545,7 @@ export default function StudentsPage() {
             className={!isAdmin ? "bg-muted cursor-not-allowed" : ""}
             onChange={(e) => {
                const disc = Number(e.target.value);
-               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
+               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc)});
             }} 
           />
           {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Only Administrators can modify discounts.</p>}
@@ -792,7 +813,7 @@ export default function StudentsPage() {
                  <Separator />
 
                  <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-sm font-medium">Total Fees</span><span className="text-xl font-bold">₹{selectedStudent.amount.toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-sm font-medium">Total Fees</span><span className="text-xl font-bold">₹{selectedStudent.amount?.toLocaleString()}</span></div>
                     <div className="flex justify-between items-center text-destructive"><span className="text-sm font-medium">Remaining Balance</span><span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
                  </section>
 
@@ -801,10 +822,10 @@ export default function StudentsPage() {
                     <div className="border rounded-lg overflow-hidden">
                       <Table>
                         <TableBody>
-                          {selectedStudent.payments?.length === 0 ? (
+                          {!selectedStudent.payments || selectedStudent.payments.length === 0 ? (
                             <TableRow><TableCell className="text-center py-4 text-xs text-muted-foreground">No payments recorded yet.</TableCell></TableRow>
                           ) : (
-                            selectedStudent.payments?.map((p, idx) => (
+                            selectedStudent.payments.map((p, idx) => (
                               <TableRow key={p.id || idx} className="text-xs">
                                 <TableCell>{p.date ? format(new Date(p.date), 'dd MMM yyyy') : 'N/A'}</TableCell>
                                 <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
@@ -830,7 +851,7 @@ export default function StudentsPage() {
                           ) : (
                             attendanceHistory.map((log) => (
                               <TableRow key={log.id} className="text-xs">
-                                <TableCell className="font-medium">{format(new Date(log.date), 'dd MMM')}</TableCell>
+                                <TableCell className="font-medium">{log.date ? format(new Date(log.date), 'dd MMM') : 'N/A'}</TableCell>
                                 <TableCell>{log.startTime} - {log.endTime}</TableCell>
                                 <TableCell className="text-right font-bold text-primary">{log.duration}h</TableCell>
                               </TableRow>

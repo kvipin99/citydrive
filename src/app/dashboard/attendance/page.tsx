@@ -44,7 +44,6 @@ export default function AttendancePage() {
   const isAdmin = profile?.role === 'Admin';
 
   // Fetch Students for search (filtered by branch if not admin)
-  // We remove the != 'Completed' filter to simplify the query and avoid index/permission edge cases
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'students');
@@ -71,7 +70,6 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!studentSearch || studentSearch.length < 2) return [];
-    // We filter out 'Completed' students on the client side
     return students?.filter(s => 
       s.status !== 'Completed' && (
         s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
@@ -184,7 +182,7 @@ export default function AttendancePage() {
                         {filteredSearch.map(s => (
                           <div 
                             key={s.id} 
-                            className="p-3 hover:bg-muted cursor-pointer flex items-center justify-between transition-colors"
+                            className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
                             onClick={() => setSelectedStudent(s)}
                           >
                             <div className="flex items-center gap-3">
