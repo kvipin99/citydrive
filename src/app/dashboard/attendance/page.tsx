@@ -42,24 +42,22 @@ export default function AttendancePage() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
+  
   const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
+  const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
 
-  // Fetch Students for search (filtered by branch if not admin)
+  // Fetch Students for selection - Staff see all branches
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
-    if (isAdmin) return collection(db, 'students');
-    if (!profile.branch) return null;
-    return query(
-      collection(db, 'students'), 
-      where('branch', '==', profile.branch)
-    );
-  }, [db, user, profile, isAdmin, isStudent]);
+    if (isStaff) return collection(db, 'students');
+    return null;
+  }, [db, user, profile, isStaff, isStudent]);
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance records
+  // Fetch Attendance records - Staff see all branches for that date
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) {
@@ -67,14 +65,9 @@ export default function AttendancePage() {
       if (!studentId) return null;
       return query(collection(db, 'attendance'), where('studentId', '==', studentId));
     }
-    if (isAdmin) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
-    if (!profile.branch) return null;
-    return query(
-      collection(db, 'attendance'), 
-      where('branch', '==', profile.branch),
-      where('date', '==', selectedDate)
-    );
-  }, [db, user, profile, isAdmin, isStudent, selectedDate, students]);
+    if (isStaff) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
+    return null;
+  }, [db, user, profile, isStaff, isStudent, selectedDate, students]);
 
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -152,7 +145,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch || 'Loading...'}.`}
+            {isStudent ? 'My training sessions history.' : 'School-wide training sessions history.'}
           </p>
         </div>
         {!isStudent && (
@@ -177,13 +170,13 @@ export default function AttendancePage() {
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Record Student Session</DialogTitle>
-                  <DialogDescription>Select a student and log their training time.</DialogDescription>
+                  <DialogDescription>Select a student from any branch and log their training time.</DialogDescription>
                 </DialogHeader>
                 
                 <div className="grid gap-6 py-4">
                   {!selectedStudent ? (
                     <div className="grid gap-2">
-                      <Label>Search or Select Student</Label>
+                      <Label>Select Student (All Branches)</Label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input 
@@ -210,7 +203,7 @@ export default function AttendancePage() {
                                   <UserCircle className="h-8 w-8 text-primary/40" />
                                   <div className="grid">
                                     <p className="font-bold text-sm">{s.name}</p>
-                                    <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.branch}</p>
                                   </div>
                                 </div>
                                 <Badge variant="outline">Select</Badge>
@@ -229,7 +222,7 @@ export default function AttendancePage() {
                           </div>
                           <div>
                             <p className="font-black text-primary">{selectedStudent.name}</p>
-                            <p className="text-xs font-mono">{selectedStudent.id}</p>
+                            <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id} • {selectedStudent.branch}</p>
                           </div>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
@@ -294,7 +287,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Training sessions recorded for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
+                {isStudent ? 'Historical training record' : `All training sessions recorded for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
@@ -322,7 +315,7 @@ export default function AttendancePage() {
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 4 : 5} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
                         <p className="italic">No sessions logged.</p>
