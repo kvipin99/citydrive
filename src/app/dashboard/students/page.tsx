@@ -437,7 +437,6 @@ export default function StudentsPage() {
     toast({ title: "Export Successful" });
   };
 
-  // Wait for profile to know the branch before concluding "No students found"
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
 
   return (
@@ -470,39 +469,41 @@ export default function StudentsPage() {
                   </Button>
                 )}
 
-                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={resetForm}>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Register Student
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl">
-                    <DialogHeader>
-                      <DialogTitle>New Student Registration</DialogTitle>
-                      <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
-                    </DialogHeader>
-                    <ScrollArea className="max-h-[70vh] pr-4">
-                      <StudentForm 
-                        formData={formData} 
-                        setFormData={setFormData} 
-                        isAdmin={isAdmin} 
-                        masterCourses={masterCourses} 
-                        calculateFees={calculateFees} 
-                        handlePhotoUpload={handlePhotoUpload} 
-                        photoInputRef={photoInputRef}
-                        handleCourseToggle={handleCourseToggle}
-                        generateBranchStudentId={generateBranchStudentId}
-                      />
-                    </ScrollArea>
-                    <DialogFooter>
-                      <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
-                        {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Confirm Registration
+                {!isAdmin && (
+                  <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                    <DialogTrigger asChild>
+                      <Button onClick={resetForm}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Register Student
                       </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl">
+                      <DialogHeader>
+                        <DialogTitle>New Student Registration</DialogTitle>
+                        <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="max-h-[70vh] pr-4">
+                        <StudentForm 
+                          formData={formData} 
+                          setFormData={setFormData} 
+                          isAdmin={isAdmin} 
+                          masterCourses={masterCourses} 
+                          calculateFees={calculateFees} 
+                          handlePhotoUpload={handlePhotoUpload} 
+                          photoInputRef={photoInputRef}
+                          handleCourseToggle={handleCourseToggle}
+                          generateBranchStudentId={generateBranchStudentId}
+                        />
+                      </ScrollArea>
+                      <DialogFooter>
+                        <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
+                          {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Confirm Registration
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
             )}
           </div>
