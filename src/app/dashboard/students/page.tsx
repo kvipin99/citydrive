@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -33,7 +34,6 @@ export default function StudentsPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const editPhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +65,7 @@ export default function StudentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -232,51 +233,46 @@ export default function StudentsPage() {
     toast({ title: "Student Updated" });
   };
 
-  const handleDeleteStudent = async (student: Student) => {
-    if (!isAdmin) {
-      toast({ variant: "destructive", title: "Unauthorized", description: "Only admins can delete student records." });
-      return;
-    }
-
-    if (!confirm(`Permanently Delete ${student.name} (#${student.id})? This will remove all payments and login records. THIS ACTION CANNOT BE UNDONE.`)) {
-      return;
-    }
+  const handlePermanentDelete = async () => {
+    if (!selectedStudent || !isAdmin) return;
 
     setIsSubmitting(true);
-    toast({ title: "Removing Student", description: "Wiping all records from system..." });
+    toast({ title: "Removing Student", description: "Cleaning up profile, payments, and login..." });
 
     try {
-      // 1. Delete all payments
+      // 1. Scrub Payments
       const paymentsCol = collection(db, 'payments');
-      const q = query(paymentsCol, where('studentId', '==', student.id));
+      const q = query(paymentsCol, where('studentId', '==', selectedStudent.id));
       const paymentSnaps = await getDocs(q);
       paymentSnaps.forEach((p) => deleteDocumentNonBlocking(doc(db, 'payments', p.id)));
 
-      // 2. Attempt Auth cleanup (Best effort)
-      if (student.id) {
-        const studentEmail = `${student.id.toLowerCase()}@citydriving.in`;
-        const secondaryAppName = `cleanup-${student.id}-${Date.now()}`;
+      // 2. Auth Cleanup Attempt
+      if (selectedStudent.id) {
+        const studentEmail = `${selectedStudent.id.toLowerCase()}@citydriving.in`;
+        const secondaryAppName = `cleanup-${selectedStudent.id}-${Date.now()}`;
         const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
         const secondaryAuth = getAuth(secondaryApp);
         try {
           const cred = await signInWithEmailAndPassword(secondaryAuth, studentEmail, "City123");
           await deleteUser(cred.user);
         } catch (authErr) {
-          console.warn("Auth cleanup failed (possibly changed password):", authErr);
+          console.warn("Auth cleanup failed:", authErr);
         } finally {
           await deleteApp(secondaryApp);
         }
       }
 
-      // 3. Delete Firestore Records
-      deleteDocumentNonBlocking(doc(db, 'students', student.id));
-      if (student.userId) {
-        deleteDocumentNonBlocking(doc(db, 'users', student.userId));
+      // 3. Primary Records removal
+      deleteDocumentNonBlocking(doc(db, 'students', selectedStudent.id));
+      if (selectedStudent.userId) {
+        deleteDocumentNonBlocking(doc(db, 'users', selectedStudent.userId));
       }
 
-      toast({ title: "Student Deleted", description: "All data has been removed from the database." });
+      setIsDeleteAlertOpen(false);
+      setSelectedStudent(null);
+      toast({ title: "Student Removed", description: "Database has been fully cleaned." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Delete Failed", description: error.message });
+      toast({ variant: "destructive", title: "Operation Failed", description: error.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -383,15 +379,11 @@ export default function StudentsPage() {
 
   const handleExportCSV = () => {
     if (!students || students.length === 0) {
-      toast({ variant: "destructive", title: "Export Failed", description: "No student data available to export." });
+      toast({ variant: "destructive", title: "Export Failed", description: "No student data available." });
       return;
     }
-    const headers = ["ID", "Name", "Phone", "Email", "Parent Name", "Address", "Aadhar No", "App No", "Branch", "Status", "Registration Date", "Courses", "Total Amount", "Discount"];
-    const rows = students.map(s => [
-      s.id, s.name, s.phone, s.email || '', s.parentName || '', `"${s.address?.replace(/"/g, '""')}"`,
-      s.aadharNo || '', s.onlineAppNo || '', s.branch, s.status, s.registrationDate, `"${s.courses?.join('; ')}"`,
-      s.amount, s.discount
-    ]);
+    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Total Amount", "Discount"];
+    const rows = students.map(s => [s.id, s.name, s.phone, s.email || '', s.branch, s.status, s.amount, s.discount]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -401,7 +393,7 @@ export default function StudentsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Export Successful", description: "Student records downloaded as CSV." });
+    toast({ title: "Export Successful" });
   };
 
   return (
@@ -497,21 +489,6 @@ export default function StudentsPage() {
                         <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Online App No.</Label>
-                          <Input placeholder="APP-1001" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Learners Date</Label>
-                          <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Test Date</Label>
-                          <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
-                        </div>
-                      </div>
-
                       <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
                         <Label className="font-bold">Courses Selection</Label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -521,26 +498,7 @@ export default function StudentsPage() {
                               <Label htmlFor={`add-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
                             </div>
                           ))}
-                          <div className="flex items-center space-x-2">
-                            <Checkbox id="add-course-special" checked={formData.courses?.includes("Other Special Course")} onCheckedChange={() => handleCourseToggle("Other Special Course")} />
-                            <Label htmlFor="add-course-special" className="text-sm cursor-pointer text-primary font-medium">Other Special Course</Label>
-                          </div>
                         </div>
-                        {formData.courses?.includes("Other Special Course") && (
-                          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
-                            <div className="grid gap-2">
-                              <Label>Special Course Name</Label>
-                              <Input value={formData.specialCourseName} onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})} />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label>Special Course Fee (₹)</Label>
-                              <Input type="number" value={formData.specialCourseFee} onChange={(e) => {
-                                const fee = Number(e.target.value);
-                                setFormData({...formData, specialCourseFee: fee, amount: calculateFees(formData.courses || [], formData.discount || 0, fee)});
-                              }} />
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -580,7 +538,6 @@ export default function StudentsPage() {
                 <TableRow>
                   <TableHead>Student ID & Name</TableHead>
                   <TableHead>Branch</TableHead>
-                  <TableHead>Phone</TableHead>
                   <TableHead>Agreed Fee (₹)</TableHead>
                   <TableHead>Balance Due (₹)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -588,7 +545,7 @@ export default function StudentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredStudents.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
                 ) : (
                   filteredStudents.map((student) => (
                     <TableRow key={student.id}>
@@ -605,7 +562,6 @@ export default function StudentsPage() {
                         </div>
                       </TableCell>
                       <TableCell>{student.branch}</TableCell>
-                      <TableCell className="text-sm">{student.phone}</TableCell>
                       <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
                       <TableCell>
                         <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
@@ -623,7 +579,7 @@ export default function StudentsPage() {
                             <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {isAdmin && (
-                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteStudent(student)}>
+                              <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
                               </DropdownMenuItem>
                             )}
@@ -638,6 +594,35 @@ export default function StudentsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent className="border-destructive/20 shadow-2xl">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-6 w-6" />
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base">
+              This action will permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.
+              <br/><br/>
+              <span className="font-bold block mb-1">Impact:</span>
+              - Profile record removed.<br/>
+              - All associated payment history wiped.<br/>
+              - System login account deactivated.<br/>
+              <br/>
+              <span className="text-destructive font-black uppercase tracking-tighter">This action cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>
+              {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Wipe Record
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
         <DialogContent className="max-w-md">
