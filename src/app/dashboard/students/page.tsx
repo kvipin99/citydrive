@@ -1,5 +1,4 @@
-
-'use client';
+"use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -806,6 +805,7 @@ function StudentForm({
 function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student) return null;
+    // Removed specific branch query to ensure we see global attendance for this student
     return query(collection(db, 'attendance'), where('studentId', '==', student.id));
   }, [db, student]);
 
@@ -926,9 +926,12 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
       {/* Attendance History Section */}
       <section className="space-y-4">
-        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-          <Clock className="h-4 w-4" /> Attendance Log
-        </h3>
+        <div className="flex items-center justify-between border-b pb-2">
+          <h3 className="font-bold flex items-center gap-2 text-primary">
+            <Clock className="h-4 w-4" /> Attendance Log
+          </h3>
+          <Badge variant="outline" className="text-[10px] uppercase">Real-time Sync</Badge>
+        </div>
         {isAttendanceLoading ? (
           <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : sortedAttendance.length === 0 ? (
@@ -939,7 +942,8 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Time Slot</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Details</TableHead>
                   <TableHead className="text-right">Duration</TableHead>
                 </TableRow>
               </TableHeader>
@@ -947,8 +951,19 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
                 {sortedAttendance.map((a: any) => (
                   <TableRow key={a.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs font-medium">{format(new Date(a.date), 'MMM dd, yyyy')}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{a.startTime} - {a.endTime}</TableCell>
-                    <TableCell className="text-right font-bold text-primary">{a.duration}h</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0">
+                        {a.type || 'Practical'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-[10px] text-muted-foreground">
+                      <div className="flex flex-col">
+                        <span>{a.startTime} - {a.endTime}</span>
+                        {a.type === 'Practical' && <span className="flex items-center gap-1 font-bold text-primary"><Car className="h-2 w-2" /> {a.vehicleReg || 'N/A'}</span>}
+                        {a.type === 'Theory' && <span className="flex items-center gap-1 text-orange-600 font-bold"><BookOpen className="h-2 w-2" /> Classroom</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

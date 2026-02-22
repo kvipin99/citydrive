@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -14,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +26,11 @@ const TIME_OPTIONS = Array.from({ length: 18 }, (_, i) => {
   return { value, label, hour };
 });
 
+const SESSION_TYPES = [
+  { value: 'Practical', label: 'Practical Class', icon: Car },
+  { value: 'Theory', label: 'Theory Class', icon: BookOpen },
+] as const;
+
 export default function AttendancePage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -37,6 +41,7 @@ export default function AttendancePage() {
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [sessionType, setSessionType] = useState<'Practical' | 'Theory'>('Practical');
   
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -48,14 +53,14 @@ export default function AttendancePage() {
   const isStudent = profile?.role === 'Student';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
 
-  // Fetch Vehicles - Real-time from master list
+  // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'vehicles');
   }, [db, user]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection - Global view for staff
+  // Fetch Students for selection - Global view for staff per request
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
@@ -65,7 +70,7 @@ export default function AttendancePage() {
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance records - Staff see all branches for that date
+  // Fetch Attendance records - Global staff view for that date
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) {
@@ -81,12 +86,8 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!students) return [];
-    
-    // Filter out students who have completed their courses
     const activeOnes = students.filter(s => s.status !== 'Completed');
-
     if (!studentSearch) return activeOnes;
-
     const term = studentSearch.toLowerCase();
     return activeOnes.filter(s => 
       s.name.toLowerCase().includes(term) || 
@@ -98,7 +99,7 @@ export default function AttendancePage() {
   const handleMarkAttendance = () => {
     if (!db || !user || !profile || !selectedStudent) return;
 
-    const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}`;
+    const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
 
     const startH = parseInt(startTime.split(':')[0]);
@@ -113,11 +114,12 @@ export default function AttendancePage() {
       studentName: selectedStudent.name,
       date: selectedDate,
       status: 'Present',
+      type: sessionType,
       startTime,
       endTime,
       duration,
-      vehicleId: selectedVehicleId,
-      vehicleReg: vehicle?.regNumber || 'None',
+      vehicleId: sessionType === 'Practical' ? (selectedVehicleId || 'None') : 'Theory',
+      vehicleReg: sessionType === 'Practical' ? (vehicle?.regNumber || 'None') : 'N/A',
       branch: selectedStudent.branch,
       createdAt: serverTimestamp(),
       createdBy: user.uid
@@ -127,7 +129,7 @@ export default function AttendancePage() {
     
     toast({
       title: "Attendance Recorded",
-      description: `${selectedStudent.name} session saved (${duration} Hrs).`
+      description: `${selectedStudent.name} ${sessionType} session saved.`
     });
 
     setIsDialogOpen(false);
@@ -138,6 +140,7 @@ export default function AttendancePage() {
     setStudentSearch("");
     setSelectedStudent(null);
     setSelectedVehicleId("");
+    setSessionType('Practical');
     setStartTime("09:00");
     setEndTime("10:00");
   };
@@ -158,7 +161,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : 'School-wide training sessions history.'}
+            {isStudent ? 'My training sessions history.' : 'Global school training sessions history.'}
           </p>
         </div>
         {!isStudent && (
@@ -183,7 +186,7 @@ export default function AttendancePage() {
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Record Student Session</DialogTitle>
-                  <DialogDescription>Select a student and assign a vehicle for the session.</DialogDescription>
+                  <DialogDescription>Select student and class details.</DialogDescription>
                 </DialogHeader>
                 
                 <div className="grid gap-6 py-4">
@@ -202,7 +205,7 @@ export default function AttendancePage() {
                       <ScrollArea className="h-[300px] border rounded-lg mt-1">
                         {filteredSearch.length === 0 ? (
                           <div className="p-8 text-center text-muted-foreground italic text-sm">
-                            No students found.
+                            No active students found.
                           </div>
                         ) : (
                           <div className="divide-y">
@@ -235,7 +238,7 @@ export default function AttendancePage() {
                           </div>
                           <div>
                             <p className="font-black text-primary">{selectedStudent.name}</p>
-                            <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id} • {selectedStudent.branch}</p>
+                            <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id}</p>
                           </div>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
@@ -244,24 +247,47 @@ export default function AttendancePage() {
                       </div>
 
                       <div className="grid gap-2">
-                        <Label className="flex items-center gap-2">
-                          <Car className="h-4 w-4 text-primary" />
-                          Assigned Vehicle
-                        </Label>
-                        <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="Select Vehicle" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="None">No Vehicle Assigned</SelectItem>
-                            {vehicles?.map(v => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.regNumber} ({v.brandModel})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label>Session Type</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {SESSION_TYPES.map(type => {
+                            const Icon = type.icon;
+                            const active = sessionType === type.value;
+                            return (
+                              <Button 
+                                key={type.value}
+                                variant={active ? 'default' : 'outline'}
+                                className="h-12 flex items-center gap-2 justify-center"
+                                onClick={() => setSessionType(type.value as any)}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {type.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {sessionType === 'Practical' && (
+                        <div className="grid gap-2 animate-in slide-in-from-top-2">
+                          <Label className="flex items-center gap-2">
+                            <Car className="h-4 w-4 text-primary" />
+                            Assigned Vehicle
+                          </Label>
+                          <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                            <SelectTrigger className="bg-background">
+                              <SelectValue placeholder="Select Vehicle" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="None">No Vehicle Assigned</SelectItem>
+                              {vehicles?.map(v => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.regNumber} ({v.brandModel})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
@@ -339,8 +365,9 @@ export default function AttendancePage() {
                 <TableRow>
                   {isStudent && <TableHead className="pl-6">Date</TableHead>}
                   {!isStudent && <TableHead className="pl-6">Student</TableHead>}
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Session Timing</TableHead>
+                  <TableHead>Session Type</TableHead>
+                  <TableHead>Vehicle / Details</TableHead>
+                  <TableHead>Timing</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Branch</TableHead>
                   {!isStudent && <TableHead className="text-right pr-6">Action</TableHead>}
@@ -349,10 +376,10 @@ export default function AttendancePage() {
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isStudent ? 5 : 6} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 6 : 7} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
-                        <p className="italic">No sessions logged.</p>
+                        <p className="italic">No sessions logged for this period.</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -360,7 +387,7 @@ export default function AttendancePage() {
                   sortedRecords.map((record) => (
                     <TableRow key={record.id} className="hover:bg-muted/20">
                       {isStudent && (
-                        <TableCell className="pl-6 font-medium">
+                        <TableCell className="pl-6 font-medium text-xs">
                           {format(new Date(record.date), 'MMM dd, yyyy')}
                         </TableCell>
                       )}
@@ -371,26 +398,36 @@ export default function AttendancePage() {
                               {record.studentName?.charAt(0) || 'S'}
                             </div>
                             <div className="grid gap-0.5">
-                              <span className="font-bold text-sm">{record.studentName}</span>
+                              <span className="font-bold text-sm leading-none">{record.studentName}</span>
                               <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
                             </div>
                           </div>
                         </TableCell>
                       )}
                       <TableCell>
+                        <Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>
+                          {record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                          {record.type || 'Practical'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-                          <Car className="h-3 w-3" />
-                          {record.vehicleReg || 'None'}
+                          {record.type === 'Theory' ? 'Classroom' : (
+                            <>
+                              <Car className="h-3 w-3" />
+                              {record.vehicleReg || 'None'}
+                            </>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm font-medium">
+                        <div className="flex items-center gap-2 text-xs font-medium">
                           <Clock className="h-3.5 w-3.5 text-primary" />
                           {record.startTime} - {record.endTime}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100">
+                        <Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100 text-[10px]">
                           {record.duration}h
                         </Badge>
                       </TableCell>
