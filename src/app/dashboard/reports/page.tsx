@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
-import { FileDown, Printer, Filter, DollarSign, Users, Receipt, PieChart } from "lucide-react";
-import { format, parseISO, isSameMonth, isSameYear } from "date-fns";
+import { FileDown, Printer, Filter, DollarSign, Users, Receipt, RefreshCw } from "lucide-react";
+import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -22,7 +22,7 @@ export default function ReportsPage() {
   const { toast } = useToast();
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
-  const { data: profile } = useDoc(userProfileRef);
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
   const [activeTab, setActiveTab] = useState("financial");
@@ -33,7 +33,7 @@ export default function ReportsPage() {
   // Sync selected branch with user profile for non-admins
   useEffect(() => {
     if (profile && !isAdmin) {
-      setSelectedBranch(profile.branch);
+      setSelectedBranch(profile.branch || "Branch 1");
     }
   }, [profile, isAdmin]);
 
@@ -41,26 +41,26 @@ export default function ReportsPage() {
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'students');
-    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
-    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'expenses');
-    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
   const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  const isLoading = isStudentsLoading || isPaymentsLoading || isExpensesLoading;
+  const isActuallyLoading = isProfileLoading || isStudentsLoading || isPaymentsLoading || isExpensesLoading;
 
   // --- REPORT LOGIC: FINANCIAL ---
   const financialData = useMemo(() => {
@@ -69,7 +69,6 @@ export default function ReportsPage() {
     let filteredPayments = [...payments];
     let filteredExpenses = [...expenses];
 
-    // Admin can still filter the full list, but managers are locked by query
     if (isAdmin && selectedBranch !== "Full") {
       filteredPayments = filteredPayments.filter(p => p.branch === selectedBranch);
       filteredExpenses = filteredExpenses.filter(e => e.branch === selectedBranch);
@@ -184,7 +183,7 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Reports</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Generate financial and operational summaries.' : `Performance reports for ${profile?.branch}`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Generate financial and operational summaries.' : `Performance reports for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handlePrint}>
@@ -217,7 +216,7 @@ export default function ReportsPage() {
                   {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to your branch.</p>}
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to your branch identity.</p>}
             </div>
 
             {activeTab === 'students' && (
@@ -289,7 +288,7 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {isLoading ? <LoadingRows cols={4} /> : (
+                        {isActuallyLoading ? <LoadingRows cols={4} /> : (
                           financialData.length === 0 ? <NoData colSpan={4} /> :
                           financialData.map((d) => (
                             <TableRow key={d.period}>
@@ -335,7 +334,7 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {isLoading ? <LoadingRows cols={5} /> : (
+                        {isActuallyLoading ? <LoadingRows cols={5} /> : (
                           filteredStudents.length === 0 ? <NoData colSpan={5} /> :
                           filteredStudents.map((s) => (
                             <TableRow key={s.id}>
@@ -382,7 +381,7 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {isLoading ? <LoadingRows cols={5} /> : (
+                        {isActuallyLoading ? <LoadingRows cols={5} /> : (
                           paymentDuesData.length === 0 ? <NoData colSpan={5} /> :
                           paymentDuesData.map((s) => (
                             <TableRow key={s.id}>

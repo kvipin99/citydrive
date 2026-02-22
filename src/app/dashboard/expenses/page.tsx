@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -41,16 +42,17 @@ export default function ExpensesPage() {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
   }, [db, user]);
-  const { data: profile } = useDoc(userProfileRef);
+  
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'expenses');
-    return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
-  const { data: expenses, isLoading } = useCollection<ExpenseRecord>(expensesQuery);
+  const { data: expenses, isLoading: isExpensesLoading } = useCollection<ExpenseRecord>(expensesQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRecord | null>(null);
@@ -128,12 +130,14 @@ export default function ExpensesPage() {
     return expenses?.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
   }, [expenses]);
 
+  const isActuallyLoading = isProfileLoading || isExpensesLoading;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branch}.`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profile?.branch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()}>
           <PlusCircle className="mr-2 h-5 w-5" />
@@ -147,12 +151,12 @@ export default function ExpensesPage() {
             <Wallet className="h-5 w-5 text-primary" />
             Expenditure Log
           </CardTitle>
-          <CardDescription>A list of recent expenses recorded for {isAdmin ? 'all branches' : profile?.branch}.</CardDescription>
+          <CardDescription>A list of recent expenses recorded for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isActuallyLoading ? (
             <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <Table>
@@ -170,7 +174,7 @@ export default function ExpensesPage() {
                 {sortedExpenses.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      No expenses recorded yet.
+                      No expenses recorded yet for this branch.
                     </TableCell>
                   </TableRow>
                 ) : (

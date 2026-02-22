@@ -65,7 +65,8 @@ export default function StudentsPage() {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
   }, [db, user]);
-  const { data: profile } = useDoc(userProfileRef);
+  
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
 
@@ -77,7 +78,9 @@ export default function StudentsPage() {
     if (isAdmin) {
       return collection(db, 'students');
     }
-    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    // Branch manager or staff filter
+    const branchId = profile.branch || "Branch 1";
+    return query(collection(db, 'students'), where('branch', '==', branchId));
   }, [db, user, profile, isAdmin, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
@@ -434,6 +437,9 @@ export default function StudentsPage() {
     toast({ title: "Export Successful" });
   };
 
+  // Wait for profile to know the branch before concluding "No students found"
+  const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
+
   return (
     <div className="space-y-6">
       <Card>
@@ -442,7 +448,7 @@ export default function StudentsPage() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profile?.branch || 'your branch'}.`}
               </CardDescription>
             </div>
             {!isStudent && (
@@ -502,7 +508,7 @@ export default function StudentsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isStudentsLoading || isCoursesLoading ? (
+          {isActuallyLoading ? (
              <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>

@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, Phone, MoreHorizontal, Trash2 } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt, User, Phone, MoreHorizontal, Trash2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -50,23 +50,24 @@ export default function PaymentsPage() {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
   }, [db, user]);
-  const { data: profile } = useDoc(userProfileRef);
+  
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
-    return query(collection(db, 'payments'), where('branch', '==', profile.branch));
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'students');
-    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user, profile, isAdmin]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection<PaymentRecord>(paymentsQuery);
-  const { data: students } = useCollection<Student>(studentsQuery);
+  const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -119,7 +120,7 @@ export default function PaymentsPage() {
     const fullPaymentRecord: PaymentRecord = {
       id: paymentId,
       studentId: selectedStudent.id,
-      studentUid: selectedStudent.userId, // Storing UID for secure list queries by students
+      studentUid: selectedStudent.userId, 
       studentName: selectedStudent.name,
       studentPhone: selectedStudent.phone,
       amount: paymentData.amount,
@@ -213,12 +214,14 @@ export default function PaymentsPage() {
     });
   }, [sortedPayments, listSearchTerm]);
 
+  const isActuallyLoading = isProfileLoading || isPaymentsLoading || isStudentsLoading;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Fee Collection</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Global school collection log.' : `Collection log for ${profile?.branch}`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Global school collection log.' : `Collection log for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
         </div>
         <div className="flex items-center gap-2">
            <div className="relative">
@@ -354,12 +357,12 @@ export default function PaymentsPage() {
             <Receipt className="h-5 w-5 text-primary" />
             Recent Transactions
           </CardTitle>
-          <CardDescription>Fee collections for {isAdmin ? 'all branches' : profile?.branch}.</CardDescription>
+          <CardDescription>Fee collections for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isPaymentsLoading ? (
+          {isActuallyLoading ? (
             <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <Table>
@@ -377,7 +380,7 @@ export default function PaymentsPage() {
                 {filteredPayments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      {listSearchTerm ? 'No payments match your search.' : 'No payment transactions found.'}
+                      {listSearchTerm ? 'No payments match your search.' : 'No payment transactions found for this branch.'}
                     </TableCell>
                   </TableRow>
                 ) : (
