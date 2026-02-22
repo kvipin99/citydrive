@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, CheckCircle2 } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -119,6 +119,25 @@ export default function StudentsPage() {
     ) || [];
   }, [students, searchQuery]);
 
+  // Helper to generate the next Student ID based on branch series
+  const generateBranchStudentId = (branchName: string) => {
+    const branchPart = branchName.split(' ')[1] || "X";
+    const prefix = `B${branchPart}-`;
+    
+    // Find all students globally (if admin) or in this branch (if manager) that belong to this branch
+    // Note: If admin, they have the full 'students' list in memory.
+    const branchStudents = students?.filter(s => s.branch === branchName) || [];
+    
+    const maxNumber = branchStudents.reduce((max, s) => {
+      const parts = s.id.split('-');
+      if (parts.length < 2) return max;
+      const num = parseInt(parts[1], 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, 1000); // Start from 1001
+
+    return `${prefix}${maxNumber + 1}`;
+  };
+
   const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
     const totalWithSpecial = baseAmount + (courses.includes("Other Special Course") ? (specialFee || 0) : 0);
@@ -181,8 +200,7 @@ export default function StudentsPage() {
     }
 
     const branchName = formData.branch;
-    const branchPart = branchName.split(' ')[1] || "X";
-    const studentId = `${branchPart}-${Date.now().toString().slice(-6)}`;
+    const studentId = generateBranchStudentId(branchName);
     
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
@@ -413,9 +431,10 @@ export default function StudentsPage() {
         const [id, name, phone, email, parent, address, aadhar, appNo, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
         
         const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
-        const studentId = id || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        const studentRef = doc(db, 'students', studentId);
         const finalBranch = branch || (profile?.role === 'Admin' ? "Branch 1" : profile?.branch || "Branch 1");
+        const studentId = id || generateBranchStudentId(finalBranch);
+        
+        const studentRef = doc(db, 'students', studentId);
 
         const newStudentData = {
           id: studentId,
@@ -499,7 +518,7 @@ export default function StudentsPage() {
                 <DialogContent className="max-w-4xl">
                   <DialogHeader>
                     <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. JPEG photo must be under 200 KB.</DialogDescription>
+                    <DialogDescription>Fill in all details. IDs follow the branch series (e.g., B1-1001).</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
