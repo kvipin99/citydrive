@@ -8,17 +8,6 @@ service cloud.firestore {
      * Core Philosophy:
      * This ruleset enforces a strict Role-Based Access Control (RBAC) model combined with document-level ownership.
      * High-level roles (Admin, BranchManager, Instructor, Student) are checked via helper functions.
-     *
-     * Data Structure:
-     * - /users: Profiles and roles for application users.
-     * - /students: Detailed records of enrolled students.
-     * - /instructors: Profiles for driving instructors.
-     * - /vehicles: Operational data for the school's fleet.
-     * - /classes: Scheduled lessons.
-     * - /attendance: Daily training logs.
-     * - /payments: Financial records for student fees.
-     * - /expenses: Internal school operating costs.
-     * - /settings: System configurations (Backup, etc).
      */
 
     // --- GLOBAL HELPER FUNCTIONS ---
@@ -65,12 +54,12 @@ service cloud.firestore {
 
     // --- COLLECTION RULES ---
 
-    /** Users: Owners and Admins manage profiles. */
+    /** Users: Owners and Staff manage profiles. Admins only delete. */
     match /users/{userId} {
       allow get: if isOwner(userId) || isStaff();
       allow list: if isStaff();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) || isStaff();
+      allow update: if isOwner(userId) || isStaff();
       allow delete: if isAdmin();
     }
 
@@ -83,7 +72,7 @@ service cloud.firestore {
     /** Instructors: Staff manage. */
     match /instructors/{instructorId} {
       allow read: if isStaff();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isBranchManager();
     }
 
     /** Vehicles: All staff see fleet; Admin/Managers manage. */
@@ -100,7 +89,7 @@ service cloud.firestore {
 
     /** Attendance: Staff manage; Students see own logs. */
     match /attendance/{id} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.studentId == request.auth.uid);
+      allow read: if isStaff() || (isSignedIn() && (resource == null || resource.data.studentId == request.auth.uid));
       allow write: if isStaff();
     }
 
