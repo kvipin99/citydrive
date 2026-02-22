@@ -41,16 +41,22 @@ export default function QuizzesPage() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
+  
   const isAdmin = profile?.role === 'Admin';
+  const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
 
   const quizzesQuery = useMemoFirebase(() => (db ? query(collection(db, "quizzes"), orderBy("createdAt", "desc")) : null), [db]);
   const { data: quizzes, isLoading: isQuizzesLoading } = useCollection<Quiz>(quizzesQuery);
 
   const attemptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null; // Ensure profile is loaded before querying
-    if (isAdmin) return query(collection(db, "quizAttempts"), orderBy("completedAt", "desc"));
+    if (!db || !user || !profile) return null; 
+    // Staff can see all attempts, students only their own
+    if (isStaff) {
+      return query(collection(db, "quizAttempts"), orderBy("completedAt", "desc"));
+    }
     return query(collection(db, "quizAttempts"), where("studentUid", "==", user.uid), orderBy("completedAt", "desc"));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user, profile, isStaff]);
+  
   const { data: attempts } = useCollection(attemptsQuery);
 
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
@@ -221,7 +227,7 @@ export default function QuizzesPage() {
         <div className="space-y-6">
           <h3 className="text-lg font-bold flex items-center gap-2">
             <History className="h-5 w-5 text-primary" />
-            {isAdmin ? "Global Performance" : "My Attempts"}
+            {isStaff ? "Global Performance" : "My Attempts"}
           </h3>
           <div className="space-y-4">
             {attempts?.slice(0, 10).map((att: any) => (
@@ -232,7 +238,7 @@ export default function QuizzesPage() {
                     {att.passed ? "Passed" : "Failed"}
                   </Badge>
                 </div>
-                {isAdmin && <p className="text-[10px] font-bold text-primary mb-1">Student: {att.userName}</p>}
+                {isStaff && <p className="text-[10px] font-bold text-primary mb-1">Student: {att.userName}</p>}
                 <div className="flex items-center justify-between text-sm">
                   <div className="font-black text-lg">{att.score} / {att.total}</div>
                   <span className="text-[10px] text-muted-foreground">{att.completedAt?.seconds ? new Date(att.completedAt.seconds * 1000).toLocaleDateString() : 'Just now'}</span>
@@ -276,7 +282,7 @@ function QuizPlayer({ quiz, onComplete, user, db }: { quiz: Quiz, onComplete: ()
 
     setDocumentNonBlocking(attemptRef, {
       id: attemptId,
-      studentUid: user.uid, // Use studentUid for consistent security rules
+      studentUid: user.uid, 
       userName: user.email?.split('@')[0] || 'Unknown',
       quizId: quiz.id,
       quizTitle: quiz.title,

@@ -38,7 +38,6 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      // Optimized check for all staff roles
       return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
              getUserData().role in ['Admin', 'BranchManager', 'Instructor'];
     }
@@ -57,12 +56,15 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid)) || isStaff();
+      // Allow students to read their own record via userId field
+      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow write: if isStaff();
     }
 
     match /attendance/{id} {
-      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
+      // Split list and get for clearer optimization
+      allow list: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
+      allow get: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
       allow write: if isStaff();
     }
 
@@ -72,7 +74,8 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
+      allow list: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
+      allow get: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
       allow write: if isAdmin() || isBranchManager();
     }
 
@@ -96,8 +99,9 @@ service cloud.firestore {
     }
 
     match /quizAttempts/{id} {
-      // Use studentUid for efficient list queries
-      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
+      // Optimized for list queries using studentUid
+      allow list: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
+      allow get: if isStaff() || (isSignedIn() && resource.data.studentUid == request.auth.uid);
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
