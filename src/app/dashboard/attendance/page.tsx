@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -8,16 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, XCircle, Calendar as CalendarIcon, User, Search, RefreshCw, Clock, Trash2 } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, User, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 const TIME_OPTIONS = Array.from({ length: 18 }, (_, i) => {
   const hour = i + 6; // Start from 6 AM
-  const period = hour >= 12 ? (hour === 24 ? 'AM' : 'PM') : 'AM';
-  const displayHour = hour > 12 ? hour - 12 : hour;
+  const period = hour >= 12 ? (hour === 24 ? 'AM' : (hour === 12 ? 'PM' : 'PM')) : 'AM';
+  const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
   const value = `${String(hour).padStart(2, '0')}:00`;
   const label = `${displayHour}:00 ${period}`;
   return { value, label, hour };
@@ -29,24 +31,31 @@ export default function AttendancePage() {
   const { toast } = useToast();
   
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [searchQuery, setSearchQuery] = useState("");
-  const [globalStartTime, setGlobalStartTime] = useState("09:00");
-  const [globalEndTime, setGlobalEndTime] = useState("10:00");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("10:00");
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
-  // Fetch Students for this branch
+  // Fetch Students for search (filtered by branch and NOT completed)
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'students');
-    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    if (isAdmin) return query(collection(db, 'students'), where('status', '!=', 'Completed'));
+    return query(
+      collection(db, 'students'), 
+      where('branch', '==', profile.branch),
+      where('status', '!=', 'Completed')
+    );
   }, [db, user, profile, isAdmin]);
 
-  const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
+  const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance for this branch and date
+  // Fetch Attendance for the selected date
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
@@ -59,49 +68,35 @@ export default function AttendancePage() {
 
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  const filteredStudents = useMemo(() => {
+  const filteredSearch = useMemo(() => {
+    if (!studentSearch || studentSearch.length < 2) return [];
     return students?.filter(s => 
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      s.id.toLowerCase().includes(searchQuery.toLowerCase())
-    ) || [];
-  }, [students, searchQuery]);
+      s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+      s.id.toLowerCase().includes(studentSearch.toLowerCase()) ||
+      s.phone?.includes(studentSearch)
+    ).slice(0, 5) || [];
+  }, [students, studentSearch]);
 
-  const attendanceMap = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    attendanceRecords?.forEach(record => {
-      if (!map[record.studentId]) map[record.studentId] = [];
-      map[record.studentId].push(record);
-    });
-    return map;
-  }, [attendanceRecords]);
+  const handleMarkAttendance = () => {
+    if (!db || !user || !profile || !selectedStudent) return;
 
-  const handleMarkAttendance = (student: any, status: 'Present' | 'Absent', startTime?: string, endTime?: string) => {
-    if (!db || !user || !profile) return;
-
-    // For multiple sessions, we include startTime in ID to allow uniqueness
-    const attendanceId = status === 'Present' 
-      ? `${student.id}_${selectedDate}_${startTime?.replace(':', '')}` 
-      : `${student.id}_${selectedDate}_ABSENT`;
-      
+    const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
 
-    let duration = 0;
-    if (startTime && endTime) {
-      const startH = parseInt(startTime.split(':')[0]);
-      const endH = parseInt(endTime.split(':')[0]);
-      duration = Math.max(0, endH - startH);
-    }
+    const startH = parseInt(startTime.split(':')[0]);
+    const endH = parseInt(endTime.split(':')[0]);
+    const duration = Math.max(0, endH - startH);
 
     const record = {
       id: attendanceId,
-      studentId: student.id,
-      studentName: student.name,
+      studentId: selectedStudent.id,
+      studentName: selectedStudent.name,
       date: selectedDate,
-      status: status,
-      startTime: status === 'Present' ? startTime : null,
-      endTime: status === 'Present' ? endTime : null,
-      duration: status === 'Present' ? duration : 0,
-      branch: student.branch,
+      status: 'Present',
+      startTime,
+      endTime,
+      duration,
+      branch: selectedStudent.branch,
       createdAt: serverTimestamp(),
       createdBy: user.uid
     };
@@ -110,8 +105,18 @@ export default function AttendancePage() {
     
     toast({
       title: "Attendance Recorded",
-      description: `${student.name} marked as ${status}${status === 'Present' ? ` (${duration} Hrs)` : ''}.`
+      description: `${selectedStudent.name} session saved (${duration} Hrs).`
     });
+
+    setIsDialogOpen(false);
+    resetPopup();
+  };
+
+  const resetPopup = () => {
+    setStudentSearch("");
+    setSelectedStudent(null);
+    setStartTime("09:00");
+    setEndTime("10:00");
   };
 
   const handleDeleteRecord = (recordId: string) => {
@@ -119,6 +124,10 @@ export default function AttendancePage() {
     deleteDocumentNonBlocking(doc(db, 'attendance', recordId));
     toast({ title: "Record Removed" });
   };
+
+  const sortedRecords = useMemo(() => {
+    return attendanceRecords?.sort((a, b) => a.startTime.localeCompare(b.startTime)) || [];
+  }, [attendanceRecords]);
 
   return (
     <div className="space-y-6">
@@ -129,158 +138,211 @@ export default function AttendancePage() {
             {isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch}.`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4 bg-muted/30 p-3 rounded-xl border">
-          <div className="grid gap-1">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground">Select Date</Label>
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4 text-primary" />
-              <Input 
-                type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="h-9 w-[150px] bg-background"
-              />
-            </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
+            <Label className="text-xs font-bold px-2">DATE:</Label>
+            <Input 
+              type="date" 
+              value={selectedDate} 
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-9 w-[150px] bg-background border-primary/20"
+            />
           </div>
-          <div className="hidden sm:block w-px h-10 bg-border mx-2" />
-          <div className="grid gap-1">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground">Default Session Time</Label>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" />
-              <Select value={globalStartTime} onValueChange={setGlobalStartTime}>
-                <SelectTrigger className="h-9 w-[110px] bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <span className="text-xs font-bold text-muted-foreground">to</span>
-              <Select value={globalEndTime} onValueChange={setGlobalEndTime}>
-                <SelectTrigger className="h-9 w-[110px] bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="shadow-lg">
+                <PlusCircle className="mr-2 h-5 w-5" />
+                Record Session
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Student Session</DialogTitle>
+                <DialogDescription>Search for an active student and log their training time.</DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-6 py-4">
+                {!selectedStudent ? (
+                  <div className="grid gap-2">
+                    <Label>Search Student (Active Only)</Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        placeholder="Type Name, ID or Phone..." 
+                        className="pl-8" 
+                        value={studentSearch} 
+                        onChange={(e) => setStudentSearch(e.target.value)} 
+                      />
+                    </div>
+                    {filteredSearch.length > 0 && (
+                      <div className="border rounded-lg overflow-hidden divide-y mt-1 shadow-sm">
+                        {filteredSearch.map(s => (
+                          <div 
+                            key={s.id} 
+                            className="p-3 hover:bg-muted cursor-pointer flex items-center justify-between transition-colors"
+                            onClick={() => setSelectedStudent(s)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <UserCircle className="h-8 w-8 text-primary/40" />
+                              <div className="grid">
+                                <p className="font-bold text-sm">{s.name}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
+                              </div>
+                            </div>
+                            <Badge variant="outline">Select</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                          {selectedStudent.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-black text-primary">{selectedStudent.name}</p>
+                          <p className="text-xs font-mono">{selectedStudent.id}</p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>From Time</Label>
+                        <Select value={startTime} onValueChange={setStartTime}>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>To Time</Label>
+                        <Select value={endTime} onValueChange={setEndTime}>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
+                      <span className="text-sm font-medium">Session Duration:</span>
+                      <Badge variant="secondary" className="font-bold text-sm">
+                        {Math.max(0, parseInt(endTime.split(':')[0]) - parseInt(startTime.split(':')[0]))} Hours
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button 
+                  onClick={handleMarkAttendance} 
+                  className="w-full" 
+                  disabled={!selectedStudent}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Confirm & Save Log
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <CardHeader className="pb-3 border-b">
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Student Session Log</CardTitle>
+              <CardTitle className="text-lg">Daily Session Log</CardTitle>
               <CardDescription>
-                Marking records for {format(new Date(selectedDate), 'EEEE, MMMM do, yyyy')}
+                Training sessions recorded for {format(new Date(selectedDate), 'EEEE, MMMM do')}
               </CardDescription>
             </div>
-            <div className="relative w-full sm:w-[300px]">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search Student..."
-                className="pl-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+            <Badge variant="outline" className="h-6">
+              {sortedRecords.length} Sessions Found
+            </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          {isStudentsLoading || isAttendanceLoading ? (
+        <CardContent className="p-0">
+          {isAttendanceLoading ? (
             <div className="flex justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead>Student ID & Name</TableHead>
-                  <TableHead>History for Today</TableHead>
-                  <TableHead className="text-right">New Session Action</TableHead>
+                  <TableHead className="pl-6">Student</TableHead>
+                  <TableHead>Session Timing</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead className="text-right pr-6">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStudents.length === 0 ? (
+                {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
-                      No students found for this selection.
+                    <TableCell colSpan={5} className="text-center py-20 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <CalendarIcon className="h-10 w-10 opacity-20" />
+                        <p className="italic">No sessions logged for this date.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredStudents.map((student) => {
-                    const records = attendanceMap[student.id] || [];
-                    const isAbsent = records.some(r => r.status === 'Absent');
-                    
-                    return (
-                      <TableRow key={student.id}>
-                        <TableCell>
+                  sortedRecords.map((record) => (
+                    <TableRow key={record.id} className="hover:bg-muted/20">
+                      <TableCell className="pl-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                            {record.studentName.charAt(0)}
+                          </div>
                           <div className="grid gap-0.5">
-                            <span className="font-bold text-primary text-sm">{student.id}</span>
-                            <div className="flex items-center gap-2">
-                              <User className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="font-medium text-sm">{student.name}</span>
-                            </div>
+                            <span className="font-bold text-sm">{record.studentName}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {records.length === 0 ? (
-                              <span className="text-xs text-muted-foreground italic">No sessions logged.</span>
-                            ) : (
-                              records.map((r) => (
-                                <Badge 
-                                  key={r.id} 
-                                  variant={r.status === 'Present' ? 'default' : 'destructive'}
-                                  className={`flex items-center gap-1.5 py-1 ${r.status === 'Present' ? 'bg-green-500 hover:bg-green-600' : ''}`}
-                                >
-                                  {r.status === 'Present' ? (
-                                    <>
-                                      <Clock className="h-3 w-3" />
-                                      {r.startTime} - {r.endTime} ({r.duration}h)
-                                    </>
-                                  ) : (
-                                    'Absent'
-                                  )}
-                                  <button onClick={() => handleDeleteRecord(r.id)} className="ml-1 hover:text-white/70">
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
-                                </Badge>
-                              ))
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="text-green-600 border-green-200 hover:bg-green-50"
-                              onClick={() => handleMarkAttendance(student, 'Present', globalStartTime, globalEndTime)}
-                              disabled={isAbsent}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                              Add Present Session
-                            </Button>
-                            {!isAbsent && records.length === 0 && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="text-destructive border-red-200 hover:bg-red-50"
-                                onClick={() => handleMarkAttendance(student, 'Absent')}
-                              >
-                                <XCircle className="h-3.5 w-3.5 mr-1" />
-                                Mark Absent
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          {record.startTime} - {record.endTime}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100">
+                          {record.duration}h
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] uppercase">{record.branch}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
+                          onClick={() => handleDeleteRecord(record.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
