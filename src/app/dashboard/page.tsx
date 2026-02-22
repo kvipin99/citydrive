@@ -37,13 +37,13 @@ export default function DashboardPage() {
 
   const welcomeName = profile?.name || user?.email?.split('@')[0] || 'User';
 
+  // --- Student View ---
   if (profile?.role === 'Student') {
     return <StudentDashboard uid={user?.uid!} welcomeName={welcomeName} />;
   }
 
-  const isStaff = profile?.role === 'BranchManager' || profile?.role === 'Instructor' || profile?.role === 'Admin';
-
-  if (isStaff && profile?.role !== 'Admin') {
+  // --- Instructor View (Operational Only) ---
+  if (profile?.role === 'Instructor') {
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -76,14 +76,23 @@ export default function DashboardPage() {
     );
   }
 
-  // Admin view
+  // --- Management View (Admin & Branch Manager) ---
+  const isBranchManager = profile?.role === 'BranchManager';
+  const isAdmin = profile?.role === 'Admin';
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold tracking-tight">Welcome back, {welcomeName}!</h2>
-        <p className="text-muted-foreground text-sm">Here is the school's overview across all branches.</p>
+        <p className="text-muted-foreground text-sm">
+          {isAdmin 
+            ? "Here is the school's overview across all branches." 
+            : `Here is the performance status for ${profile?.branch || 'your branch'}.`}
+        </p>
       </div>
+
       <StatsCards />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <RevenueChart />
@@ -92,6 +101,7 @@ export default function DashboardPage() {
           <ProfitChart />
         </div>
       </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
            <AiSummary />
