@@ -21,7 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -95,12 +95,13 @@ export default function StudentsPage() {
     photoUrl: ""
   });
 
+  // Effect to sync branch when profile is loaded or dialog is opened
   useEffect(() => {
-    if (profile && !formData.branch) {
-      const defaultBranch = profile.role === 'Admin' ? "Branch 1" : (profile.branch || "Branch 1");
+    if (profile && isAddDialogOpen) {
+      const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profile.branch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
-  }, [profile, formData.branch]);
+  }, [profile, isAddDialogOpen, isAdmin]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -116,13 +117,13 @@ export default function StudentsPage() {
     ) || [];
   }, [students, searchQuery]);
 
-  // Generate Student ID: B<BranchNumber>XXXXX (e.g. B10001)
+  // Generate Student ID: B<BranchNumber><Sequence> (e.g. B10001)
   const generateBranchStudentId = (branchName: string) => {
     const branchNumber = branchName.split(' ')[1] || "1";
     const prefix = `B${branchNumber}`;
     
-    // We need to look at ALL students to ensure the series is continuous across the whole branch
-    // even if the current user only sees their own branch (already handled by fetching profile.branch)
+    // We need to check existing students for this branch to continue the series
+    // If user is Admin, they have all students. If user is Manager, they have their branch's students.
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     
     const maxSequence = branchStudents.reduce((max, s) => {
@@ -134,7 +135,7 @@ export default function StudentsPage() {
       return max;
     }, 0);
     
-    // Start from 0001 if no students exist, otherwise increment
+    // Start from 0001 (e.g. B10001)
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   };
@@ -179,6 +180,7 @@ export default function StudentsPage() {
         id: uid,
         email: email,
         role: 'Student',
+        branch: formData.branch,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -266,7 +268,7 @@ export default function StudentsPage() {
           const cred = await signInWithEmailAndPassword(secondaryAuth, studentEmail, "City123");
           await deleteUser(cred.user);
         } catch (authErr) {
-          console.warn("Auth cleanup failed:", authErr);
+          console.warn("Auth cleanup failed (possibly already deleted or password changed):", authErr);
         } finally {
           await deleteApp(secondaryApp);
         }
@@ -445,7 +447,7 @@ export default function StudentsPage() {
                 <DialogContent className="max-w-4xl">
                   <DialogHeader>
                     <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. IDs follow the branch series (e.g., B10001, B10002).</DialogDescription>
+                    <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
@@ -465,18 +467,24 @@ export default function StudentsPage() {
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
-                          <Label className="text-primary font-bold">Branch Assignment</Label>
+                          <Label className="text-primary font-bold flex items-center gap-1.5">
+                            Branch Assignment {!isAdmin && <Lock className="h-3 w-3" />}
+                          </Label>
                           <Select 
                             value={formData.branch} 
                             onValueChange={(v) => setFormData({...formData, branch: v as any})} 
                             disabled={!isAdmin}
                           >
-                            <SelectTrigger className="border-primary/50"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                            <SelectTrigger className={`border-primary/50 ${!isAdmin ? 'bg-muted cursor-not-allowed' : ''}`}>
+                              <SelectValue placeholder="Select Branch" />
+                            </SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          {!isAdmin && <p className="text-[10px] text-muted-foreground">Auto-allocated to your branch.</p>}
+                          {!isAdmin && (
+                            <p className="text-[10px] text-primary font-medium italic">Fixed: Linked to your branch account.</p>
+                          )}
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
@@ -526,15 +534,16 @@ export default function StudentsPage() {
                         </div>
                         <div className="grid gap-2">
                           <Label className="text-primary font-bold">Total Payable Amount</Label>
-                          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold flex items-center">
-                            ₹{formData.amount?.toLocaleString() || '0'}
+                          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold flex items-center justify-between">
+                            <span>₹{formData.amount?.toLocaleString() || '0'}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase">Next ID: {formData.branch ? generateBranchStudentId(formData.branch) : '...'}</span>
                           </div>
                         </div>
                       </div>
                     </div>
                   </ScrollArea>
                   <DialogFooter>
-                    <Button onClick={handleAddStudent} disabled={isSubmitting}>
+                    <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
                       {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Confirm Registration
                     </Button>
