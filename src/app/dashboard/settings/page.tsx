@@ -256,8 +256,17 @@ function SettingsContent() {
     </div>
   );
 
+  const greeting = isBranchManager 
+    ? `Hello, ${profile?.branch || 'Branch'} Branch!` 
+    : `Settings Overview`;
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <div className="space-y-1 mb-6">
+        <h2 className="text-2xl font-bold tracking-tight">{greeting}</h2>
+        <p className="text-muted-foreground text-sm">Manage your personal and office configurations.</p>
+      </div>
+
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-1'} max-w-md`}>
           {isAdmin && <TabsTrigger value="general">General</TabsTrigger>}
@@ -401,7 +410,7 @@ function SettingsContent() {
 
             <Card className="md:col-span-3">
               <CardHeader>
-                <CardTitle>Account Details</CardTitle>
+                <CardTitle>{isBranchManager ? "Accounting Details" : "Account Details"}</CardTitle>
                 <CardDescription>
                   Update your profile information and security credentials.
                 </CardDescription>
@@ -431,7 +440,7 @@ function SettingsContent() {
 
                       {isBranchManager && (
                         <div className="grid gap-2">
-                          <Label htmlFor="branch-name">Branch Identity</Label>
+                          <Label htmlFor="branch-name">Branch Identity (Name)</Label>
                           <div className="flex gap-2">
                             <div className="relative flex-1">
                               <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -443,7 +452,7 @@ function SettingsContent() {
                                 onChange={(e) => setBranchName(e.target.value)}
                               />
                             </div>
-                            <Button variant="outline" onClick={handleUpdateBranch}>Update Branch</Button>
+                            <Button variant="outline" onClick={handleUpdateBranch}>Update Identity</Button>
                           </div>
                           <p className="text-[10px] text-muted-foreground italic">Updating this changes the branch name displayed on your management dashboard.</p>
                         </div>

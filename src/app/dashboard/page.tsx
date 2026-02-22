@@ -78,11 +78,15 @@ export default function DashboardPage() {
 
   // --- Management View (Admin & Branch Manager) ---
   const isAdmin = profile?.role === 'Admin';
+  const isBranchManager = profile?.role === 'BranchManager';
+  const greeting = isBranchManager 
+    ? `Hello, ${profile?.branch || 'Branch'} Branch!` 
+    : `Hello, ${welcomeName}!`;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{greeting}</h2>
         <p className="text-muted-foreground text-sm">
           {isAdmin 
             ? "Here is the school's overview across all branches." 
