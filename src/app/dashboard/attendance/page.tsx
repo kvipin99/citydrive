@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
+import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, User, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,14 +43,14 @@ export default function AttendancePage() {
   const { data: profile } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
-  // Fetch Students for search (filtered by branch and NOT completed)
+  // Fetch Students for search (filtered by branch if not admin)
+  // We remove the != 'Completed' filter to simplify the query and avoid index/permission edge cases
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return query(collection(db, 'students'), where('status', '!=', 'Completed'));
+    if (isAdmin) return collection(db, 'students');
     return query(
       collection(db, 'students'), 
-      where('branch', '==', profile.branch),
-      where('status', '!=', 'Completed')
+      where('branch', '==', profile.branch)
     );
   }, [db, user, profile, isAdmin]);
 
@@ -70,10 +71,13 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!studentSearch || studentSearch.length < 2) return [];
+    // We filter out 'Completed' students on the client side
     return students?.filter(s => 
-      s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
-      s.id.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      s.phone?.includes(studentSearch)
+      s.status !== 'Completed' && (
+        s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+        s.id.toLowerCase().includes(studentSearch.toLowerCase()) ||
+        s.phone?.includes(studentSearch)
+      )
     ).slice(0, 5) || [];
   }, [students, studentSearch]);
 

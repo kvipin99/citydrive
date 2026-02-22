@@ -9,12 +9,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    // Safely get the user document data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function hasRole(role) {
-      return isSignedIn() && getRole() == role;
+      return isSignedIn() && getUserData().role == role;
     }
 
     function isAdmin() {
@@ -25,6 +26,14 @@ service cloud.firestore {
       return hasRole('BranchManager');
     }
 
+    function isAccountant() {
+      return hasRole('Accountant');
+    }
+
+    function isInstructor() {
+      return hasRole('Instructor');
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -32,10 +41,8 @@ service cloud.firestore {
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
       allow list: if isAdmin();
-      // Allow Branch Managers to create student profiles during registration
-      // and allow users to update their own profiles
       allow create, update: if isSignedIn() && (
         request.auth.uid == userId || 
         isAdmin() || 
@@ -50,7 +57,15 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isSignedIn() && (isOwner(studentId) || isAdmin() || isBranchManager());
+      // Staff can list and get student details
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager());
+      allow get: if isSignedIn() && (
+        isAdmin() || 
+        isBranchManager() || 
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (request.auth.uid == studentId)
+      );
+      
       allow create, update: if isAdmin() || isBranchManager();
       allow delete: if isAdmin();
     }
@@ -67,21 +82,22 @@ service cloud.firestore {
 
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager() || hasRole('Instructor');
+      allow write: if isAdmin() || isBranchManager() || isInstructor();
     }
 
     match /attendance/{attendanceId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isInstructor());
       allow write: if isAdmin() || isBranchManager();
     }
 
     match /payments/{paymentId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
+      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isAccountant());
+      allow write: if isAdmin() || isBranchManager() || isAccountant();
     }
 
     match /expenses/{expenseId} {
-      allow read, write: if isAdmin() || isBranchManager() || hasRole('Accountant');
+      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isAccountant());
+      allow write: if isAdmin() || isBranchManager() || isAccountant();
     }
 
     match /backupMetadata/{backupId} {
