@@ -49,11 +49,13 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Staff can list students.
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager());
+      // Staff can list students. Students can list to find their own record.
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || isStudent());
       
-      // Students can only get their own profile.
-      // Staff can get students based on branch or admin status.
+      // Allow getting specific student record.
+      // 1. Admins see all.
+      // 2. Managers see branch students.
+      // 3. Students see their own record (matched by userId field or document ID).
       allow get: if isSignedIn() && (
         isAdmin() || 
         (isBranchManager() && (resource == null || resource.data.branch == getProfile().branch)) || 
@@ -81,7 +83,7 @@ service cloud.firestore {
     }
 
     match /attendance/{attendanceId} {
-      // Staff can list. Students can list if they filter by their own ID.
+      // Staff and Students can list (students should filter by their ID in the query).
       allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Instructor') || isStudent());
       allow get: if isSignedIn();
       allow write: if isAdmin() || isBranchManager();

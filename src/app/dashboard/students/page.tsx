@@ -95,23 +95,22 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If role is student and profile isn't open, open it automatically for the only student in list
+  // If role is student, automatically select their record and open profile
   useEffect(() => {
-    if (isStudent && students && students.length > 0 && !isProfileOpen) {
+    if (isStudent && students && students.length > 0 && !selectedStudent) {
       setSelectedStudent(students[0]);
       setIsProfileOpen(true);
     }
-  }, [isStudent, students, isProfileOpen]);
+  }, [isStudent, students, selectedStudent]);
 
-  // Scoped query for attendance history when profile is open
   const attendanceHistoryQuery = useMemoFirebase(() => {
-    if (!db || !selectedStudent || !isProfileOpen || !profile) return null;
+    if (!db || !selectedStudent || !isProfileOpen) return null;
     return query(
       collection(db, 'attendance'), 
       where('studentId', '==', selectedStudent.id),
       orderBy('date', 'desc')
     );
-  }, [db, selectedStudent, isProfileOpen, profile]);
+  }, [db, selectedStudent, isProfileOpen]);
 
   const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
@@ -566,132 +565,170 @@ export default function StudentsPage() {
     </div>
   );
 
-  if (isStudent && students && students.length > 0) {
-    // Logic for student profile sheet is handled via useEffect
-    return <div className="flex items-center justify-center h-[60vh]"><RefreshCw className="h-8 w-8 animate-spin text-primary" /> Loading my profile...</div>;
-  }
-
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle>Students Database</CardTitle>
-              <CardDescription>
-                {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search ID, Name or Mobile..."
-                  className="pl-8 w-[200px] lg:w-[300px]"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+      {/* Student Profile Overview Card (Visible only to students) */}
+      {isStudent && selectedStudent && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16 border-2 border-primary">
+                <AvatarImage src={selectedStudent.photoUrl} />
+                <AvatarFallback>{selectedStudent.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <CardTitle>{selectedStudent.name}</CardTitle>
+                <CardDescription className="flex items-center gap-2">
+                  <Badge variant="outline">{selectedStudent.id}</Badge>
+                  <Badge variant="secondary">{selectedStudent.status}</Badge>
+                </CardDescription>
               </div>
-              
-              {isAdmin && (
-                <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </Button>
-              )}
-
-              <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Register Student
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl">
-                  <DialogHeader>
-                    <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
-                  </DialogHeader>
-                  <ScrollArea className="max-h-[70vh] pr-4">
-                    {renderStudentForm(false)}
-                  </ScrollArea>
-                  <DialogFooter>
-                    <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
-                      {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Confirm Registration
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isStudentsLoading || isCoursesLoading ? (
-             <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student ID & Name</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Agreed Fee (₹)</TableHead>
-                  <TableHead>Balance Due (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredStudents.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
-                ) : (
-                  filteredStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
-                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="grid gap-0.5">
-                            <span className="font-bold text-primary">{student.id}</span>
-                            <span className="text-sm">{student.name}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{student.branch}</TableCell>
-                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                          ₹{calculateBalanceDue(student).toLocaleString()}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {isAdmin && (
-                              <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-3 border rounded-lg bg-background">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Balance Due</p>
+                <p className="text-lg font-black text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p>
+              </div>
+              <div className="p-3 border rounded-lg bg-background">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Hours</p>
+                <p className="text-lg font-black text-primary">
+                  {attendanceHistory?.reduce((sum, log) => sum + (Number(log.duration) || 0), 0) || 0} Hrs
+                </p>
+              </div>
+              <Button className="col-span-2 h-auto py-4" onClick={() => setIsProfileOpen(true)}>
+                <Eye className="mr-2 h-5 w-5" />
+                View Full My Profile & Log
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
+      {/* Main Student List (Visible to staff) */}
+      {!isStudent && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <CardTitle>Students Database</CardTitle>
+                <CardDescription>
+                  {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search ID, Name or Mobile..."
+                    className="pl-8 w-[200px] lg:w-[300px]"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                {isAdmin && (
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                )}
+
+                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                  <DialogTrigger asChild>
+                    <Button onClick={resetForm}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Register Student
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                      <DialogTitle>New Student Registration</DialogTitle>
+                      <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[70vh] pr-4">
+                      {renderStudentForm(false)}
+                    </ScrollArea>
+                    <DialogFooter>
+                      <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
+                        {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Confirm Registration
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isStudentsLoading || isCoursesLoading ? (
+               <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student ID & Name</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Agreed Fee (₹)</TableHead>
+                    <TableHead>Balance Due (₹)</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
+                              <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="grid gap-0.5">
+                              <span className="font-bold text-primary">{student.id}</span>
+                              <span className="text-sm">{student.name}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{student.branch}</TableCell>
+                        <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            ₹{calculateBalanceDue(student).toLocaleString()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {isAdmin && (
+                                <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Common Modals (Delete, Payment, Profile Sheet, Edit) */}
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent className="border-destructive/20 shadow-2xl">
           <AlertDialogHeader>
@@ -754,7 +791,7 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={isProfileOpen} onOpenChange={(open) => { setIsProfileOpen(open); if (!open && isStudent) setSelectedStudent(null); }}>
+      <Sheet open={isProfileOpen} onOpenChange={(open) => { setIsProfileOpen(open); if (!open && isStudent) { /* keep selected */ } else if (!open) setSelectedStudent(null); }}>
         <SheetContent side="right" className="sm:max-w-xl">
           <SheetHeader><SheetTitle>Student Profile Details</SheetTitle></SheetHeader>
           {selectedStudent && (
