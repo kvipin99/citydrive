@@ -10,22 +10,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where, orderBy } from "firebase/firestore";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock, BookOpen, Clock, FileText, Wallet, Tag } from "lucide-react";
+import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
-import { format } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -67,16 +64,25 @@ export default function StudentsPage() {
   const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
 
+  // Redirect or hide content for students as they should use the Dashboard/Attendance pages
+  if (isStudent) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center text-center">
+        <div className="max-w-md space-y-4">
+          <h2 className="text-2xl font-bold">Access Restricted</h2>
+          <p className="text-muted-foreground">The student list is for management staff only. Please check your Dashboard for training details.</p>
+        </div>
+      </div>
+    );
+  }
+
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isStudent) {
-      return query(collection(db, 'students'), where('userId', '==', user.uid));
-    }
     if (isAdmin) {
       return collection(db, 'students');
     }
     return query(collection(db, 'students'), where('branch', '==', profile.branch));
-  }, [db, user, profile, isAdmin, isStudent]);
+  }, [db, user, profile, isAdmin]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -89,30 +95,10 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // If role is student, automatically select their record and open profile
-  useEffect(() => {
-    if (isStudent && students && students.length > 0 && !selectedStudent) {
-      setSelectedStudent(students[0]);
-      setIsProfileOpen(true);
-    }
-  }, [isStudent, students, selectedStudent]);
-
-  const attendanceHistoryQuery = useMemoFirebase(() => {
-    if (!db || !selectedStudent || !isProfileOpen) return null;
-    return query(
-      collection(db, 'attendance'), 
-      where('studentId', '==', selectedStudent.id),
-      orderBy('date', 'desc')
-    );
-  }, [db, selectedStudent, isProfileOpen]);
-
-  const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -567,168 +553,124 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Student Profile Overview Card (Visible only to students) */}
-      {isStudent && selectedStudent && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16 border-2 border-primary">
-                <AvatarImage src={selectedStudent.photoUrl} />
-                <AvatarFallback>{selectedStudent.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div>
-                <CardTitle>{selectedStudent.name}</CardTitle>
-                <CardDescription className="flex items-center gap-2">
-                  <Badge variant="outline">{selectedStudent.id}</Badge>
-                  <Badge variant="secondary">{selectedStudent.status}</Badge>
-                </CardDescription>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Students Database</CardTitle>
+              <CardDescription>
+                {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-3 border rounded-lg bg-background">
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Balance Due</p>
-                <p className="text-lg font-black text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search ID, Name or Mobile..."
+                  className="pl-8 w-[200px] lg:w-[300px]"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-              <div className="p-3 border rounded-lg bg-background">
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Hours</p>
-                <p className="text-lg font-black text-primary">
-                  {attendanceHistory?.reduce((sum, log) => sum + (Number(log.duration) || 0), 0) || 0} Hrs
-                </p>
-              </div>
-              <Button className="col-span-2 h-auto py-4" onClick={() => setIsProfileOpen(true)}>
-                <Eye className="mr-2 h-5 w-5" />
-                View Full My Profile & Log
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+              )}
 
-      {/* Main Student List (Visible to staff) */}
-      {!isStudent && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <CardTitle>Students Database</CardTitle>
-                <CardDescription>
-                  {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
-                </CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search ID, Name or Mobile..."
-                    className="pl-8 w-[200px] lg:w-[300px]"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                
-                {isAdmin && (
-                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export CSV
+              <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                <DialogTrigger asChild>
+                  <Button onClick={resetForm}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Register Student
                   </Button>
-                )}
-
-                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={resetForm}>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Register Student
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl">
+                  <DialogHeader>
+                    <DialogTitle>New Student Registration</DialogTitle>
+                    <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[70vh] pr-4">
+                    {renderStudentForm(false)}
+                  </ScrollArea>
+                  <DialogFooter>
+                    <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
+                      {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Confirm Registration
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl">
-                    <DialogHeader>
-                      <DialogTitle>New Student Registration</DialogTitle>
-                      <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
-                    </DialogHeader>
-                    <ScrollArea className="max-h-[70vh] pr-4">
-                      {renderStudentForm(false)}
-                    </ScrollArea>
-                    <DialogFooter>
-                      <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
-                        {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Confirm Registration
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
-          </CardHeader>
-          <CardContent>
-            {isStudentsLoading || isCoursesLoading ? (
-               <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student ID & Name</TableHead>
-                    <TableHead>Branch</TableHead>
-                    <TableHead>Agreed Fee (₹)</TableHead>
-                    <TableHead>Balance Due (₹)</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStudents.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
-                  ) : (
-                    filteredStudents.map((student) => (
-                      <TableRow key={student.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
-                              <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="grid gap-0.5">
-                              <span className="font-bold text-primary">{student.id}</span>
-                              <span className="text-sm">{student.name}</span>
-                            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isStudentsLoading || isCoursesLoading ? (
+             <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student ID & Name</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Agreed Fee (₹)</TableHead>
+                  <TableHead>Balance Due (₹)</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                ) : (
+                  filteredStudents.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
+                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="grid gap-0.5">
+                            <span className="font-bold text-primary">{student.id}</span>
+                            <span className="text-sm">{student.name}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>{student.branch}</TableCell>
-                        <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                            ₹{calculateBalanceDue(student).toLocaleString()}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {isAdmin && (
-                                <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
-                                  <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{student.branch}</TableCell>
+                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                          ₹{calculateBalanceDue(student).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {isAdmin && (
+                              <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Common Modals (Delete, Payment, Profile Sheet, Edit) */}
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent className="border-destructive/20 shadow-2xl">
           <AlertDialogHeader>
@@ -739,11 +681,6 @@ export default function StudentsPage() {
             <AlertDialogDescription className="text-base">
               This action will permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.
               <br/><br/>
-              <span className="font-bold block mb-1">Impact:</span>
-              - Profile record removed.<br/>
-              - All associated payment history wiped.<br/>
-              - System login account deactivated.<br/>
-              <br/>
               <span className="text-destructive font-black uppercase tracking-tighter">This action cannot be undone.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -790,163 +727,6 @@ export default function StudentsPage() {
           <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Sheet open={isProfileOpen} onOpenChange={(open) => { setIsProfileOpen(open); if (!open && isStudent) { /* keep selected */ } else if (!open) setSelectedStudent(null); }}>
-        <SheetContent side="right" className="sm:max-w-xl">
-          <SheetHeader><SheetTitle>Student Profile Details</SheetTitle></SheetHeader>
-          {selectedStudent && (
-             <ScrollArea className="h-full mt-6 pr-4">
-               <div className="space-y-6 pb-20">
-                 <div className="flex flex-col items-center text-center">
-                    <Avatar className="h-32 w-32 border-4 border-primary/20 mb-4">
-                      <AvatarImage src={selectedStudent.photoUrl || undefined} alt={selectedStudent.name} />
-                      <AvatarFallback className="text-2xl">{selectedStudent.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
-                    <Badge variant="outline" className="mt-1 font-mono">{selectedStudent.id}</Badge>
-                    <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                      <Badge variant="secondary" className="capitalize">{selectedStudent.status}</Badge>
-                      <Badge variant="outline" className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedStudent.branch}</Badge>
-                    </div>
-                 </div>
-
-                 <Separator />
-
-                 <section className="space-y-3">
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><User className="h-4 w-4" /> Personal Information</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium flex items-center gap-1.5"><Phone className="h-3 w-3" /> {selectedStudent.phone}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Parent/Guardian</p><p className="font-medium">{selectedStudent.parentName || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Aadhar</p><p className="font-medium">{selectedStudent.aadharNo || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Email</p><p className="font-medium flex items-center gap-1.5"><Mail className="h-3 w-3" /> {selectedStudent.email || 'N/A'}</p></div>
-                    </div>
-                    <div className="space-y-1"><p className="text-xs text-muted-foreground">Address</p><p className="font-medium text-xs leading-relaxed">{selectedStudent.address || 'N/A'}</p></div>
-                 </section>
-
-                 <Separator />
-
-                 <section className="space-y-3">
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><FileText className="h-4 w-4" /> Academic & License Details</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Online App No.</p><p className="font-mono text-xs">{selectedStudent.onlineAppNo || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Registration Date</p><p className="font-medium">{selectedStudent.registrationDate}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Learners Date</p><p className="font-medium">{selectedStudent.learnersDate || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Test Date</p><p className="font-medium">{selectedStudent.testDate || 'N/A'}</p></div>
-                    </div>
-                    {!isStudent && (
-                      <div className="space-y-1 p-3 rounded-lg border bg-muted/30">
-                        <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Staff Remarks</p>
-                        <p className="text-xs italic mt-1">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
-                      </div>
-                    )}
-                 </section>
-
-                 <Separator />
-
-                 <section className="space-y-3">
-                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><BookOpen className="h-4 w-4" /> Course Enrollment & Fees</h3>
-                    <div className="space-y-2">
-                      {selectedStudent.courses?.map((courseName, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-sm p-2 rounded-md bg-muted/20 border border-muted">
-                          <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> {courseName}</span>
-                          <span className="font-medium">₹{(coursePriceMap[courseName] || 0).toLocaleString()}</span>
-                        </div>
-                      ))}
-                      {(!selectedStudent.courses || selectedStudent.courses.length === 0) && (
-                        <p className="text-xs text-muted-foreground italic">No courses enrolled.</p>
-                      )}
-                    </div>
-
-                    <div className="mt-4 p-4 border rounded-xl bg-primary/5 space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Subtotal Fee</span>
-                        <span className="font-medium">₹{(selectedStudent.courses?.reduce((sum, c) => sum + (coursePriceMap[c] || 0), 0) || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm text-green-600">
-                        <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Admin Discount</span>
-                        <span className="font-bold">-₹{(selectedStudent.discount || 0).toLocaleString()}</span>
-                      </div>
-                      <Separator className="my-2" />
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold flex items-center gap-1.5"><Wallet className="h-4 w-4" /> Net Payable</span>
-                        <span className="text-xl font-black text-primary">₹{(selectedStudent.amount || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-destructive pt-1">
-                        <span className="text-xs font-bold uppercase tracking-tight">Remaining Balance</span>
-                        <span className="text-lg font-black underline decoration-2">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span>
-                      </div>
-                    </div>
-                 </section>
-
-                 <Separator />
-
-                 <section className="space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Transaction History</h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-muted/30">
-                          <TableRow>
-                            <TableHead className="text-[10px] uppercase">Date</TableHead>
-                            <TableHead className="text-[10px] uppercase">Method</TableHead>
-                            <TableHead className="text-[10px] uppercase text-right">Amount (₹)</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {!selectedStudent.payments || selectedStudent.payments.length === 0 ? (
-                            <TableRow><TableCell colSpan={3} className="text-center py-4 text-xs text-muted-foreground italic">No payments recorded yet.</TableCell></TableRow>
-                          ) : (
-                            selectedStudent.payments.map((p, idx) => (
-                              <TableRow key={p.id || idx} className="text-xs hover:bg-muted/10">
-                                <TableCell>
-                                  <div className="grid">
-                                    <span>{p.date ? format(new Date(p.date), 'dd MMM yyyy') : 'N/A'}</span>
-                                    <span className="text-[9px] text-muted-foreground">#{p.receiptNo}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell><Badge variant="outline" className="text-[9px]">{p.method}</Badge></TableCell>
-                                <TableCell className="font-bold text-green-600 text-right">₹{p.amount?.toLocaleString()}</TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                 </section>
-
-                 <Separator />
-
-                 <section className="space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4" /> Training Attendance Log</h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-muted/30">
-                          <TableRow>
-                            <TableHead className="text-[10px] uppercase">Date</TableHead>
-                            <TableHead className="text-[10px] uppercase">Session Timing</TableHead>
-                            <TableHead className="text-[10px] uppercase text-right">Hrs</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {!attendanceHistory || attendanceHistory.length === 0 ? (
-                            <TableRow><TableCell colSpan={3} className="text-center py-8 text-xs text-muted-foreground italic">No training sessions logged.</TableCell></TableRow>
-                          ) : (
-                            attendanceHistory.map((log) => (
-                              <TableRow key={log.id} className="text-xs hover:bg-muted/10">
-                                <TableCell className="font-medium">{log.date ? format(new Date(log.date), 'dd MMM') : 'N/A'}</TableCell>
-                                <TableCell>{log.startTime} - {log.endTime}</TableCell>
-                                <TableCell className="text-right font-bold text-primary">{log.duration}h</TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                 </section>
-               </div>
-             </ScrollArea>
-          )}
-        </SheetContent>
-      </Sheet>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl">

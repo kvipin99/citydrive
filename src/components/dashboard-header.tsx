@@ -1,3 +1,4 @@
+
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -12,8 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { PlaceHolderImages } from "@/lib/placeholder-images";
-import { LogOut, User, Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
@@ -21,7 +21,6 @@ import { doc } from "firebase/firestore";
 import Link from "next/link";
 
 export default function DashboardHeader() {
-  const avatarPlaceholder = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
   const pathname = usePathname();
   const { user } = useUser();
   const auth = useAuth();
@@ -60,6 +59,8 @@ export default function DashboardHeader() {
         return 'Backup';
       case '/dashboard/settings':
         return 'Settings';
+      case '/dashboard/attendance':
+        return 'Attendance';
       default:
         return 'Dashboard';
     }
@@ -96,19 +97,13 @@ export default function DashboardHeader() {
                   </p>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     {profile?.role === 'Admin' ? 'Administrator' : 
-                     profile?.role === 'BranchManager' ? 'Branch Manager' : 'Staff User'}
+                     profile?.role === 'BranchManager' ? 'Branch Manager' : profile?.role === 'Student' ? 'Student' : 'Staff User'}
                   </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/dashboard/settings?tab=profile" className="flex items-center w-full">
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/dashboard/settings?tab=general" className="flex items-center w-full">
+                <Link href="/dashboard/settings" className="flex items-center w-full">
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </Link>

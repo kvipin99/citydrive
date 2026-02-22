@@ -14,16 +14,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function hasRole(role) {
-      return isSignedIn() && getProfile().role == role;
-    }
-
     function isAdmin() {
-      return hasRole('Admin');
+      return isSignedIn() && getProfile().role == 'Admin';
     }
 
     function isBranchManager() {
-      return hasRole('BranchManager');
+      return isSignedIn() && getProfile().role == 'BranchManager';
     }
 
     function isStaff() {
@@ -31,7 +27,7 @@ service cloud.firestore {
     }
 
     function isStudent() {
-      return hasRole('Student');
+      return isSignedIn() && getProfile().role == 'Student';
     }
 
     // --- COLLECTION RULES ---
@@ -49,56 +45,51 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Staff can list students. Students can list to find their own record.
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || isStudent());
+      // Allow listing if staff or if student is querying their own record
+      allow list: if isSignedIn();
       
       // Allow getting specific student record.
-      // 1. Admins see all.
-      // 2. Managers see branch students.
-      // 3. Students see their own record (matched by userId field or document ID).
       allow get: if isSignedIn() && (
-        isAdmin() || 
-        (isBranchManager() && (resource == null || resource.data.branch == getProfile().branch)) || 
-        (resource != null && resource.data.userId == request.auth.uid) ||
-        (request.auth.uid == studentId)
+        isStaff() || 
+        resource.data.userId == request.auth.uid ||
+        request.auth.uid == studentId
       );
       
-      allow create, update: if isAdmin() || isBranchManager();
+      allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
 
     match /instructors/{instructorId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager();
+      allow write: if isStaff();
     }
 
     match /vehicles/{vehicleId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager();
+      allow write: if isStaff();
     }
 
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager() || hasRole('Instructor');
+      allow write: if isStaff() || getProfile().role == 'Instructor';
     }
 
     match /attendance/{attendanceId} {
-      // Staff and Students can list (students should filter by their ID in the query).
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Instructor') || isStudent());
+      allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager();
+      allow write: if isStaff();
     }
 
     match /payments/{paymentId} {
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant') || isStudent());
+      allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
+      allow write: if isStaff() || getProfile().role == 'Accountant';
     }
 
     match /expenses/{expenseId} {
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant'));
+      allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
+      allow write: if isStaff() || getProfile().role == 'Accountant';
     }
 
     match /backupMetadata/{backupId} {
