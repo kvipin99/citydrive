@@ -52,6 +52,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    /** Verifies if a studentId belongs to the authenticated user. */
+    function isStudentOwner(studentId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/students/$(studentId)) && 
+             get(/databases/$(database)/documents/students/$(studentId)).data.userId == request.auth.uid;
+    }
+
     // --- COLLECTION RULES ---
 
     /** Users: Owners and Staff manage profiles. Admins only delete. */
@@ -83,19 +89,19 @@ service cloud.firestore {
 
     /** Classes: Staff manage; Students see assigned. */
     match /classes/{classId} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.studentId == request.auth.uid);
+      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
       allow write: if isStaff();
     }
 
     /** Attendance: Staff manage; Students see own logs. */
     match /attendance/{id} {
-      allow read: if isStaff() || (isSignedIn() && (resource == null || resource.data.studentId == request.auth.uid));
+      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
       allow write: if isStaff();
     }
 
     /** Payments: Staff manage; Students see own history. */
     match /payments/{paymentId} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.studentId == request.auth.uid);
+      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
       allow write: if isAdmin() || isBranchManager();
     }
 

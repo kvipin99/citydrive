@@ -98,6 +98,7 @@ export default function InstructorsPage() {
         id: uid,
         email: email,
         role: 'Instructor',
+        staffId: staffId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         createdBy: user?.uid

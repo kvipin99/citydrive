@@ -207,6 +207,7 @@ export default function StudentsPage() {
         id: uid,
         email: email,
         role: 'Student',
+        studentId: studentId,
         branch: formData.branch,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
