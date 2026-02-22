@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -28,7 +29,9 @@
         "status": { "type": "string" },
         "amount": { "type": "number" },
         "payments": { "type": "array" },
-        "studentUid": { "type": "string" }
+        "studentUid": { "type": "string" },
+        "specialCourseName": { "type": "string", "description": "Custom name for 'Others' course selection." },
+        "specialCourseFee": { "type": "number", "description": "Custom fee for 'Others' course selection." }
       }
     },
     "Instructor": {

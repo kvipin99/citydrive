@@ -50,6 +50,8 @@ export interface Student {
   status: 'Active' | 'Inactive' | 'Completed' | 'On Hold';
   registrationDate: string;
   payments: any[];
+  specialCourseName?: string;
+  specialCourseFee?: number;
 }
 
 export default function StudentsPage() {
@@ -126,7 +128,9 @@ export default function StudentsPage() {
     testDate: "",
     remarks: "",
     photoUrl: "",
-    registrationDate: format(new Date(), 'yyyy-MM-dd')
+    registrationDate: format(new Date(), 'yyyy-MM-dd'),
+    specialCourseName: "",
+    specialCourseFee: 0
   });
 
   useEffect(() => {
@@ -169,9 +173,9 @@ export default function StudentsPage() {
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   };
 
-  const calculateFees = (courses: string[], discount: number) => {
+  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
-    return Math.max(0, baseAmount - (discount || 0));
+    return Math.max(0, baseAmount + specialFee - (discount || 0));
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,7 +236,7 @@ export default function StudentsPage() {
     setIsSubmitting(true);
     const branchName = formData.branch!;
     const studentId = generateBranchStudentId(branchName);
-    const amount = calculateFees(formData.courses || [], formData.discount || 0);
+    const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
       toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
@@ -320,7 +324,9 @@ export default function StudentsPage() {
       testDate: "",
       remarks: "",
       photoUrl: "",
-      registrationDate: format(new Date(), 'yyyy-MM-dd')
+      registrationDate: format(new Date(), 'yyyy-MM-dd'),
+      specialCourseName: "",
+      specialCourseFee: 0
     });
   };
 
@@ -332,8 +338,17 @@ export default function StudentsPage() {
     } else {
       newCourses = [...currentCourses, course];
     }
-    const newAmount = calculateFees(newCourses, formData.discount || 0);
-    setFormData({ ...formData, courses: newCourses, amount: newAmount });
+    
+    const hasOthers = newCourses.includes('Others');
+    const specialFee = hasOthers ? (formData.specialCourseFee || 0) : 0;
+
+    const newAmount = calculateFees(newCourses, formData.discount || 0, specialFee);
+    setFormData({ 
+      ...formData, 
+      courses: newCourses, 
+      amount: newAmount,
+      ...(!hasOthers ? { specialCourseName: '', specialCourseFee: 0 } : {})
+    });
   };
 
   const calculateBalanceDue = (student: Student) => {
@@ -778,7 +793,44 @@ function StudentForm({
               <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
             </div>
           ))}
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id={`${isEdit ? 'edit' : 'add'}-course-others`} 
+              checked={formData.courses?.includes('Others')} 
+              onCheckedChange={() => handleCourseToggle('Others')} 
+            />
+            <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-others`} className="text-sm cursor-pointer font-bold text-primary">Others / Custom Batch</Label>
+          </div>
         </div>
+
+        {formData.courses?.includes('Others') && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-primary/10 animate-in fade-in slide-in-from-top-2">
+            <div className="grid gap-2">
+              <Label className="text-xs">Custom Course Name</Label>
+              <Input 
+                placeholder="e.g. Special Weekend Batch" 
+                value={formData.specialCourseName || ''} 
+                onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-xs">Custom Fee (₹)</Label>
+              <Input 
+                type="number"
+                placeholder="0"
+                value={formData.specialCourseFee || ''} 
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setFormData({
+                    ...formData, 
+                    specialCourseFee: val,
+                    amount: calculateFees(formData.courses || [], formData.discount || 0, val)
+                  });
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -793,7 +845,7 @@ function StudentForm({
             className={!isAdmin ? "bg-muted cursor-not-allowed" : ""}
             onChange={(e) => {
                const disc = Number(e.target.value);
-               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc)});
+               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
             }} 
           />
           {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Only Administrators can modify discounts.</p>}
@@ -920,7 +972,9 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
           <div className="space-y-2">
             {student.courses?.map((c: string, i: number) => (
               <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
-                <span className="font-medium text-sm">{c}</span>
+                <span className="font-medium text-sm">
+                  {c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}
+                </span>
                 <Badge variant="outline">Enrolled</Badge>
               </div>
             ))}
