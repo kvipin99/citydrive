@@ -198,6 +198,23 @@
         "title",
         "questions"
       ]
+    },
+    "QuizAttempt": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QuizAttempt",
+      "type": "object",
+      "description": "Records of student quiz performances.",
+      "properties": {
+        "id": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "userName": { "type": "string" },
+        "quizId": { "type": "string" },
+        "quizTitle": { "type": "string" },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "completedAt": { "type": "object" }
+      }
     }
   },
   "auth": {
@@ -246,7 +263,7 @@
       {
         "path": "/quizAttempts/{id}",
         "definition": {
-          "description": "Records of student quiz performances."
+          "entityName": "QuizAttempt"
         }
       },
       {

@@ -38,20 +38,13 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      // Staff includes Admin, BranchManager, and Instructor
-      return isAdmin() || isBranchManager() || isInstructor();
+      // Optimized check for all staff roles
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().role in ['Admin', 'BranchManager', 'Instructor'];
     }
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
-    }
-
-    /** 
-     * Verifies if a record belongs to the student user by comparing UIDs.
-     * This is highly efficient for list queries.
-     */
-    function isStudentRecord(data) {
-      return isSignedIn() && data.studentUid == request.auth.uid;
     }
 
     // --- COLLECTION RULES ---
@@ -64,14 +57,12 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Prioritize UID check for efficient list queries
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isStaff();
+      allow read: if (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid)) || isStaff();
       allow write: if isStaff();
     }
 
     match /attendance/{id} {
-      // Prioritize studentUid check for efficient list queries
-      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid) || isStaff();
+      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
       allow write: if isStaff();
     }
 
@@ -81,8 +72,7 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      // Prioritize studentUid check for efficient list queries
-      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid) || isStaff();
+      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
       allow write: if isAdmin() || isBranchManager();
     }
 
@@ -106,8 +96,8 @@ service cloud.firestore {
     }
 
     match /quizAttempts/{id} {
-      // Prioritize userId check for efficient list queries
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isStaff();
+      // Use studentUid for efficient list queries
+      allow read: if (isSignedIn() && (resource == null || resource.data.studentUid == request.auth.uid)) || isStaff();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }

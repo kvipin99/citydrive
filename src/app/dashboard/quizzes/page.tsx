@@ -47,10 +47,10 @@ export default function QuizzesPage() {
   const { data: quizzes, isLoading: isQuizzesLoading } = useCollection<Quiz>(quizzesQuery);
 
   const attemptsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || !profile) return null; // Ensure profile is loaded before querying
     if (isAdmin) return query(collection(db, "quizAttempts"), orderBy("completedAt", "desc"));
-    return query(collection(db, "quizAttempts"), where("userId", "==", user.uid), orderBy("completedAt", "desc"));
-  }, [db, user, isAdmin]);
+    return query(collection(db, "quizAttempts"), where("studentUid", "==", user.uid), orderBy("completedAt", "desc"));
+  }, [db, user, profile, isAdmin]);
   const { data: attempts } = useCollection(attemptsQuery);
 
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
@@ -276,7 +276,7 @@ function QuizPlayer({ quiz, onComplete, user, db }: { quiz: Quiz, onComplete: ()
 
     setDocumentNonBlocking(attemptRef, {
       id: attemptId,
-      userId: user.uid,
+      studentUid: user.uid, // Use studentUid for consistent security rules
       userName: user.email?.split('@')[0] || 'Unknown',
       quizId: quiz.id,
       quizTitle: quiz.title,
