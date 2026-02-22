@@ -10,8 +10,10 @@ import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from "@
 import { doc, collection, query, where } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Calendar, Clock, CreditCard, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BookOpen, Calendar, Clock, CreditCard, Wallet, CalendarCheck, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -41,14 +43,23 @@ export default function DashboardPage() {
   if (isStaff) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Staff Overview</h2>
             <p className="text-muted-foreground text-sm">Welcome! Here is your agenda and fleet status for today.</p>
           </div>
-          <Badge variant="secondary" className="px-3 py-1 font-bold">
-            {profile?.branch || 'Operational'}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="px-3 py-1 font-bold">
+              {profile?.branch || 'Operational'}
+            </Badge>
+            <Button asChild className="shadow-sm">
+              <Link href="/dashboard/attendance">
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Record Attendance
+                <ArrowRight className="ml-2 h-4 w-4 opacity-50" />
+              </Link>
+            </Button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
