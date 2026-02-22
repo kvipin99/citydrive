@@ -482,11 +482,20 @@ export default function StudentsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label>Discount (₹)</Label>
-          <Input type="number" value={formData.discount} onChange={(e) => {
-             const disc = Number(e.target.value);
-             setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
-          }} />
+          <Label className={!isAdmin ? "text-muted-foreground flex items-center gap-1" : ""}>
+            Discount (₹) {!isAdmin && <Lock className="h-3 w-3" />}
+          </Label>
+          <Input 
+            type="number" 
+            value={formData.discount} 
+            disabled={!isAdmin}
+            className={!isAdmin ? "bg-muted cursor-not-allowed" : ""}
+            onChange={(e) => {
+               const disc = Number(e.target.value);
+               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
+            }} 
+          />
+          {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Only Administrators can modify discounts.</p>}
         </div>
         <div className="grid gap-2">
           <Label className="text-primary font-bold">Total Payable Amount</Label>
