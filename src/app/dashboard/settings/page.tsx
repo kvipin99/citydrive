@@ -38,6 +38,7 @@ function SettingsContent() {
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
   const isAdmin = profile?.role === 'Admin';
+  const isStudent = profile?.role === 'Student';
 
   useEffect(() => {
     const tabFromUrl = searchParams.get("tab");
@@ -368,29 +369,34 @@ function SettingsContent() {
             <Card className="md:col-span-3">
               <CardHeader>
                 <CardTitle>Account Details</CardTitle>
-                <CardDescription>Update your display name and security credentials.</CardDescription>
+                <CardDescription>
+                  {isStudent ? 'Manage your security credentials.' : 'Update your display name and security credentials.'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="display-name">Display Name</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          id="display-name" 
-                          placeholder="Enter your full name"
-                          className="pl-9"
-                          value={displayName}
-                          onChange={(e) => setDisplayName(e.target.value)}
-                        />
+                {!isStudent && (
+                  <>
+                    <div className="space-y-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="display-name">Display Name</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              id="display-name" 
+                              placeholder="Enter your full name"
+                              className="pl-9"
+                              value={displayName}
+                              onChange={(e) => setDisplayName(e.target.value)}
+                            />
+                          </div>
+                          <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
+                        </div>
                       </div>
-                      <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
                     </div>
-                  </div>
-                </div>
-
-                <Separator />
+                    <Separator />
+                  </>
+                )}
 
                 <div className="space-y-4">
                   <Label>Security</Label>
