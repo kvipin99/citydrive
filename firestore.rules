@@ -35,7 +35,12 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isAdmin();
       // Allow Branch Managers to create student/staff profiles during registration
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
+      // and allow users to update their own profiles (like avatars)
+      allow create, update: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isAdmin() || 
+        isBranchManager()
+      );
       allow delete: if isAdmin();
     }
 

@@ -47,10 +47,9 @@ export default function LoginPage() {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const uid = userCredential.user.uid;
           
-          // Map Branch1 to "Branch 1" to match student records
-          const formattedBranch = userId.startsWith('Branch') 
-            ? `Branch ${userId.replace('Branch', '')}` 
-            : 'HeadOffice';
+          // Uniform branch naming: "Branch 1", "Branch 2", etc.
+          const branchNum = userId.match(/\d+/);
+          const formattedBranch = branchNum ? `Branch ${branchNum[0]}` : 'HeadOffice';
 
           await setDoc(doc(db, 'users', uid), {
             id: uid,

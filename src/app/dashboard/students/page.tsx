@@ -95,7 +95,6 @@ export default function StudentsPage() {
     photoUrl: ""
   });
 
-  // Effect to sync branch when profile is loaded or dialog is opened
   useEffect(() => {
     if (profile && isAddDialogOpen) {
       const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profile.branch || "Branch 1");
@@ -117,15 +116,12 @@ export default function StudentsPage() {
     ) || [];
   }, [students, searchQuery]);
 
-  // Generate Student ID: B<BranchNumber><Sequence> (e.g. B10001)
   const generateBranchStudentId = (branchName: string) => {
-    const branchNumber = branchName.split(' ')[1] || "1";
+    const numMatch = branchName.match(/\d+/);
+    const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    // We need to check existing students for this branch to continue the series
-    // If user is Admin, they have all students. If user is Manager, they have their branch's students.
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
-    
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
         const seqPart = s.id.slice(prefix.length);
@@ -135,7 +131,6 @@ export default function StudentsPage() {
       return max;
     }, 0);
     
-    // Start from 0001 (e.g. B10001)
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   };
@@ -205,7 +200,7 @@ export default function StudentsPage() {
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
-      toast({ title: "Registering Student", description: `Generating ID ${studentId} for ${branchName}...` });
+      toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
       const authUid = await createStudentAuth(studentId);
       
       const newStudentData = {
@@ -225,7 +220,7 @@ export default function StudentsPage() {
 
       setIsAddDialogOpen(false);
       resetForm();
-      toast({ title: "Success", description: `Student ${studentId} registered at ${branchName}.` });
+      toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed", description: error.message });
     } finally {
@@ -249,32 +244,14 @@ export default function StudentsPage() {
     if (!selectedStudent || !isAdmin) return;
 
     setIsSubmitting(true);
-    toast({ title: "Removing Student", description: "Cleaning up profile, payments, and login..." });
+    toast({ title: "Removing Student", description: "Cleaning up profile and payments..." });
 
     try {
-      // 1. Scrub Payments
       const paymentsCol = collection(db, 'payments');
       const q = query(paymentsCol, where('studentId', '==', selectedStudent.id));
       const paymentSnaps = await getDocs(q);
       paymentSnaps.forEach((p) => deleteDocumentNonBlocking(doc(db, 'payments', p.id)));
 
-      // 2. Auth Cleanup Attempt
-      if (selectedStudent.id) {
-        const studentEmail = `${selectedStudent.id.toLowerCase()}@citydriving.in`;
-        const secondaryAppName = `cleanup-${selectedStudent.id}-${Date.now()}`;
-        const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-        const secondaryAuth = getAuth(secondaryApp);
-        try {
-          const cred = await signInWithEmailAndPassword(secondaryAuth, studentEmail, "City123");
-          await deleteUser(cred.user);
-        } catch (authErr) {
-          console.warn("Auth cleanup failed (possibly already deleted or password changed):", authErr);
-        } finally {
-          await deleteApp(secondaryApp);
-        }
-      }
-
-      // 3. Primary Records removal
       deleteDocumentNonBlocking(doc(db, 'students', selectedStudent.id));
       if (selectedStudent.userId) {
         deleteDocumentNonBlocking(doc(db, 'users', selectedStudent.userId));
@@ -408,6 +385,125 @@ export default function StudentsPage() {
     toast({ title: "Export Successful" });
   };
 
+  const renderStudentForm = (isEdit: boolean = false) => (
+    <div className="grid gap-6 py-4">
+      <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
+        <Label className="font-bold">Student Photo</Label>
+        <div className="relative">
+          <Avatar className="h-32 w-32 border-4 border-primary/20">
+            <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
+            <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+          </Avatar>
+          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => isEdit ? editPhotoInputRef.current?.click() : photoInputRef.current?.click()}>
+            <PlusCircle className="h-5 w-5" />
+          </Button>
+          <input type="file" ref={isEdit ? editPhotoInputRef : photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid gap-2">
+          <Label className="text-primary font-bold flex items-center gap-1.5">
+            Branch Assignment {!isAdmin && <Lock className="h-3 w-3" />}
+          </Label>
+          <Select 
+            value={formData.branch} 
+            onValueChange={(v) => setFormData({...formData, branch: v as any})} 
+            disabled={!isAdmin}
+          >
+            <SelectTrigger className={`border-primary/50 ${!isAdmin ? 'bg-muted cursor-not-allowed' : ''}`}>
+              <SelectValue placeholder="Select Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Full Name</Label>
+          <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Mobile No.</Label>
+          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid gap-2">
+          <Label>Status</Label>
+          <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Inactive">Inactive</SelectItem>
+              <SelectItem value="Completed">Completed</SelectItem>
+              <SelectItem value="On Hold">On Hold</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Parent/Guardian Name</Label>
+          <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Aadhar No.</Label>
+          <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label>Online App No.</Label>
+          <Input placeholder="APP-12345" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Learners License Date</Label>
+          <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Address</Label>
+        <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
+      </div>
+
+      <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
+        <Label className="font-bold">Courses Selection</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {masterCourses?.map(course => (
+            <div key={course.id} className="flex items-center space-x-2">
+              <Checkbox id={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
+              <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label>Discount (₹)</Label>
+          <Input type="number" value={formData.discount} onChange={(e) => {
+             const disc = Number(e.target.value);
+             setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
+          }} />
+        </div>
+        <div className="grid gap-2">
+          <Label className="text-primary font-bold">Total Payable Amount</Label>
+          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold flex items-center justify-between">
+            <span>₹{formData.amount?.toLocaleString() || '0'}</span>
+            {!isEdit && <span className="text-[10px] text-muted-foreground uppercase">Next ID: {formData.branch ? generateBranchStudentId(formData.branch) : '...'}</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Remarks</Label>
+        <Textarea placeholder="Any specific notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <Card>
@@ -450,97 +546,7 @@ export default function StudentsPage() {
                     <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
-                    <div className="grid gap-6 py-4">
-                      <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
-                        <Label className="font-bold">Student Photo</Label>
-                        <div className="relative">
-                          <Avatar className="h-32 w-32 border-4 border-primary/20">
-                            <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
-                            <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
-                          </Avatar>
-                          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => photoInputRef.current?.click()}>
-                            <PlusCircle className="h-5 w-5" />
-                          </Button>
-                          <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="grid gap-2">
-                          <Label className="text-primary font-bold flex items-center gap-1.5">
-                            Branch Assignment {!isAdmin && <Lock className="h-3 w-3" />}
-                          </Label>
-                          <Select 
-                            value={formData.branch} 
-                            onValueChange={(v) => setFormData({...formData, branch: v as any})} 
-                            disabled={!isAdmin}
-                          >
-                            <SelectTrigger className={`border-primary/50 ${!isAdmin ? 'bg-muted cursor-not-allowed' : ''}`}>
-                              <SelectValue placeholder="Select Branch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          {!isAdmin && (
-                            <p className="text-[10px] text-primary font-medium italic">Fixed: Linked to your branch account.</p>
-                          )}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Full Name</Label>
-                          <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Mobile No.</Label>
-                          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Parent/Guardian Name</Label>
-                          <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Aadhar No.</Label>
-                          <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label>Address</Label>
-                        <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
-                      </div>
-
-                      <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
-                        <Label className="font-bold">Courses Selection</Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {masterCourses?.map(course => (
-                            <div key={course.id} className="flex items-center space-x-2">
-                              <Checkbox id={`add-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
-                              <Label htmlFor={`add-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Discount (₹)</Label>
-                          <Input type="number" value={formData.discount} onChange={(e) => {
-                             const disc = Number(e.target.value);
-                             setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
-                          }} />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label className="text-primary font-bold">Total Payable Amount</Label>
-                          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold flex items-center justify-between">
-                            <span>₹{formData.amount?.toLocaleString() || '0'}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase">Next ID: {formData.branch ? generateBranchStudentId(formData.branch) : '...'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    {renderStudentForm(false)}
                   </ScrollArea>
                   <DialogFooter>
                     <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
@@ -619,7 +625,6 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Alert */}
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent className="border-destructive/20 shadow-2xl">
           <AlertDialogHeader>
@@ -704,7 +709,7 @@ export default function StudentsPage() {
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium">{selectedStudent.phone}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Parent/Guardian</p><p className="font-medium">{selectedStudent.parentName || 'N/A'}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Aadhar</p><p className="font-medium">{selectedStudent.aadharNo || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Email</p><p className="font-medium text-xs">{selectedStudent.email}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">App No.</p><p className="font-medium">{selectedStudent.onlineAppNo || 'N/A'}</p></div>
                     </div>
                  </section>
                  <Separator />
@@ -733,56 +738,11 @@ export default function StudentsPage() {
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update information, courses, and pricing.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update all student details, courses, and pricing.</DialogDescription></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
-            <div className="grid gap-6 py-4">
-              <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
-                <Label className="font-bold">Student Photo</Label>
-                <div className="relative">
-                  <Avatar className="h-32 w-32 border-4 border-primary/20">
-                    <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
-                    <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
-                  </Avatar>
-                  <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => editPhotoInputRef.current?.click()}><PlusCircle className="h-5 w-5" /></Button>
-                  <input type="file" ref={editPhotoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="grid gap-2">
-                  <Label>Branch</Label>
-                  <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})} disabled={!isAdmin}>
-                    <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
-                    <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2"><Label>Full Name</Label><Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} /></div>
-                <div className="grid gap-2">
-                  <Label>Status</Label>
-                  <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
-                <Label className="font-bold">Courses & Pricing</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {masterCourses?.map(course => (
-                    <div key={course.id} className="flex items-center space-x-2">
-                      <Checkbox id={`edit-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
-                      <Label htmlFor={`edit-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
-                  <div className="grid gap-2"><Label>Discount (₹)</Label><Input type="number" value={formData.discount} onChange={(e) => { const disc = Number(e.target.value); setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)}); }} /></div>
-                  <div className="grid gap-2"><Label className="text-primary font-bold">Total Agreed Fee (₹)</Label><Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div>
-                </div>
-              </div>
-              <div className="grid gap-2"><Label>Address</Label><Textarea value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
-            </div>
+            {renderStudentForm(true)}
           </ScrollArea>
-          <DialogFooter><Button onClick={handleUpdateStudent}>Save Changes</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
