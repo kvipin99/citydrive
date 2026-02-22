@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -36,6 +36,7 @@ export default function AttendancePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -47,7 +48,14 @@ export default function AttendancePage() {
   const isStudent = profile?.role === 'Student';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
 
-  // Fetch Students for selection - Staff see all branches
+  // Fetch Vehicles - Real-time from master list
+  const vehiclesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return collection(db, 'vehicles');
+  }, [db, user]);
+  const { data: vehicles } = useCollection(vehiclesQuery);
+
+  // Fetch Students for selection - Global view for staff
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
@@ -97,6 +105,8 @@ export default function AttendancePage() {
     const endH = parseInt(endTime.split(':')[0]);
     const duration = Math.max(0, endH - startH);
 
+    const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
+
     const record = {
       id: attendanceId,
       studentId: selectedStudent.id,
@@ -106,6 +116,8 @@ export default function AttendancePage() {
       startTime,
       endTime,
       duration,
+      vehicleId: selectedVehicleId,
+      vehicleReg: vehicle?.regNumber || 'None',
       branch: selectedStudent.branch,
       createdAt: serverTimestamp(),
       createdBy: user.uid
@@ -125,6 +137,7 @@ export default function AttendancePage() {
   const resetPopup = () => {
     setStudentSearch("");
     setSelectedStudent(null);
+    setSelectedVehicleId("");
     setStartTime("09:00");
     setEndTime("10:00");
   };
@@ -151,7 +164,7 @@ export default function AttendancePage() {
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-4">
             <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-              <Label className="text-xs font-bold px-2">DATE:</Label>
+              <Label className="text-xs font-bold px-2 text-primary">SELECT DATE:</Label>
               <Input 
                 type="date" 
                 value={selectedDate} 
@@ -170,7 +183,7 @@ export default function AttendancePage() {
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Record Student Session</DialogTitle>
-                  <DialogDescription>Select a student from any branch and log their training time.</DialogDescription>
+                  <DialogDescription>Select a student and assign a vehicle for the session.</DialogDescription>
                 </DialogHeader>
                 
                 <div className="grid gap-6 py-4">
@@ -228,6 +241,26 @@ export default function AttendancePage() {
                         <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
                           <X className="h-4 w-4" />
                         </Button>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label className="flex items-center gap-2">
+                          <Car className="h-4 w-4 text-primary" />
+                          Assigned Vehicle
+                        </Label>
+                        <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Select Vehicle" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="None">No Vehicle Assigned</SelectItem>
+                            {vehicles?.map(v => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.regNumber} ({v.brandModel})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -306,6 +339,7 @@ export default function AttendancePage() {
                 <TableRow>
                   {isStudent && <TableHead className="pl-6">Date</TableHead>}
                   {!isStudent && <TableHead className="pl-6">Student</TableHead>}
+                  <TableHead>Vehicle</TableHead>
                   <TableHead>Session Timing</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Branch</TableHead>
@@ -315,7 +349,7 @@ export default function AttendancePage() {
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isStudent ? 4 : 5} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 5 : 6} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
                         <p className="italic">No sessions logged.</p>
@@ -343,6 +377,12 @@ export default function AttendancePage() {
                           </div>
                         </TableCell>
                       )}
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                          <Car className="h-3 w-3" />
+                          {record.vehicleReg || 'None'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <Clock className="h-3.5 w-3.5 text-primary" />

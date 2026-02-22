@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -206,6 +207,8 @@
         "startTime": { "type": "string", "description": "Session start time (HH:mm)" },
         "endTime": { "type": "string", "description": "Session end time (HH:mm)" },
         "duration": { "type": "number", "description": "Duration in hours" },
+        "vehicleId": { "type": "string", "description": "ID of the vehicle used" },
+        "vehicleReg": { "type": "string", "description": "Registration number of the vehicle" },
         "branch": { "type": "string" },
         "remarks": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
