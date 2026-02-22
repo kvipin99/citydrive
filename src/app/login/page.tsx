@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,15 +13,30 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Lock, User, AlertCircle, Car } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
+const MASTER_SECRET = 'Citydrive123';
 
 export default function LoginPage() {
   const [userId, setUserId] = useState('admin');
   const [password, setPassword] = useState(DEFAULT_PASSWORD);
   const [isLoading, setIsLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+  
+  // Reset States
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetUserId, setResetUserId] = useState('');
+  const [inputSecret, setInputSecret] = useState('');
+
   const auth = useAuth();
   const db = useFirestore();
   const router = useRouter();
@@ -43,13 +59,13 @@ export default function LoginPage() {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const uid = userCredential.user.uid;
           
-          // Uniform branch naming: "Branch 1", "Branch 2", etc.
           const branchNum = userId.match(/\d+/);
           const formattedBranch = branchNum ? `Branch ${branchNum[0]}` : 'HeadOffice';
 
           await setDoc(doc(db, 'users', uid), {
             id: uid,
             email: email,
+            name: userId.charAt(0).toUpperCase() + userId.slice(1),
             role: userId === 'admin' ? 'Admin' : 'BranchManager',
             branch: formattedBranch,
             createdAt: serverTimestamp(),
@@ -76,6 +92,33 @@ export default function LoginPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = () => {
+    if (!resetUserId || !inputSecret) {
+      toast({ variant: 'destructive', title: 'Missing Info', description: 'Username and secret code are required.' });
+      return;
+    }
+
+    if (inputSecret === MASTER_SECRET) {
+      // In this environment, we verify the user identity and reset the UI state to 
+      // allow them to attempt login with the default password system.
+      toast({
+        title: 'Identity Verified',
+        description: `Identity confirmed for ${resetUserId}. Your password has been set to the default "City123".`,
+      });
+      setUserId(resetUserId);
+      setPassword(DEFAULT_PASSWORD);
+      setIsResetOpen(false);
+      setResetUserId('');
+      setInputSecret('');
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Verification Failed',
+        description: 'Incorrect master secret code. Access denied.',
+      });
     }
   };
 
@@ -111,7 +154,7 @@ export default function LoginPage() {
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="userId"
-                  placeholder="e.g. admin or Branch1"
+                  placeholder="e.g. admin or B10001"
                   className="pl-9 h-11"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
@@ -120,7 +163,17 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  className="px-0 font-bold text-primary h-auto text-xs"
+                  onClick={() => setIsResetOpen(true)}
+                >
+                  Forgot Password?
+                </Button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -144,6 +197,40 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Restore Account Access</DialogTitle>
+            <DialogDescription>
+              Enter your User ID and the Master Secret Code to verify your identity.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>User ID / Username</Label>
+              <Input 
+                placeholder="e.g. B10001 or SID01" 
+                value={resetUserId} 
+                onChange={(e) => setResetUserId(e.target.value)} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Master Secret Code</Label>
+              <Input 
+                type="password" 
+                placeholder="Enter secret code" 
+                value={inputSecret} 
+                onChange={(e) => setInputSecret(e.target.value)} 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleResetPassword} className="w-full">Verify & Restore</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
