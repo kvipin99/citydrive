@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -204,6 +203,9 @@
         "studentName": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "status": { "type": "string", "enum": ["Present", "Absent"] },
+        "startTime": { "type": "string", "description": "Session start time (HH:mm)" },
+        "endTime": { "type": "string", "description": "Session end time (HH:mm)" },
+        "duration": { "type": "number", "description": "Duration in hours" },
         "branch": { "type": "string" },
         "remarks": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
