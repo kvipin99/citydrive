@@ -1,4 +1,3 @@
-
 "use client";
 
 import { usePathname } from 'next/navigation';
@@ -18,6 +17,7 @@ import {
   CalendarCheck,
   FileVideo,
   GraduationCap,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -27,6 +27,7 @@ const navItems = [
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
   { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
   { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
+  { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes' },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Payments', staffOnly: true },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },

@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -28,7 +27,8 @@
         "registrationDate": { "type": "string", "format": "date" },
         "status": { "type": "string" },
         "amount": { "type": "number" },
-        "payments": { "type": "array" }
+        "payments": { "type": "array" },
+        "studentUid": { "type": "string" }
       }
     },
     "Instructor": {
@@ -113,6 +113,17 @@
         "type": { "type": "string" },
         "url": { "type": "string" }
       }
+    },
+    "QuizLink": {
+      "title": "Quiz Link",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "url": { "type": "string" },
+        "description": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -132,6 +143,7 @@
       { "path": "/courses/{id}", "definition": { "entityName": "Course" } },
       { "path": "/classes/{id}", "definition": { "entityName": "Class" } },
       { "path": "/resources/{id}", "definition": { "entityName": "Resource" } },
+      { "path": "/quizLinks/{id}", "definition": { "entityName": "QuizLink" } },
       { "path": "/settings/{id}", "definition": { "description": "System configuration settings." } },
       { "path": "/backupMetadata/{id}", "definition": { "description": "Audit logs for database exports." } }
     ]
