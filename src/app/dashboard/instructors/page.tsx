@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -82,7 +83,7 @@ export default function InstructorsPage() {
     i.phone.includes(searchQuery)
   ) || [];
 
-  const createInstructorAuth = async (staffId: string) => {
+  const createInstructorAuth = async (staffId: string, name: string) => {
     const email = `${staffId.toLowerCase()}@citydriving.in`;
     const password = "City123";
     const secondaryAppName = `create-${staffId}-${Date.now()}`;
@@ -97,6 +98,7 @@ export default function InstructorsPage() {
       setDocumentNonBlocking(userRef, {
         id: uid,
         email: email,
+        name: name,
         role: 'Instructor',
         staffId: staffId,
         createdAt: serverTimestamp(),
@@ -123,7 +125,7 @@ export default function InstructorsPage() {
 
     try {
       toast({ title: "Registering Staff", description: `Creating login account for ${staffId} with default password City123...` });
-      const authUid = await createInstructorAuth(staffId);
+      const authUid = await createInstructorAuth(staffId, formData.name!);
       
       const newInstructorData = {
         ...formData,
@@ -168,6 +170,11 @@ export default function InstructorsPage() {
     };
 
     updateDocumentNonBlocking(instructorRef, updatedData);
+    
+    // Also update primary user profile
+    const userRef = doc(db, 'users', selectedInstructor.userId);
+    updateDocumentNonBlocking(userRef, { name: formData.name, updatedAt: serverTimestamp() });
+
     setIsEditDialogOpen(false);
     setSelectedInstructor(null);
     toast({ title: "Profile Updated", description: "Instructor details have been saved." });
@@ -483,7 +490,7 @@ export default function InstructorsPage() {
       </Dialog>
 
       {/* View Profile Sheet */}
-      <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+      <Sheet open={isViewSheetOpen} onOpenChange={(open) => { setIsViewSheetOpen(open); if (!open) setSelectedInstructor(null); }}>
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Instructor Profile</SheetTitle>

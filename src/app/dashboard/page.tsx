@@ -127,6 +127,7 @@ function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: stri
 
   if (isStudentLoading) return <Skeleton className="h-64 w-full" />;
 
+  const displayName = student?.name || welcomeName;
   const paidAmount = student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
   const balance = (student?.amount || 0) - paidAmount;
   const totalHours = attendance?.reduce((sum: number, a: any) => sum + (Number(a.duration) || 0), 0) || 0;
@@ -134,7 +135,7 @@ function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: stri
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Hello, {displayName}!</h2>
         <p className="text-muted-foreground text-sm">Track your training progress and upcoming lessons.</p>
       </div>
 

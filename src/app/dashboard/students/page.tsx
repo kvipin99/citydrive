@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -191,7 +192,7 @@ export default function StudentsPage() {
     reader.readAsDataURL(file);
   };
 
-  const createStudentAuth = async (studentId: string) => {
+  const createStudentAuth = async (studentId: string, name: string) => {
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
     const secondaryAppName = `secondary-${studentId}-${Date.now()}`;
@@ -206,6 +207,7 @@ export default function StudentsPage() {
       setDocumentNonBlocking(userRef, {
         id: uid,
         email: email,
+        name: name,
         role: 'Student',
         studentId: studentId,
         branch: formData.branch,
@@ -234,7 +236,7 @@ export default function StudentsPage() {
     
     try {
       toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
-      const authUid = await createStudentAuth(studentId);
+      const authUid = await createStudentAuth(studentId, formData.name!);
       
       const newStudentData = {
         ...formData,
