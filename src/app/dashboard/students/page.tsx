@@ -115,7 +115,6 @@ export default function StudentsPage() {
     ) || [];
   }, [students, searchQuery]);
 
-  // Helper to generate the next Student ID based on branch series
   const generateBranchStudentId = (branchName: string) => {
     const branchPart = branchName.split(' ')[1] || "X";
     const prefix = `B${branchPart}-`;
@@ -239,12 +238,12 @@ export default function StudentsPage() {
       return;
     }
 
-    if (!confirm(`Permanently Delete ${student.name} (#${student.id})? This will also wipe all their payment records and deactivate their login account.`)) {
+    if (!confirm(`Permanently Delete ${student.name} (#${student.id})? This will remove all payments and login records. THIS ACTION CANNOT BE UNDONE.`)) {
       return;
     }
 
     setIsSubmitting(true);
-    toast({ title: "Deep Deleting Data", description: "Cleaning up database and security accounts..." });
+    toast({ title: "Removing Student", description: "Wiping all records from system..." });
 
     try {
       // 1. Delete all payments
@@ -253,7 +252,7 @@ export default function StudentsPage() {
       const paymentSnaps = await getDocs(q);
       paymentSnaps.forEach((p) => deleteDocumentNonBlocking(doc(db, 'payments', p.id)));
 
-      // 2. Clean up Auth User (Email login)
+      // 2. Attempt Auth cleanup (Best effort)
       if (student.id) {
         const studentEmail = `${student.id.toLowerCase()}@citydriving.in`;
         const secondaryAppName = `cleanup-${student.id}-${Date.now()}`;
@@ -263,7 +262,7 @@ export default function StudentsPage() {
           const cred = await signInWithEmailAndPassword(secondaryAuth, studentEmail, "City123");
           await deleteUser(cred.user);
         } catch (authErr) {
-          console.warn("Auth account already gone or password changed:", authErr);
+          console.warn("Auth cleanup failed (possibly changed password):", authErr);
         } finally {
           await deleteApp(secondaryApp);
         }
@@ -275,7 +274,7 @@ export default function StudentsPage() {
         deleteDocumentNonBlocking(doc(db, 'users', student.userId));
       }
 
-      toast({ title: "Student Wiped", description: "All records and login credentials have been permanently removed." });
+      toast({ title: "Student Deleted", description: "All data has been removed from the database." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Delete Failed", description: error.message });
     } finally {
@@ -405,38 +404,6 @@ export default function StudentsPage() {
     toast({ title: "Export Successful", description: "Student records downloaded as CSV." });
   };
 
-  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split("\n").filter(line => line.trim() !== "");
-      const dataLines = lines.slice(1);
-      toast({ title: "Importing Students", description: `Processing ${dataLines.length} records...` });
-      for (const line of dataLines) {
-        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        if (parts.length < 5) continue;
-        const [id, name, phone, email, parent, address, aadhar, appNo, branch, status, regDate, coursesStr, amount, discount] = parts.map(p => p.trim());
-        const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
-        const finalBranch = branch || (profile?.role === 'Admin' ? "Branch 1" : profile?.branch || "Branch 1");
-        const studentId = id || generateBranchStudentId(finalBranch);
-        const studentRef = doc(db, 'students', studentId);
-        const newStudentData = {
-          id: studentId, name: name || "Unknown", phone: phone || "", email: email || `${studentId.toLowerCase()}@citydriving.in`,
-          parentName: parent || "", address: address || "", aadharNo: aadhar || "", onlineAppNo: appNo || "",
-          branch: finalBranch, status: status || "Active", registrationDate: regDate || new Date().toISOString().split('T')[0],
-          courses: courses, amount: Number(amount) || 0, discount: Number(discount) || 0, payments: [],
-          createdAt: serverTimestamp(), updatedAt: serverTimestamp(), createdBy: user?.uid
-        };
-        setDocumentNonBlocking(studentRef, newStudentData, { merge: true });
-      }
-      toast({ title: "Import Complete", description: "Student records have been processed." });
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
-
   return (
     <div className="space-y-6">
       <Card>
@@ -460,17 +427,10 @@ export default function StudentsPage() {
               </div>
               
               {isAdmin && (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Import
-                  </Button>
-                  <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImportCSV} />
-                </div>
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
               )}
 
               <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
@@ -488,7 +448,7 @@ export default function StudentsPage() {
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
                       <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
-                        <Label className="font-bold">Student Photo (Max 200KB JPEG)</Label>
+                        <Label className="font-bold">Student Photo</Label>
                         <div className="relative">
                           <Avatar className="h-32 w-32 border-4 border-primary/20">
                             <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
@@ -664,7 +624,7 @@ export default function StudentsPage() {
                             <DropdownMenuSeparator />
                             {isAdmin && (
                               <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteStudent(student)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete Full Data
+                                <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
