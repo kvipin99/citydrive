@@ -42,29 +42,36 @@ export default function AttendancePage() {
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
+  const isStudent = profile?.role === 'Student';
 
   // Fetch Students for search (filtered by branch if not admin)
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
     if (isAdmin) return collection(db, 'students');
     return query(
       collection(db, 'students'), 
       where('branch', '==', profile.branch)
     );
-  }, [db, user, profile, isAdmin]);
+  }, [db, user, profile, isAdmin, isStudent]);
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance for the selected date
+  // Fetch Attendance records
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    if (isStudent) {
+      const studentId = students?.[0]?.id;
+      if (!studentId) return null;
+      return query(collection(db, 'attendance'), where('studentId', '==', studentId));
+    }
     if (isAdmin) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
     return query(
       collection(db, 'attendance'), 
       where('branch', '==', profile.branch),
       where('date', '==', selectedDate)
     );
-  }, [db, user, profile, isAdmin, selectedDate]);
+  }, [db, user, profile, isAdmin, isStudent, selectedDate, students]);
 
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -128,150 +135,152 @@ export default function AttendancePage() {
   };
 
   const sortedRecords = useMemo(() => {
-    return attendanceRecords?.sort((a, b) => a.startTime.localeCompare(b.startTime)) || [];
+    return attendanceRecords?.sort((a, b) => b.date.localeCompare(a.date) || a.startTime.localeCompare(b.startTime)) || [];
   }, [attendanceRecords]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Daily Attendance</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch}.`}
+            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school attendance records.' : `Attendance logs for ${profile?.branch}.`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-            <Label className="text-xs font-bold px-2">DATE:</Label>
-            <Input 
-              type="date" 
-              value={selectedDate} 
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-9 w-[150px] bg-background border-primary/20"
-            />
-          </div>
-          
-          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
-            <DialogTrigger asChild>
-              <Button size="lg" className="shadow-lg">
-                <PlusCircle className="mr-2 h-5 w-5" />
-                Record Session
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Record Student Session</DialogTitle>
-                <DialogDescription>Search for an active student and log their training time.</DialogDescription>
-              </DialogHeader>
-              
-              <div className="grid gap-6 py-4">
-                {!selectedStudent ? (
-                  <div className="grid gap-2">
-                    <Label>Search Student (Active Only)</Label>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        placeholder="Type Name, ID or Phone..." 
-                        className="pl-8" 
-                        value={studentSearch} 
-                        onChange={(e) => setStudentSearch(e.target.value)} 
-                      />
-                    </div>
-                    {filteredSearch.length > 0 && (
-                      <div className="border rounded-lg overflow-hidden divide-y mt-1 shadow-sm">
-                        {filteredSearch.map(s => (
-                          <div 
-                            key={s.id} 
-                            className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
-                            onClick={() => setSelectedStudent(s)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <UserCircle className="h-8 w-8 text-primary/40" />
-                              <div className="grid">
-                                <p className="font-bold text-sm">{s.name}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
-                              </div>
-                            </div>
-                            <Badge variant="outline">Select</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
-                          {selectedStudent.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-black text-primary">{selectedStudent.name}</p>
-                          <p className="text-xs font-mono">{selectedStudent.id}</p>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>From Time</Label>
-                        <Select value={startTime} onValueChange={setStartTime}>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>To Time</Label>
-                        <Select value={endTime} onValueChange={setEndTime}>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
-                      <span className="text-sm font-medium">Session Duration:</span>
-                      <Badge variant="secondary" className="font-bold text-sm">
-                        {Math.max(0, parseInt(endTime.split(':')[0]) - parseInt(startTime.split(':')[0]))} Hours
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button 
-                  onClick={handleMarkAttendance} 
-                  className="w-full" 
-                  disabled={!selectedStudent}
-                >
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Confirm & Save Log
+        {!isStudent && (
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
+              <Label className="text-xs font-bold px-2">DATE:</Label>
+              <Input 
+                type="date" 
+                value={selectedDate} 
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="h-9 w-[150px] bg-background border-primary/20"
+              />
+            </div>
+            
+            <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
+              <DialogTrigger asChild>
+                <Button size="lg" className="shadow-lg">
+                  <PlusCircle className="mr-2 h-5 w-5" />
+                  Record Session
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Record Student Session</DialogTitle>
+                  <DialogDescription>Search for an active student and log their training time.</DialogDescription>
+                </DialogHeader>
+                
+                <div className="grid gap-6 py-4">
+                  {!selectedStudent ? (
+                    <div className="grid gap-2">
+                      <Label>Search Student (Active Only)</Label>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Type Name, ID or Phone..." 
+                          className="pl-8" 
+                          value={studentSearch} 
+                          onChange={(e) => setStudentSearch(e.target.value)} 
+                        />
+                      </div>
+                      {filteredSearch.length > 0 && (
+                        <div className="border rounded-lg overflow-hidden divide-y mt-1 shadow-sm">
+                          {filteredSearch.map(s => (
+                            <div 
+                              key={s.id} 
+                              className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
+                              onClick={() => setSelectedStudent(s)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <UserCircle className="h-8 w-8 text-primary/40" />
+                                <div className="grid">
+                                  <p className="font-bold text-sm">{s.name}</p>
+                                  <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
+                                </div>
+                              </div>
+                              <Badge variant="outline">Select</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                            {selectedStudent.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-black text-primary">{selectedStudent.name}</p>
+                            <p className="text-xs font-mono">{selectedStudent.id}</p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>From Time</Label>
+                          <Select value={startTime} onValueChange={setStartTime}>
+                            <SelectTrigger className="bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>To Time</Label>
+                          <Select value={endTime} onValueChange={setEndTime}>
+                            <SelectTrigger className="bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
+                        <span className="text-sm font-medium">Session Duration:</span>
+                        <Badge variant="secondary" className="font-bold text-sm">
+                          {Math.max(0, parseInt(endTime.split(':')[0]) - parseInt(startTime.split(':')[0]))} Hours
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button 
+                    onClick={handleMarkAttendance} 
+                    className="w-full" 
+                    disabled={!selectedStudent}
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Confirm & Save Log
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
 
       <Card>
         <CardHeader className="pb-3 border-b">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Daily Session Log</CardTitle>
+              <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                Training sessions recorded for {format(new Date(selectedDate), 'EEEE, MMMM do')}
+                {isStudent ? 'Historical training record' : `Training sessions recorded for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
@@ -288,11 +297,12 @@ export default function AttendancePage() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead className="pl-6">Student</TableHead>
+                  {isStudent && <TableHead className="pl-6">Date</TableHead>}
+                  {!isStudent && <TableHead className="pl-6">Student</TableHead>}
                   <TableHead>Session Timing</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Branch</TableHead>
-                  <TableHead className="text-right pr-6">Action</TableHead>
+                  {!isStudent && <TableHead className="text-right pr-6">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -301,24 +311,31 @@ export default function AttendancePage() {
                     <TableCell colSpan={5} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
-                        <p className="italic">No sessions logged for this date.</p>
+                        <p className="italic">No sessions logged.</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   sortedRecords.map((record) => (
                     <TableRow key={record.id} className="hover:bg-muted/20">
-                      <TableCell className="pl-6">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                            {record.studentName.charAt(0)}
+                      {isStudent && (
+                        <TableCell className="pl-6 font-medium">
+                          {format(new Date(record.date), 'MMM dd, yyyy')}
+                        </TableCell>
+                      )}
+                      {!isStudent && (
+                        <TableCell className="pl-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                              {record.studentName?.charAt(0) || 'S'}
+                            </div>
+                            <div className="grid gap-0.5">
+                              <span className="font-bold text-sm">{record.studentName}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
+                            </div>
                           </div>
-                          <div className="grid gap-0.5">
-                            <span className="font-bold text-sm">{record.studentName}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
-                          </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <Clock className="h-3.5 w-3.5 text-primary" />
@@ -333,16 +350,18 @@ export default function AttendancePage() {
                       <TableCell>
                         <Badge variant="outline" className="text-[10px] uppercase">{record.branch}</Badge>
                       </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
-                          onClick={() => handleDeleteRecord(record.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                      {!isStudent && (
+                        <TableCell className="text-right pr-6">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
+                            onClick={() => handleDeleteRecord(record.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

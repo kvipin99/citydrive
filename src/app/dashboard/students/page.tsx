@@ -65,14 +65,18 @@ export default function StudentsPage() {
   }, [db, user]);
   const { data: profile } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
+  const isStudent = profile?.role === 'Student';
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    if (isStudent) {
+      return query(collection(db, 'students'), where('userId', '==', user.uid));
+    }
     if (isAdmin) {
       return collection(db, 'students');
     }
     return query(collection(db, 'students'), where('branch', '==', profile.branch));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user, profile, isAdmin, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -91,25 +95,23 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // If role is student and profile isn't open, open it automatically for the only student in list
+  useEffect(() => {
+    if (isStudent && students && students.length > 0 && !isProfileOpen) {
+      setSelectedStudent(students[0]);
+      setIsProfileOpen(true);
+    }
+  }, [isStudent, students, isProfileOpen]);
+
   // Scoped query for attendance history when profile is open
   const attendanceHistoryQuery = useMemoFirebase(() => {
     if (!db || !selectedStudent || !isProfileOpen || !profile) return null;
-    
-    if (isAdmin) {
-      return query(
-        collection(db, 'attendance'), 
-        where('studentId', '==', selectedStudent.id),
-        orderBy('date', 'desc')
-      );
-    }
-    
     return query(
       collection(db, 'attendance'), 
-      where('branch', '==', profile.branch),
       where('studentId', '==', selectedStudent.id),
       orderBy('date', 'desc')
     );
-  }, [db, selectedStudent, isProfileOpen, isAdmin, profile]);
+  }, [db, selectedStudent, isProfileOpen, profile]);
 
   const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
@@ -237,7 +239,7 @@ export default function StudentsPage() {
     }
 
     setIsSubmitting(true);
-    const branchName = formData.branch;
+    const branchName = formData.branch!;
     const studentId = generateBranchStudentId(branchName);
     const amount = calculateFees(formData.courses || [], formData.discount || 0);
     
@@ -564,6 +566,11 @@ export default function StudentsPage() {
     </div>
   );
 
+  if (isStudent && students && students.length > 0) {
+    // Logic for student profile sheet is handled via useEffect
+    return <div className="flex items-center justify-center h-[60vh]"><RefreshCw className="h-8 w-8 animate-spin text-primary" /> Loading my profile...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -747,7 +754,7 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+      <Sheet open={isProfileOpen} onOpenChange={(open) => { setIsProfileOpen(open); if (!open && isStudent) setSelectedStudent(null); }}>
         <SheetContent side="right" className="sm:max-w-xl">
           <SheetHeader><SheetTitle>Student Profile Details</SheetTitle></SheetHeader>
           {selectedStudent && (
@@ -789,10 +796,12 @@ export default function StudentsPage() {
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Learners Date</p><p className="font-medium">{selectedStudent.learnersDate || 'N/A'}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Test Date</p><p className="font-medium">{selectedStudent.testDate || 'N/A'}</p></div>
                     </div>
-                    <div className="space-y-1 p-3 rounded-lg border bg-muted/30">
-                      <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Staff Remarks</p>
-                      <p className="text-xs italic mt-1">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
-                    </div>
+                    {!isStudent && (
+                      <div className="space-y-1 p-3 rounded-lg border bg-muted/30">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Staff Remarks</p>
+                        <p className="text-xs italic mt-1">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
+                      </div>
+                    )}
                  </section>
 
                  <Separator />

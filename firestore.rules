@@ -30,10 +30,13 @@ service cloud.firestore {
       return isAdmin() || isBranchManager();
     }
 
+    function isStudent() {
+      return hasRole('Student');
+    }
+
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      // Allow any signed in user to get a user doc (needed for role checks)
       allow get: if isSignedIn();
       allow list: if isAdmin();
       allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
@@ -46,12 +49,14 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Staff can list students. In practice, the query filters by branch.
+      // Staff can list students.
       allow list: if isSignedIn() && (isAdmin() || isBranchManager());
       
+      // Students can only get their own profile.
+      // Staff can get students based on branch or admin status.
       allow get: if isSignedIn() && (
         isAdmin() || 
-        isBranchManager() || 
+        (isBranchManager() && (resource == null || resource.data.branch == getProfile().branch)) || 
         (resource != null && resource.data.userId == request.auth.uid) ||
         (request.auth.uid == studentId)
       );
@@ -76,13 +81,14 @@ service cloud.firestore {
     }
 
     match /attendance/{attendanceId} {
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Instructor'));
+      // Staff can list. Students can list if they filter by their own ID.
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Instructor') || isStudent());
       allow get: if isSignedIn();
       allow write: if isAdmin() || isBranchManager();
     }
 
     match /payments/{paymentId} {
-      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant'));
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant') || isStudent());
       allow get: if isSignedIn();
       allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
     }
