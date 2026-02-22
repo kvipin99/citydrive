@@ -48,7 +48,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Welcome, {welcomeName}!</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
             <p className="text-muted-foreground text-sm">Here is your agenda and fleet status for today.</p>
           </div>
           <div className="flex items-center gap-3">
@@ -82,7 +82,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold tracking-tight">Welcome back, {welcomeName}!</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
         <p className="text-muted-foreground text-sm">
           {isAdmin 
             ? "Here is the school's overview across all branches." 

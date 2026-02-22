@@ -38,7 +38,6 @@ function SettingsContent() {
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
   const isAdmin = profile?.role === 'Admin';
-  const isStudent = profile?.role === 'Student';
 
   useEffect(() => {
     const tabFromUrl = searchParams.get("tab");
@@ -370,11 +369,11 @@ function SettingsContent() {
               <CardHeader>
                 <CardTitle>Account Details</CardTitle>
                 <CardDescription>
-                  {isStudent ? 'Manage your security credentials.' : 'Update your display name and security credentials.'}
+                  Update your security credentials.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {!isStudent && (
+                {isAdmin && (
                   <>
                     <div className="space-y-4">
                       <div className="grid gap-2">
