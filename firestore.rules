@@ -9,7 +9,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Safely get the user document data for the current authenticated user
     function getProfile() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -45,16 +44,8 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Allow listing if staff or if student is querying their own record
       allow list: if isSignedIn();
-      
-      // Allow getting specific student record.
-      allow get: if isSignedIn() && (
-        isStaff() || 
-        resource.data.userId == request.auth.uid ||
-        request.auth.uid == studentId
-      );
-      
+      allow get: if isSignedIn();
       allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
@@ -83,13 +74,13 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow write: if isStaff() || getProfile().role == 'Accountant';
+      allow write: if isStaff();
     }
 
     match /expenses/{expenseId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow write: if isStaff() || getProfile().role == 'Accountant';
+      allow write: if isStaff();
     }
 
     match /backupMetadata/{backupId} {

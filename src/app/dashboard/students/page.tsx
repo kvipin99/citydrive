@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,13 +17,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
+import { format } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -64,25 +67,16 @@ export default function StudentsPage() {
   const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
 
-  // Redirect or hide content for students as they should use the Dashboard/Attendance pages
-  if (isStudent) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center text-center">
-        <div className="max-w-md space-y-4">
-          <h2 className="text-2xl font-bold">Access Restricted</h2>
-          <p className="text-muted-foreground">The student list is for management staff only. Please check your Dashboard for training details.</p>
-        </div>
-      </div>
-    );
-  }
-
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    if (isStudent) {
+      return query(collection(db, 'students'), where('userId', '==', user.uid));
+    }
     if (isAdmin) {
       return collection(db, 'students');
     }
     return query(collection(db, 'students'), where('branch', '==', profile.branch));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user, profile, isAdmin, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -97,8 +91,17 @@ export default function StudentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-open self profile for students
+  useEffect(() => {
+    if (isStudent && students && students.length > 0 && !selectedStudent) {
+      setSelectedStudent(students[0]);
+      setIsProfileSheetOpen(true);
+    }
+  }, [isStudent, students, selectedStudent]);
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -412,7 +415,262 @@ export default function StudentsPage() {
     toast({ title: "Export Successful" });
   };
 
-  const renderStudentForm = (isEdit: boolean = false) => (
+  if (isStudent && students && students.length === 0 && !isStudentsLoading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center text-center">
+        <div className="max-w-md space-y-4">
+          <Avatar className="h-20 w-20 mx-auto border-4 border-muted">
+            <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
+          </Avatar>
+          <h2 className="text-2xl font-bold">Profile Not Found</h2>
+          <p className="text-muted-foreground">We couldn't locate your student record. Please contact your branch administrator.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {!isStudent && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <CardTitle>Students Database</CardTitle>
+                <CardDescription>
+                  {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search ID, Name or Mobile..."
+                    className="pl-8 w-[200px] lg:w-[300px]"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                {isAdmin && (
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                )}
+
+                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                  <DialogTrigger asChild>
+                    <Button onClick={resetForm}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Register Student
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl">
+                    <DialogHeader>
+                      <DialogTitle>New Student Registration</DialogTitle>
+                      <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[70vh] pr-4">
+                      <StudentForm 
+                        formData={formData} 
+                        setFormData={setFormData} 
+                        isAdmin={isAdmin} 
+                        masterCourses={masterCourses} 
+                        calculateFees={calculateFees} 
+                        handlePhotoUpload={handlePhotoUpload} 
+                        photoInputRef={photoInputRef}
+                        handleCourseToggle={handleCourseToggle}
+                        generateBranchStudentId={generateBranchStudentId}
+                      />
+                    </ScrollArea>
+                    <DialogFooter>
+                      <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
+                        {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Confirm Registration
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isStudentsLoading || isCoursesLoading ? (
+               <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student ID & Name</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Agreed Fee (₹)</TableHead>
+                    <TableHead>Balance Due (₹)</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
+                              <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="grid gap-0.5">
+                              <span className="font-bold text-primary">{student.id}</span>
+                              <span className="text-sm">{student.name}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{student.branch}</TableCell>
+                        <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            ₹{calculateBalanceDue(student).toLocaleString()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setIsProfileSheetOpen(true); }}>
+                              <Eye className="h-4 w-4 text-primary" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {isAdmin && (
+                                  <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
+                                    <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Profile Detail Sheet */}
+      <Sheet open={isProfileSheetOpen} onOpenChange={(open) => { setIsProfileSheetOpen(open); if(!open && !isStudent) setSelectedStudent(null); }}>
+        <SheetContent className="sm:max-w-3xl overflow-y-auto">
+          <SheetHeader className="pb-6">
+            <SheetTitle>Student Profile Dashboard</SheetTitle>
+          </SheetHeader>
+          {selectedStudent && (
+            <StudentProfileView student={selectedStudent} db={db} isAdmin={isAdmin} calculateBalanceDue={calculateBalanceDue} />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent className="border-destructive/20 shadow-2xl">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-6 w-6" />
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base">
+              This action will permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.
+              <br/><br/>
+              <span className="text-destructive font-black uppercase tracking-tighter">This action cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>
+              {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Wipe Record
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Receive Payment</DialogTitle><DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription></DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="p-3 border rounded-lg bg-muted/50 flex justify-between">
+               <span className="text-sm">Balance Due:</span>
+               <span className="font-bold text-destructive">₹{selectedStudent ? calculateBalanceDue(selectedStudent).toLocaleString() : 0}</span>
+            </div>
+            <div className="grid gap-2">
+              <Label>Payment Date</Label>
+              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Amount Received (₹)</Label>
+              <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Receipt No.</Label>
+                <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Method</Label>
+                <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update all student details, courses, and pricing.</DialogDescription></DialogHeader>
+          <ScrollArea className="max-h-[70vh] pr-4">
+            <StudentForm 
+              formData={formData} 
+              setFormData={setFormData} 
+              isAdmin={isAdmin} 
+              masterCourses={masterCourses} 
+              calculateFees={calculateFees} 
+              handlePhotoUpload={handlePhotoUpload} 
+              photoInputRef={editPhotoInputRef}
+              handleCourseToggle={handleCourseToggle}
+              isEdit={true}
+            />
+          </ScrollArea>
+          <DialogFooter><Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StudentForm({ 
+  formData, 
+  setFormData, 
+  isAdmin, 
+  masterCourses, 
+  calculateFees, 
+  handlePhotoUpload, 
+  photoInputRef,
+  handleCourseToggle,
+  isEdit = false,
+  generateBranchStudentId
+}: any) {
+  return (
     <div className="grid gap-6 py-4">
       <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
         <Label className="font-bold">Student Photo</Label>
@@ -421,10 +679,10 @@ export default function StudentsPage() {
             <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
             <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
           </Avatar>
-          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => isEdit ? editPhotoInputRef.current?.click() : photoInputRef.current?.click()}>
+          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => photoInputRef.current?.click()}>
             <PlusCircle className="h-5 w-5" />
           </Button>
-          <input type="file" ref={isEdit ? editPhotoInputRef : photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
+          <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
         </div>
       </div>
 
@@ -436,9 +694,9 @@ export default function StudentsPage() {
           <Select 
             value={formData.branch} 
             onValueChange={(v) => setFormData({...formData, branch: v as any})} 
-            disabled={!isAdmin}
+            disabled={!isAdmin && !isEdit}
           >
-            <SelectTrigger className={`border-primary/50 ${!isAdmin ? 'bg-muted cursor-not-allowed' : ''}`}>
+            <SelectTrigger className={`border-primary/50 ${(!isAdmin && !isEdit) ? 'bg-muted cursor-not-allowed' : ''}`}>
               <SelectValue placeholder="Select Branch" />
             </SelectTrigger>
             <SelectContent>
@@ -509,7 +767,7 @@ export default function StudentsPage() {
       <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
         <Label className="font-bold">Courses Selection</Label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {masterCourses?.map(course => (
+          {masterCourses?.map((course: any) => (
             <div key={course.id} className="flex items-center space-x-2">
               <Checkbox id={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
               <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
@@ -550,193 +808,193 @@ export default function StudentsPage() {
       </div>
     </div>
   );
+}
+
+function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
+  const attendanceQuery = useMemoFirebase(() => {
+    if (!db || !student) return null;
+    return query(collection(db, 'attendance'), where('studentId', '==', student.id));
+  }, [db, student]);
+
+  const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+
+  const totalHours = useMemo(() => {
+    return attendance?.reduce((sum, a) => sum + (Number(a.duration) || 0), 0) || 0;
+  }, [attendance]);
+
+  const sortedAttendance = useMemo(() => {
+    return attendance?.sort((a, b) => b.date.localeCompare(a.date)) || [];
+  }, [attendance]);
+
+  const paidAmount = student.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+  const balance = calculateBalanceDue(student);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle>Students Database</CardTitle>
-              <CardDescription>
-                {isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branch}.`}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search ID, Name or Mobile..."
-                  className="pl-8 w-[200px] lg:w-[300px]"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              
-              {isAdmin && (
-                <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </Button>
-              )}
-
-              <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Register Student
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl">
-                  <DialogHeader>
-                    <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
-                  </DialogHeader>
-                  <ScrollArea className="max-h-[70vh] pr-4">
-                    {renderStudentForm(false)}
-                  </ScrollArea>
-                  <DialogFooter>
-                    <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
-                      {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Confirm Registration
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
+        <Avatar className="h-24 w-24 border-4 border-white shadow-xl">
+          <AvatarImage src={student.photoUrl} alt={student.name} />
+          <AvatarFallback className="text-2xl font-bold bg-primary text-white">{student.name.charAt(0)}</AvatarFallback>
+        </Avatar>
+        <div className="grid gap-1">
+          <h2 className="text-2xl font-black tracking-tight">{student.name}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <Badge variant="secondary" className="font-mono font-bold tracking-tighter">{student.id}</Badge>
+            <Badge variant="outline" className="uppercase font-bold text-[10px] tracking-widest">{student.branch}</Badge>
           </div>
-        </CardHeader>
-        <CardContent>
-          {isStudentsLoading || isCoursesLoading ? (
-             <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
+          <Badge className="mx-auto mt-2" variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-green-50/50 border-green-100">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-green-600 flex items-center gap-2">
+              <CreditCard className="h-3 w-3" /> Paid
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl font-black text-green-700">₹{paidAmount.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50/50 border-red-100">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-red-600 flex items-center gap-2">
+              <ArrowDownCircle className="h-3 w-3" /> Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl font-black text-red-700">₹{balance.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50/50 border-blue-100">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
+              <Clock className="h-3 w-3" /> Training
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-xl font-black text-blue-700">{totalHours} Hours</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="space-y-4">
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
+            <User className="h-4 w-4" /> Personal & Licensing
+          </h3>
+          <div className="grid gap-4 text-sm">
+            <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
+            <ProfileItem icon={<Fingerprint />} label="Aadhar No" value={student.aadharNo} />
+            <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
+            <ProfileItem icon={<Calendar />} label="Learners License" value={student.learnersDate ? format(new Date(student.learnersDate), 'MMM dd, yyyy') : 'N/A'} />
+            <ProfileItem icon={<Calendar />} label="Driving Test" value={student.testDate ? format(new Date(student.testDate), 'MMM dd, yyyy') : 'N/A'} />
+            <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
+            <CheckCircle2 className="h-4 w-4" /> Enrolled Courses
+          </h3>
+          <div className="space-y-2">
+            {student.courses?.map((c: string, i: number) => (
+              <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
+                <span className="font-medium text-sm">{c}</span>
+                <Badge variant="outline">Enrolled</Badge>
+              </div>
+            ))}
+            {(!student.courses || student.courses.length === 0) && <p className="text-xs italic text-muted-foreground">No courses listed.</p>}
+          </div>
+          {student.remarks && (
+            <div className="mt-6 p-4 rounded-lg bg-orange-50 border border-orange-100">
+              <p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Staff Remarks</p>
+              <p className="text-xs text-orange-800 italic">{student.remarks}</p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
+          <Clock className="h-4 w-4" /> Attendance Log
+        </h3>
+        {isAttendanceLoading ? (
+          <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : sortedAttendance.length === 0 ? (
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No training sessions recorded yet.</p>
+        ) : (
+          <div className="rounded-xl border overflow-hidden">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead>Student ID & Name</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Agreed Fee (₹)</TableHead>
-                  <TableHead>Balance Due (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Time Slot</TableHead>
+                  <TableHead className="text-right">Hours</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStudents.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
-                ) : (
-                  filteredStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={student.photoUrl || undefined} alt={student.name} />
-                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="grid gap-0.5">
-                            <span className="font-bold text-primary">{student.id}</span>
-                            <span className="text-sm">{student.name}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{student.branch}</TableCell>
-                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                          ₹{calculateBalanceDue(student).toLocaleString()}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {isAdmin && (
-                              <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                {sortedAttendance.map((a: any) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="text-xs font-medium">{format(new Date(a.date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{a.startTime} - {a.endTime}</TableCell>
+                    <TableCell className="text-right font-bold text-primary">{a.duration}h</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
-        <AlertDialogContent className="border-destructive/20 shadow-2xl">
-          <AlertDialogHeader>
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <AlertTriangle className="h-6 w-6" />
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            </div>
-            <AlertDialogDescription className="text-base">
-              This action will permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.
-              <br/><br/>
-              <span className="text-destructive font-black uppercase tracking-tighter">This action cannot be undone.</span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-            <Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>
-              {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Wipe Record
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Receive Payment</DialogTitle><DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="p-3 border rounded-lg bg-muted/50 flex justify-between">
-               <span className="text-sm">Balance Due:</span>
-               <span className="font-bold text-destructive">₹{selectedStudent ? calculateBalanceDue(selectedStudent).toLocaleString() : 0}</span>
-            </div>
-            <div className="grid gap-2">
-              <Label>Payment Date</Label>
-              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
-            </div>
-            <div className="grid gap-2">
-              <Label>Amount Received (₹)</Label>
-              <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Receipt No.</Label>
-                <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
-              </div>
-              <div className="grid gap-2">
-                <Label>Method</Label>
-                <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
-                </Select>
-              </div>
-            </div>
           </div>
-          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+      </section>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update all student details, courses, and pricing.</DialogDescription></DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
-            {renderStudentForm(true)}
-          </ScrollArea>
-          <DialogFooter><Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <section className="space-y-4">
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
+          <CreditCard className="h-4 w-4" /> Payment History
+        </h3>
+        {student.payments?.length === 0 ? (
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No payments received yet.</p>
+        ) : (
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Receipt</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {student.payments?.map((p: any) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-xs">{format(new Date(p.date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
+                    <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{p.method}</Badge></TableCell>
+                    <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ProfileItem({ icon, label, value, fullWidth = false }: any) {
+  return (
+    <div className={`grid gap-1 ${fullWidth ? 'col-span-full' : ''}`}>
+      <div className="flex items-center gap-2 text-muted-foreground font-medium text-[10px] uppercase tracking-wider">
+        <span className="text-primary/60">{icon}</span>
+        {label}
+      </div>
+      <div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent hover:border-muted transition-colors">
+        {value || 'Not provided'}
+      </div>
     </div>
   );
 }
