@@ -121,11 +121,11 @@ function SettingsContent() {
   };
 
   const handleDeleteUserRecord = (targetUser: any) => {
-    if (targetUser.role === 'Admin') {
+    if (targetUser.role === 'Admin' || targetUser.role === 'BranchManager') {
       toast({
         variant: "destructive",
         title: "Action Denied",
-        description: "Administrator accounts cannot be deleted for system security.",
+        description: "Management accounts (Admin/Branch) cannot be deleted for system security.",
       });
       return;
     }
@@ -316,7 +316,7 @@ function SettingsContent() {
                               >
                                 <Key className="h-3 w-3 mr-1" /> Reset
                               </Button>
-                              {u.role === 'Admin' ? (
+                              {(u.role === 'Admin' || u.role === 'BranchManager') ? (
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
