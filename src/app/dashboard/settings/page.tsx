@@ -74,7 +74,10 @@ function SettingsContent() {
     if (profile?.name) {
       setDisplayName(profile.name);
     }
-    if (profile?.branch) {
+    // Use branchName for display identity, keep 'branch' as the stable system ID
+    if (profile?.branchName) {
+      setBranchName(profile.branchName);
+    } else if (profile?.branch) {
       setBranchName(profile.branch);
     }
   }, [profile]);
@@ -114,8 +117,9 @@ function SettingsContent() {
 
   const handleUpdateBranch = () => {
     if (!profileRef || !branchName) return;
+    // CRITICAL: Update branchName field ONLY to keep the 'branch' ID stable for filtering
     updateDocumentNonBlocking(profileRef, { 
-      branch: branchName,
+      branchName: branchName,
       updatedAt: serverTimestamp() 
     });
     toast({ title: "Branch Updated", description: "The system identity for this branch has been updated." });
@@ -256,8 +260,9 @@ function SettingsContent() {
     </div>
   );
 
+  const currentBranchDisplay = profile?.branchName || profile?.branch || 'Branch';
   const greeting = isBranchManager 
-    ? `Hello, ${profile?.branch || 'Branch'} Branch!` 
+    ? `Hello, ${currentBranchDisplay} Branch!` 
     : `Settings Overview`;
 
   return (
@@ -454,7 +459,7 @@ function SettingsContent() {
                             </div>
                             <Button variant="outline" onClick={handleUpdateBranch}>Update Identity</Button>
                           </div>
-                          <p className="text-[10px] text-muted-foreground italic">Updating this changes the branch name displayed on your management dashboard.</p>
+                          <p className="text-[10px] text-muted-foreground italic">Updating this changes the branch name displayed on your management dashboard without breaking internal filters.</p>
                         </div>
                       )}
                     </div>

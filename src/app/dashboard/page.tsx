@@ -53,7 +53,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="secondary" className="px-3 py-1 font-bold">
-              {profile?.branch || 'Operational'}
+              {profile?.branchName || profile?.branch || 'Operational'}
             </Badge>
             <Button asChild className="shadow-sm">
               <Link href="/dashboard/attendance">
@@ -79,8 +79,12 @@ export default function DashboardPage() {
   // --- Management View (Admin & Branch Manager) ---
   const isAdmin = profile?.role === 'Admin';
   const isBranchManager = profile?.role === 'BranchManager';
+  
+  // Use custom branch name if set in settings, fallback to branch ID
+  const currentBranchDisplay = profile?.branchName || profile?.branch || 'Branch';
+  
   const greeting = isBranchManager 
-    ? `Hello, ${profile?.branch || 'Branch'} Branch!` 
+    ? `Hello, ${currentBranchDisplay} Branch!` 
     : `Hello, ${welcomeName}!`;
 
   return (
@@ -90,7 +94,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground text-sm">
           {isAdmin 
             ? "Here is the school's overview across all branches." 
-            : `Here is the performance status for ${profile?.branch || 'your branch'}.`}
+            : `Here is the performance status for ${currentBranchDisplay}.`}
         </p>
       </div>
 
@@ -188,7 +192,7 @@ function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: stri
             {student?.courses?.length > 0 ? (
               student.courses.map((course: string, i: number) => (
                 <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                  <span className="font-medium">{course}</span>
+                  <span className="font-medium">{course === 'Others' ? (student.specialCourseName || 'Custom Course') : course}</span>
                   <Badge variant="outline">Enrolled</Badge>
                 </div>
               ))

@@ -98,7 +98,8 @@ export default function DashboardHeader() {
                   </p>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     {profile?.role === 'Admin' ? 'Administrator' : 
-                     profile?.role === 'BranchManager' ? 'Branch Manager' : profile?.role === 'Student' ? 'Student' : 'Staff User'}
+                     profile?.role === 'BranchManager' ? (profile?.branchName || profile?.branch || 'Branch Manager') : 
+                     profile?.role === 'Student' ? 'Student' : 'Staff User'}
                   </p>
                 </div>
               </DropdownMenuLabel>
