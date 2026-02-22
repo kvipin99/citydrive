@@ -60,7 +60,9 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isStaff() || isStudentRecord(studentId);
+      // Allow read if staff OR if document's userId matches the requester
+      // Using resource.data.userId allows students to perform list queries filtered by their UID
+      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow write: if isStaff();
     }
 
