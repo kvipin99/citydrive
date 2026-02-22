@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -38,6 +38,7 @@ function SettingsContent() {
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
   const isAdmin = profile?.role === 'Admin';
+  const isBranchManager = profile?.role === 'BranchManager';
 
   useEffect(() => {
     const tabFromUrl = searchParams.get("tab");
@@ -64,6 +65,7 @@ function SettingsContent() {
   // Form States
   const [newPassword, setNewPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [branchName, setBranchName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -71,6 +73,9 @@ function SettingsContent() {
   useEffect(() => {
     if (profile?.name) {
       setDisplayName(profile.name);
+    }
+    if (profile?.branch) {
+      setBranchName(profile.branch);
     }
   }, [profile]);
 
@@ -105,6 +110,15 @@ function SettingsContent() {
       updatedAt: serverTimestamp() 
     });
     toast({ title: "Profile Updated", description: "Your display name has been saved." });
+  };
+
+  const handleUpdateBranch = () => {
+    if (!profileRef || !branchName) return;
+    updateDocumentNonBlocking(profileRef, { 
+      branch: branchName,
+      updatedAt: serverTimestamp() 
+    });
+    toast({ title: "Branch Updated", description: "The system identity for this branch has been updated." });
   };
 
   const handleResetUserPassword = (targetUser: any) => {
@@ -389,29 +403,51 @@ function SettingsContent() {
               <CardHeader>
                 <CardTitle>Account Details</CardTitle>
                 <CardDescription>
-                  Update your security credentials.
+                  Update your profile information and security credentials.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {isAdmin && (
+                {(isAdmin || isBranchManager) && (
                   <>
                     <div className="space-y-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="display-name">Display Name</Label>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              id="display-name" 
-                              placeholder="Enter your full name"
-                              className="pl-9"
-                              value={displayName}
-                              onChange={(e) => setDisplayName(e.target.value)}
-                            />
+                      {isAdmin && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="display-name">Display Name</Label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input 
+                                id="display-name" 
+                                placeholder="Enter your full name"
+                                className="pl-9"
+                                value={displayName}
+                                onChange={(e) => setDisplayName(e.target.value)}
+                              />
+                            </div>
+                            <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
                           </div>
-                          <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
                         </div>
-                      </div>
+                      )}
+
+                      {isBranchManager && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="branch-name">Branch Identity</Label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input 
+                                id="branch-name" 
+                                placeholder="e.g. Pune Main Branch"
+                                className="pl-9"
+                                value={branchName}
+                                onChange={(e) => setBranchName(e.target.value)}
+                              />
+                            </div>
+                            <Button variant="outline" onClick={handleUpdateBranch}>Update Branch</Button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground italic">Updating this changes the branch name displayed on your management dashboard.</p>
+                        </div>
+                      )}
                     </div>
                     <Separator />
                   </>
