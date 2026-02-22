@@ -66,6 +66,7 @@ export default function DashboardHeader() {
     }
   };
 
+  const displayName = profile?.name || user?.email?.split('@')[0] || 'User';
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
@@ -84,7 +85,7 @@ export default function DashboardHeader() {
                     alt="User Avatar" 
                   />
                   <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                    {user?.email?.charAt(0).toUpperCase() || 'A'}
+                    {displayName.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -93,7 +94,7 @@ export default function DashboardHeader() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-bold leading-none">
-                    {user?.email?.split('@')[0]}
+                    {displayName}
                   </p>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     {profile?.role === 'Admin' ? 'Administrator' : 

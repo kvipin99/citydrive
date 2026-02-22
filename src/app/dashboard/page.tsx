@@ -35,19 +35,21 @@ export default function DashboardPage() {
     );
   }
 
+  const welcomeName = profile?.name || user?.email?.split('@')[0] || 'User';
+
   if (profile?.role === 'Student') {
-    return <StudentDashboard uid={user?.uid!} />;
+    return <StudentDashboard uid={user?.uid!} welcomeName={welcomeName} />;
   }
 
-  const isStaff = profile?.role === 'BranchManager' || profile?.role === 'Instructor';
+  const isStaff = profile?.role === 'BranchManager' || profile?.role === 'Instructor' || profile?.role === 'Admin';
 
-  if (isStaff) {
+  if (isStaff && profile?.role !== 'Admin') {
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Staff Overview</h2>
-            <p className="text-muted-foreground text-sm">Welcome! Here is your agenda and fleet status for today.</p>
+            <h2 className="text-2xl font-bold tracking-tight">Welcome, {welcomeName}!</h2>
+            <p className="text-muted-foreground text-sm">Here is your agenda and fleet status for today.</p>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="secondary" className="px-3 py-1 font-bold">
@@ -77,6 +79,10 @@ export default function DashboardPage() {
   // Admin view
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-bold tracking-tight">Welcome back, {welcomeName}!</h2>
+        <p className="text-muted-foreground text-sm">Here is the school's overview across all branches.</p>
+      </div>
       <StatsCards />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
@@ -102,7 +108,7 @@ export default function DashboardPage() {
   );
 }
 
-function StudentDashboard({ uid }: { uid: string }) {
+function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: string }) {
   const db = useFirestore();
   
   const studentQuery = useMemoFirebase(() => 
@@ -122,6 +128,11 @@ function StudentDashboard({ uid }: { uid: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
+        <p className="text-muted-foreground text-sm">Track your training progress and upcoming lessons.</p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-primary shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

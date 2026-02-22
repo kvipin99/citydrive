@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -14,6 +15,10 @@
           "type": "string",
           "description": "The email address associated with the user's account.",
           "format": "email"
+        },
+        "name": {
+          "type": "string",
+          "description": "The display name of the user."
         },
         "role": {
           "type": "string",
@@ -32,6 +37,9 @@
           "type": "string",
           "description": "Timestamp when the user record was last updated.",
           "format": "date-time"
+        },
+        "avatarUrl": {
+          "type": "string"
         }
       },
       "required": [

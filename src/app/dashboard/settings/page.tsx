@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2 } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -63,9 +63,16 @@ function SettingsContent() {
 
   // Form States
   const [newPassword, setNewPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
+
+  useEffect(() => {
+    if (profile?.name) {
+      setDisplayName(profile.name);
+    }
+  }, [profile]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,6 +96,15 @@ function SettingsContent() {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleUpdateProfile = () => {
+    if (!profileRef || !displayName) return;
+    updateDocumentNonBlocking(profileRef, { 
+      name: displayName,
+      updatedAt: serverTimestamp() 
+    });
+    toast({ title: "Profile Updated", description: "Your display name has been saved." });
   };
 
   const handleResetUserPassword = (targetUser: any) => {
@@ -206,7 +222,8 @@ function SettingsContent() {
     return uniqueUsers.filter(u => 
       u.email?.toLowerCase().includes(term) || 
       u.role?.toLowerCase().includes(term) ||
-      u.id?.toLowerCase().includes(term)
+      u.id?.toLowerCase().includes(term) ||
+      u.name?.toLowerCase().includes(term)
     );
   }, [allUsers, userSearchTerm]);
 
@@ -269,7 +286,7 @@ function SettingsContent() {
                         <TableRow key={u.id}>
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="font-medium">{u.email || u.id}</span>
+                              <span className="font-medium">{u.name || u.email || u.id}</span>
                               <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-tight">
                                 {u.role || 'Unassigned Role'}
                               </span>
@@ -342,7 +359,7 @@ function SettingsContent() {
                   />
                 </div>
                 <div className="text-center space-y-1">
-                  <h3 className="font-bold text-lg">{profile?.email?.split('@')[0]}</h3>
+                  <h3 className="font-bold text-lg">{profile?.name || profile?.email?.split('@')[0]}</h3>
                   <p className="text-sm text-muted-foreground">{profile?.email}</p>
                 </div>
               </CardContent>
@@ -350,24 +367,48 @@ function SettingsContent() {
 
             <Card className="md:col-span-3">
               <CardHeader>
-                <CardTitle>Security</CardTitle>
-                <CardDescription>Change your login credentials.</CardDescription>
+                <CardTitle>Account Details</CardTitle>
+                <CardDescription>Update your display name and security credentials.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input 
-                    id="new-password" 
-                    type="password" 
-                    placeholder="Enter at least 6 characters"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="display-name">Display Name</Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          id="display-name" 
+                          placeholder="Enter your full name"
+                          className="pl-9"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                        />
+                      </div>
+                      <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
+                    </div>
+                  </div>
                 </div>
-                <Button onClick={handleUpdatePassword} disabled={isSaving || newPassword.length < 6}>
-                  {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Update Password
-                </Button>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <Label>Security</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <Input 
+                      id="new-password" 
+                      type="password" 
+                      placeholder="Enter at least 6 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleUpdatePassword} disabled={isSaving || newPassword.length < 6}>
+                    {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Update Password
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
