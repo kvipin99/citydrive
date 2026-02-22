@@ -1,131 +1,114 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
      * DRIVING SCHOOL MANAGEMENT SYSTEM - SECURITY RULES
-     *
-     * Core Philosophy:
-     * This ruleset enforces a strict Role-Based Access Control (RBAC) model combined with document-level ownership.
-     * High-level roles (Admin, BranchManager, Instructor, Student) are checked via helper functions.
      */
 
     // --- GLOBAL HELPER FUNCTIONS ---
 
-    /** Checks if a user is authenticated. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** Retrieves the role of the authenticated user from their profile. */
-    function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    /** Checks if the authenticated user has a specific role. */
     function hasRole(role) {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == role;
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == role;
     }
 
-    /** Checks if the user is an Admin. */
     function isAdmin() {
       return hasRole('Admin');
     }
 
-    /** Checks if the user is a Branch Manager. */
     function isBranchManager() {
       return hasRole('BranchManager');
     }
 
-    /** Checks if the user is an Instructor. */
     function isInstructor() {
       return hasRole('Instructor');
     }
 
-    /** Checks if the user is a Staff member (Admin, Manager, or Instructor). */
     function isStaff() {
       return isAdmin() || isBranchManager() || isInstructor();
     }
 
-    /** Basic ownership check based on UID. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** Verifies if a studentId belongs to the authenticated user. */
-    function isStudentOwner(studentId) {
-      return isSignedIn() && exists(/databases/$(database)/documents/students/$(studentId)) && 
-             get(/databases/$(database)/documents/students/$(studentId)).data.userId == request.auth.uid;
+    /** 
+     * Verifies if a record belongs to the student user.
+     * Checks the user's profile for the business studentId.
+     */
+    function isStudentRecord(studentId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().studentId == studentId;
     }
 
     // --- COLLECTION RULES ---
 
-    /** Users: Owners and Staff manage profiles. Admins only delete. */
     match /users/{userId} {
-      allow get: if isOwner(userId) || isStaff();
+      allow get: if isSignedIn();
       allow list: if isStaff();
-      allow create: if isOwner(userId) || isStaff();
-      allow update: if isOwner(userId) || isStaff();
+      allow create, update: if isOwner(userId) || isStaff();
       allow delete: if isAdmin();
     }
 
-    /** Students: Staff manage; Students see own profile. */
     match /students/{studentId} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow read: if isStaff() || isStudentRecord(studentId);
       allow write: if isStaff();
     }
 
-    /** Instructors: Staff manage. */
-    match /instructors/{instructorId} {
-      allow read: if isStaff();
-      allow write: if isAdmin() || isBranchManager();
+    match /attendance/{id} {
+      allow read: if isStaff() || isStudentRecord(resource.data.studentId);
+      allow write: if isStaff();
     }
 
-    /** Vehicles: All staff see fleet; Admin/Managers manage. */
     match /vehicles/{vehicleId} {
       allow read: if isSignedIn();
       allow write: if isAdmin() || isBranchManager();
     }
 
-    /** Classes: Staff manage; Students see assigned. */
-    match /classes/{classId} {
-      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
-      allow write: if isStaff();
-    }
-
-    /** Attendance: Staff manage; Students see own logs. */
-    match /attendance/{id} {
-      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
-      allow write: if isStaff();
-    }
-
-    /** Payments: Staff manage; Students see own history. */
     match /payments/{paymentId} {
-      allow read: if isStaff() || (isSignedIn() && isStudentOwner(resource.data.studentId));
+      allow read: if isStaff() || isStudentRecord(resource.data.studentId);
       allow write: if isAdmin() || isBranchManager();
     }
 
-    /** Expenses: Only Managers and Admins. */
     match /expenses/{expenseId} {
       allow read, write: if isAdmin() || isBranchManager();
     }
 
-    /** Courses: All staff can see; Admin manage. */
     match /courses/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    /** Backups & Settings: Admin only. */
+    match /resources/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /quizzes/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /quizAttempts/{id} {
+      allow read: if isSignedIn() && (isStaff() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
     match /settings/{id} {
       allow read, write: if isAdmin();
     }
 
     match /backupMetadata/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    match /backups/{backupId} {
       allow read, write: if isAdmin();
     }
   }

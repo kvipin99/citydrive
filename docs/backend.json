@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -21,6 +22,10 @@
         "branch": {
           "type": "string",
           "description": "The branch the user belongs to."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "The business ID if the user is a student (e.g. B10001)."
         }
       },
       "required": ["id", "role"]
@@ -66,6 +71,33 @@
         "name": { "type": "string" },
         "amount": { "type": "number" }
       }
+    },
+    "Resource": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Resource",
+      "type": "object",
+      "description": "Learning materials like videos or PDFs.",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["Video", "PDF", "Link"] },
+        "url": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "Quiz": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Quiz",
+      "type": "object",
+      "description": "Examination provided by Admin.",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "timeLimit": { "type": "number", "description": "Time limit in minutes." },
+        "passingMarks": { "type": "number" },
+        "questions": { "type": "array" }
+      }
     }
   },
   "auth": {
@@ -79,6 +111,9 @@
       { "path": "/students/{studentId}", "definition": { "entityName": "Student" } },
       { "path": "/attendance/{id}", "definition": { "entityName": "Attendance" } },
       { "path": "/courses/{id}", "definition": { "entityName": "Course" } },
+      { "path": "/resources/{id}", "definition": { "entityName": "Resource" } },
+      { "path": "/quizzes/{id}", "definition": { "entityName": "Quiz" } },
+      { "path": "/quizAttempts/{id}", "definition": { "description": "Records of student quiz performances." } },
       { "path": "/settings/{id}", "definition": { "description": "System configuration settings." } }
     ]
   }

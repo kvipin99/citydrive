@@ -17,6 +17,9 @@ import {
   Wallet,
   CalendarCheck,
   User,
+  GraduationCap,
+  FileVideo,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -24,6 +27,7 @@ import { doc } from 'firebase/firestore';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
+  { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
   { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Payments', staffOnly: true },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
@@ -32,6 +36,8 @@ const navItems = [
   { href: '/dashboard/courses', icon: Tags, label: 'Courses', adminOnly: true },
   { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', adminOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports', staffOnly: true },
+  { href: '/dashboard/resources', icon: FileVideo, label: 'Resources' },
+  { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes' },
   { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup', adminOnly: true },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];
@@ -50,17 +56,15 @@ export default function SidebarNav() {
   const isAdmin = profile?.role === 'Admin';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
-  const isStaff = isAdmin || isBranchManager;
+  const isStaff = isAdmin || isBranchManager || profile?.role === 'Instructor';
 
   return (
     <div className="flex h-full flex-col justify-between p-2">
       <SidebarMenu>
         {navItems.map((item) => {
-          // Hide adminOnly items from Branch Managers and Students
           if (item.adminOnly && !isAdmin) return null;
-          
-          // Hide staffOnly items from Students
           if (item.staffOnly && !isStaff) return null;
+          if (item.studentOnly && !isStudent) return null;
           
           return (
             <SidebarMenuItem key={item.href}>
