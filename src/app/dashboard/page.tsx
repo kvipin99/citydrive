@@ -77,7 +77,6 @@ export default function DashboardPage() {
   }
 
   // --- Management View (Admin & Branch Manager) ---
-  const isBranchManager = profile?.role === 'BranchManager';
   const isAdmin = profile?.role === 'Admin';
 
   return (
@@ -104,18 +103,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-           {isAdmin ? <AiSummary /> : <VehicleValidityAlerts />}
+           <VehicleValidityAlerts />
         </div>
         <div className="lg:col-span-2">
-          <div className="flex flex-col gap-6">
-            {isAdmin && (
-              <>
-                <UpcomingClasses />
-                <VehicleValidityAlerts />
-              </>
-            )}
-            <ExpensesChart />
-          </div>
+          <ExpensesChart />
         </div>
       </div>
     </div>
