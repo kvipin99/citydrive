@@ -41,6 +41,7 @@ export default function StatsCards() {
     const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
     const stats = useMemo(() => {
+        if (!profile) return [];
         const totalStudents = students?.length || 0;
         const activeStudents = students?.filter(s => s.status === 'Active').length || 0;
         const totalRevenue = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -48,10 +49,10 @@ export default function StatsCards() {
         const netProfit = totalRevenue - totalExpenses;
 
         return [
-            { title: "Total Students", value: totalStudents.toLocaleString(), icon: <Users className="h-4 w-4 text-muted-foreground" />, change: isAdmin ? "All recorded registrations" : `At ${profile?.branch}` },
-            { title: "Active Students", value: activeStudents.toLocaleString(), icon: <Activity className="h-4 w-4 text-muted-foreground" />, change: "Currently in training" },
-            { title: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-muted-foreground" />, change: "Total fees collected" },
-            { title: "Net Profit", value: `₹${netProfit.toLocaleString()}`, icon: <Wallet className="h-4 w-4 text-muted-foreground" />, change: "Revenue minus expenses" }
+            { title: "Total Students", value: totalStudents.toLocaleString(), icon: <Users className="h-4 w-4 text-muted-foreground" />, change: isAdmin ? "All records" : `At ${profile?.branch}` },
+            { title: "Active Students", value: activeStudents.toLocaleString(), icon: <Activity className="h-4 w-4 text-muted-foreground" />, change: "In training" },
+            { title: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-muted-foreground" />, change: "Fees collected" },
+            { title: "Net Profit", value: `₹${netProfit.toLocaleString()}`, icon: <Wallet className="h-4 w-4 text-muted-foreground" />, change: "Rev - Exp" }
         ];
     }, [students, payments, expenses, isAdmin, profile]);
 

@@ -14,8 +14,8 @@ service cloud.firestore {
     }
 
     function hasRole(role) {
-      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return isSignedIn() && profile != null && profile.data.role == role;
+      let profilePath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isSignedIn() && exists(profilePath) && get(profilePath).data.role == role;
     }
 
     function isAdmin() {
@@ -26,8 +26,12 @@ service cloud.firestore {
       return hasRole('BranchManager');
     }
 
+    function isInstructor() {
+      return hasRole('Instructor');
+    }
+
     function isStaff() {
-      return isAdmin() || isBranchManager();
+      return isAdmin() || isBranchManager() || isInstructor();
     }
 
     function isStudent() {
@@ -49,9 +53,7 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Get: individual doc access
       allow get: if isSignedIn() && (isStaff() || (isStudent() && resource.data.userId == request.auth.uid));
-      // List: collection-level access (managers list their branch, students list their self-record)
       allow list: if isSignedIn() && (isStaff() || isStudent());
       allow create, update: if isStaff();
       allow delete: if isAdmin();
@@ -69,7 +71,7 @@ service cloud.firestore {
 
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isStaff() || hasRole('Instructor');
+      allow write: if isStaff();
     }
 
     match /attendance/{attendanceId} {

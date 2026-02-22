@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
 import { format, isSameDay } from "date-fns";
-import { Calendar } from "lucide-react";
+import { Calendar, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function UpcomingClasses() {
   const db = useFirestore();
@@ -29,32 +30,43 @@ export default function UpcomingClasses() {
   }, [classes]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upcoming Classes</CardTitle>
-        <CardDescription>Scheduled for {format(new Date(), 'EEEE, MMM do')}.</CardDescription>
+    <Card className="shadow-sm overflow-hidden border-primary/10">
+      <CardHeader className="bg-primary/5 border-b">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Clock className="h-5 w-5 text-primary" />
+          Today's Driving Schedule
+        </CardTitle>
+        <CardDescription>{format(new Date(), 'EEEE, MMMM do, yyyy')}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <div className="space-y-4">
           {isLoading ? (
-            [1, 2, 3].map(i => <div key={i} className="h-12 w-full animate-pulse bg-muted rounded-lg" />)
+            [1, 2, 3].map(i => <div key={i} className="h-16 w-full animate-pulse bg-muted rounded-xl" />)
           ) : todaysClasses.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                <Calendar className="h-10 w-10 mb-2 opacity-20" />
-                <p>No classes scheduled for today.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-2 border-dashed rounded-2xl">
+                <Calendar className="h-12 w-12 mb-3 opacity-10" />
+                <p className="font-medium">No sessions scheduled for today.</p>
+                <p className="text-xs">Bookings will appear here in real-time.</p>
             </div>
           ) : (
-            todaysClasses.map((c, index) => (
-              <div key={index} className="flex items-center space-x-4 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                <Avatar>
-                  <AvatarFallback>{c.studentName?.charAt(0) || 'S'}</AvatarFallback>
+            todaysClasses.map((c) => (
+              <div key={c.id} className="flex items-center space-x-4 p-3 rounded-xl border bg-card hover:shadow-md transition-all group">
+                <Avatar className="h-10 w-10 border-2 border-primary/10 group-hover:border-primary/30 transition-colors">
+                  <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
+                    {c.studentName?.charAt(0) || 'S'}
+                  </AvatarFallback>
                 </Avatar>
-                <div className="flex-1">
-                  <p className="font-medium">{c.studentName}</p>
-                  <p className="text-sm text-muted-foreground">Instructor: {c.instructorName}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold truncate text-sm">{c.studentName}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">
+                    Instr: <span className="text-foreground font-semibold">{c.instructorName}</span>
+                  </p>
                 </div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  {format(new Date(c.startTime), 'p')} - {format(new Date(c.endTime), 'p')}
+                <div className="text-right flex flex-col items-end gap-1">
+                  <Badge variant="outline" className="font-mono text-[10px] bg-background">
+                    {format(new Date(c.startTime), 'p')}
+                  </Badge>
+                  <span className="text-[9px] text-muted-foreground font-medium">to {format(new Date(c.endTime), 'p')}</span>
                 </div>
               </div>
             ))

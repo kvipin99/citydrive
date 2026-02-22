@@ -5,6 +5,7 @@ import AiSummary from "@/components/dashboard/ai-summary";
 import { RevenueChart, ProfitChart, ExpensesChart } from "@/components/dashboard/charts";
 import StatsCards from "@/components/dashboard/stats-cards";
 import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
+import UpcomingClasses from "@/components/dashboard/upcoming-classes";
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, where } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,30 @@ export default function DashboardPage() {
     return <StudentDashboard uid={user?.uid!} />;
   }
 
+  const isStaff = profile?.role === 'BranchManager' || profile?.role === 'Instructor';
+
+  if (isStaff) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Staff Overview</h2>
+            <p className="text-muted-foreground text-sm">Welcome! Here is your agenda and fleet status for today.</p>
+          </div>
+          <Badge variant="secondary" className="px-3 py-1 font-bold">
+            {profile?.branch || 'Operational'}
+          </Badge>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <UpcomingClasses />
+          <VehicleValidityAlerts />
+        </div>
+      </div>
+    );
+  }
+
+  // Admin view
   return (
     <div className="flex flex-col gap-6">
       <StatsCards />
@@ -52,6 +77,7 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-2">
           <div className="flex flex-col gap-6">
+            <UpcomingClasses />
             <VehicleValidityAlerts />
             <ExpensesChart />
           </div>
