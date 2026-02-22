@@ -19,9 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where, orderBy } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, RefreshCw, AlertTriangle, Lock, BookOpen, Clock, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -68,6 +68,18 @@ export default function StudentsPage() {
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Specific query for attendance history when profile is open
+  const attendanceHistoryQuery = useMemoFirebase(() => {
+    if (!db || !selectedStudent || !isProfileOpen) return null;
+    return query(
+      collection(db, 'attendance'), 
+      where('studentId', '==', selectedStudent.id),
+      orderBy('date', 'desc')
+    );
+  }, [db, selectedStudent?.id, isProfileOpen]);
+
+  const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -463,6 +475,17 @@ export default function StudentsPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label>Driving Test Date</Label>
+          <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Email (Optional)</Label>
+          <Input type="email" placeholder="student@example.com" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+        </div>
+      </div>
+
       <div className="grid gap-2">
         <Label>Address</Label>
         <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
@@ -709,35 +732,104 @@ export default function StudentsPage() {
                     </Avatar>
                     <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
                     <Badge variant="outline" className="mt-1 font-mono">{selectedStudent.id}</Badge>
-                    <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedStudent.branch}</p>
+                    <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                      <Badge variant="secondary" className="capitalize">{selectedStudent.status}</Badge>
+                      <Badge variant="outline" className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedStudent.branch}</Badge>
+                    </div>
                  </div>
+
                  <Separator />
+
                  <section className="space-y-3">
                     <h3 className="text-sm font-bold text-primary flex items-center gap-2"><User className="h-4 w-4" /> Personal Information</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium">{selectedStudent.phone}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Mobile</p><p className="font-medium flex items-center gap-1.5"><Phone className="h-3 w-3" /> {selectedStudent.phone}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Parent/Guardian</p><p className="font-medium">{selectedStudent.parentName || 'N/A'}</p></div>
                       <div className="space-y-1"><p className="text-xs text-muted-foreground">Aadhar</p><p className="font-medium">{selectedStudent.aadharNo || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-xs text-muted-foreground">App No.</p><p className="font-medium">{selectedStudent.onlineAppNo || 'N/A'}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Email</p><p className="font-medium flex items-center gap-1.5"><Mail className="h-3 w-3" /> {selectedStudent.email || 'N/A'}</p></div>
+                    </div>
+                    <div className="space-y-1"><p className="text-xs text-muted-foreground">Address</p><p className="font-medium text-xs leading-relaxed">{selectedStudent.address || 'N/A'}</p></div>
+                 </section>
+
+                 <Separator />
+
+                 <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><FileText className="h-4 w-4" /> Academic & License Details</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Online App No.</p><p className="font-mono text-xs">{selectedStudent.onlineAppNo || 'N/A'}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Registration Date</p><p className="font-medium">{selectedStudent.registrationDate}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Learners Date</p><p className="font-medium">{selectedStudent.learnersDate || 'N/A'}</p></div>
+                      <div className="space-y-1"><p className="text-xs text-muted-foreground">Test Date</p><p className="font-medium">{selectedStudent.testDate || 'N/A'}</p></div>
+                    </div>
+                    <div className="space-y-1 p-2 rounded border bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Staff Remarks</p>
+                      <p className="text-xs italic">{selectedStudent.remarks || 'No specific remarks noted.'}</p>
                     </div>
                  </section>
+
                  <Separator />
+
+                 <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-primary flex items-center gap-2"><BookOpen className="h-4 w-4" /> Enrolled Courses</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedStudent.courses?.map((course, idx) => (
+                        <Badge key={idx} variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                          {course}
+                        </Badge>
+                      )) || <p className="text-xs text-muted-foreground">No courses enrolled.</p>}
+                    </div>
+                 </section>
+
+                 <Separator />
+
                  <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
                     <div className="flex justify-between items-center"><span className="text-sm font-medium">Total Fees</span><span className="text-xl font-bold">₹{selectedStudent.amount.toLocaleString()}</span></div>
-                    <div className="flex justify-between items-center text-destructive"><span className="text-sm font-medium">Remaining</span><span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center text-destructive"><span className="text-sm font-medium">Remaining Balance</span><span className="text-xl font-black">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</span></div>
                  </section>
+
                  <section className="space-y-3">
                     <p className="text-sm font-semibold flex items-center gap-2"><Receipt className="h-4 w-4" /> Payment History</p>
-                    <div className="border rounded-lg"><Table><TableBody>
-                      {selectedStudent.payments?.map((p, idx) => (
-                        <TableRow key={p.id || idx} className="text-xs">
-                          <TableCell>{p.date ? format(new Date(p.date), 'dd/MM/yy') : 'N/A'}</TableCell>
-                          <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
-                          <TableCell>{p.method}</TableCell>
-                          <TableCell className="text-muted-foreground italic">#{p.receiptNo}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody></Table></div>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableBody>
+                          {selectedStudent.payments?.length === 0 ? (
+                            <TableRow><TableCell className="text-center py-4 text-xs text-muted-foreground">No payments recorded yet.</TableCell></TableRow>
+                          ) : (
+                            selectedStudent.payments?.map((p, idx) => (
+                              <TableRow key={p.id || idx} className="text-xs">
+                                <TableCell>{p.date ? format(new Date(p.date), 'dd MMM yyyy') : 'N/A'}</TableCell>
+                                <TableCell className="font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
+                                <TableCell>{p.method}</TableCell>
+                                <TableCell className="text-muted-foreground italic text-right">#{p.receiptNo}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                 </section>
+
+                 <Separator />
+
+                 <section className="space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4" /> Attendance History</p>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableBody>
+                          {!attendanceHistory || attendanceHistory.length === 0 ? (
+                            <TableRow><TableCell className="text-center py-8 text-xs text-muted-foreground">No training sessions logged.</TableCell></TableRow>
+                          ) : (
+                            attendanceHistory.map((log) => (
+                              <TableRow key={log.id} className="text-xs">
+                                <TableCell className="font-medium">{format(new Date(log.date), 'dd MMM')}</TableCell>
+                                <TableCell>{log.startTime} - {log.endTime}</TableCell>
+                                <TableCell className="text-right font-bold text-primary">{log.duration}h</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                  </section>
                </div>
              </ScrollArea>
