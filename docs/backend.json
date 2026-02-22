@@ -5,215 +5,128 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user account within the system, linked to Firebase Authentication and assigned a specific role for access control.",
+      "description": "Represents a user account within the system, linked to Firebase Authentication.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the User entity (UID)."
-        },
-        "name": {
-          "type": "string",
-          "description": "Display name of the user."
-        },
-        "role": {
-          "type": "string",
-          "description": "The assigned role (Admin, BranchManager, Instructor, Student)."
-        },
-        "branch": {
-          "type": "string",
-          "description": "The branch the user belongs to."
-        },
-        "studentId": {
-          "type": "string",
-          "description": "The business ID if the user is a student (e.g. B10001)."
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "branch": { "type": "string" },
+        "studentId": { "type": "string" }
       },
-      "required": [
-        "id",
-        "role"
-      ]
+      "required": ["id", "role"]
     },
     "Student": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Student",
       "type": "object",
-      "description": "Represents a student enrolled in the driving school.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "userId": {
-          "type": "string",
-          "description": "The Firebase Authentication UID of the student."
-        },
-        "name": {
-          "type": "string"
-        },
-        "branch": {
-          "type": "string"
-        },
-        "registrationDate": {
-          "type": "string",
-          "format": "date"
-        },
-        "status": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "number"
-        },
-        "payments": {
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "branch",
-        "status",
-        "userId"
-      ]
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "branch": { "type": "string" },
+        "registrationDate": { "type": "string", "format": "date" },
+        "status": { "type": "string" },
+        "amount": { "type": "number" },
+        "payments": { "type": "array" }
+      }
+    },
+    "Instructor": {
+      "title": "Instructor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Deactive"] },
+        "avatarUrl": { "type": "string" }
+      }
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "regNumber": { "type": "string" },
+        "brandModel": { "type": "string" },
+        "status": { "type": "string" }
+      }
     },
     "Attendance": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Attendance",
       "type": "object",
-      "description": "Represents a training session log entry.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "studentId": {
-          "type": "string"
-        },
-        "studentUid": {
-          "type": "string",
-          "description": "The Firebase Authentication UID of the student for security rules."
-        },
-        "date": {
-          "type": "string",
-          "format": "date"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "Practical",
-            "Theory"
-          ]
-        },
-        "duration": {
-          "type": "number"
-        },
-        "vehicleReg": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "studentId",
-        "studentUid",
-        "date"
-      ]
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "type": { "type": "string" }
+      }
+    },
+    "Class": {
+      "title": "Class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "startTime": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "Payment": {
+      "title": "Payment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "amount": { "type": "number" },
+        "receiptNo": { "type": "string" }
+      }
+    },
+    "Expense": {
+      "title": "Expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" }
+      }
     },
     "Course": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Course",
       "type": "object",
-      "description": "Represents a course offered by the school.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "name",
-        "amount"
-      ]
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "amount": { "type": "number" }
+      }
     },
     "Resource": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Resource",
       "type": "object",
-      "description": "Learning materials like videos or PDFs.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "Video",
-            "PDF",
-            "Link"
-          ]
-        },
-        "url": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "title",
-        "type",
-        "url"
-      ]
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "url": { "type": "string" }
+      }
     },
     "Quiz": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Quiz",
       "type": "object",
-      "description": "Examination provided by Admin.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "timeLimit": {
-          "type": "number",
-          "description": "Time limit in minutes."
-        },
-        "passingMarks": {
-          "type": "number"
-        },
-        "questions": {
-          "type": "array"
-        }
-      },
-      "required": [
-        "title",
-        "questions"
-      ]
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "questions": { "type": "array" }
+      }
     },
     "QuizAttempt": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QuizAttempt",
       "type": "object",
-      "description": "Records of student quiz performances.",
       "properties": {
         "id": { "type": "string" },
         "studentUid": { "type": "string" },
-        "userName": { "type": "string" },
-        "quizId": { "type": "string" },
-        "quizTitle": { "type": "string" },
-        "score": { "type": "number" },
-        "total": { "type": "number" },
-        "passed": { "type": "boolean" },
-        "completedAt": { "type": "object" }
+        "score": { "type": "number" }
       }
     }
   },
@@ -224,54 +137,20 @@
   },
   "firestore": {
     "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User"
-        }
-      },
-      {
-        "path": "/students/{studentId}",
-        "definition": {
-          "entityName": "Student"
-        }
-      },
-      {
-        "path": "/attendance/{id}",
-        "definition": {
-          "entityName": "Attendance"
-        }
-      },
-      {
-        "path": "/courses/{id}",
-        "definition": {
-          "entityName": "Course"
-        }
-      },
-      {
-        "path": "/resources/{id}",
-        "definition": {
-          "entityName": "Resource"
-        }
-      },
-      {
-        "path": "/quizzes/{id}",
-        "definition": {
-          "entityName": "Quiz"
-        }
-      },
-      {
-        "path": "/quizAttempts/{id}",
-        "definition": {
-          "entityName": "QuizAttempt"
-        }
-      },
-      {
-        "path": "/settings/{id}",
-        "definition": {
-          "description": "System configuration settings."
-        }
-      }
+      { "path": "/users/{userId}", "definition": { "entityName": "User" } },
+      { "path": "/students/{studentId}", "definition": { "entityName": "Student" } },
+      { "path": "/instructors/{instructorId}", "definition": { "entityName": "Instructor" } },
+      { "path": "/attendance/{id}", "definition": { "entityName": "Attendance" } },
+      { "path": "/vehicles/{vehicleId}", "definition": { "entityName": "Vehicle" } },
+      { "path": "/payments/{paymentId}", "definition": { "entityName": "Payment" } },
+      { "path": "/expenses/{expenseId}", "definition": { "entityName": "Expense" } },
+      { "path": "/courses/{id}", "definition": { "entityName": "Course" } },
+      { "path": "/classes/{id}", "definition": { "entityName": "Class" } },
+      { "path": "/resources/{id}", "definition": { "entityName": "Resource" } },
+      { "path": "/quizzes/{id}", "definition": { "entityName": "Quiz" } },
+      { "path": "/quizAttempts/{id}", "definition": { "entityName": "QuizAttempt" } },
+      { "path": "/settings/{id}", "definition": { "description": "System configuration settings." } },
+      { "path": "/backupMetadata/{id}", "definition": { "description": "Audit logs for database exports." } }
     ]
   }
 }
