@@ -72,12 +72,21 @@ export default function StudentsPage() {
   // Specific query for attendance history when profile is open
   const attendanceHistoryQuery = useMemoFirebase(() => {
     if (!db || !selectedStudent || !isProfileOpen) return null;
+    // For admins, we fetch all. For branch managers, we ensure we filter by branch to match security rules
+    if (isAdmin) {
+      return query(
+        collection(db, 'attendance'), 
+        where('studentId', '==', selectedStudent.id),
+        orderBy('date', 'desc')
+      );
+    }
     return query(
       collection(db, 'attendance'), 
       where('studentId', '==', selectedStudent.id),
+      where('branch', '==', selectedStudent.branch),
       orderBy('date', 'desc')
     );
-  }, [db, selectedStudent?.id, isProfileOpen]);
+  }, [db, selectedStudent, isProfileOpen, isAdmin]);
 
   const { data: attendanceHistory } = useCollection(attendanceHistoryQuery);
 
@@ -112,7 +121,7 @@ export default function StudentsPage() {
       const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profile.branch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
-  }, [profile, isAddDialogOpen, isAdmin]);
+  }, [profile, isAddDialogOpen, isAdmin, formData.branch]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};

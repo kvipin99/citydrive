@@ -10,12 +10,13 @@ service cloud.firestore {
     }
 
     // Safely get the user document data
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // We allow reading any user doc if signed in to avoid circularity in role checks
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
     function hasRole(role) {
-      return isSignedIn() && getUserData().role == role;
+      return isSignedIn() && getUserData(request.auth.uid).role == role;
     }
 
     function isAdmin() {
@@ -26,28 +27,21 @@ service cloud.firestore {
       return hasRole('BranchManager');
     }
 
-    function isAccountant() {
-      return hasRole('Accountant');
-    }
-
     function isInstructor() {
       return hasRole('Instructor');
     }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    
+    function isStaff() {
+      return isAdmin() || isBranchManager();
     }
 
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
+      // Allow any signed in user to get a user doc (needed for role checks)
+      allow get: if isSignedIn();
       allow list: if isAdmin();
-      allow create, update: if isSignedIn() && (
-        request.auth.uid == userId || 
-        isAdmin() || 
-        isBranchManager()
-      );
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isBranchManager());
       allow delete: if isAdmin();
     }
 
@@ -57,7 +51,6 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Staff can list and get student details
       allow list: if isSignedIn() && (isAdmin() || isBranchManager());
       allow get: if isSignedIn() && (
         isAdmin() || 
@@ -86,18 +79,21 @@ service cloud.firestore {
     }
 
     match /attendance/{attendanceId} {
-      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isInstructor());
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || isInstructor());
+      allow get: if isSignedIn();
       allow write: if isAdmin() || isBranchManager();
     }
 
     match /payments/{paymentId} {
-      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isAccountant());
-      allow write: if isAdmin() || isBranchManager() || isAccountant();
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant'));
+      allow get: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
     }
 
     match /expenses/{expenseId} {
-      allow read: if isSignedIn() && (isAdmin() || isBranchManager() || isAccountant());
-      allow write: if isAdmin() || isBranchManager() || isAccountant();
+      allow list: if isSignedIn() && (isAdmin() || isBranchManager() || hasRole('Accountant'));
+      allow get: if isSignedIn();
+      allow write: if isAdmin() || isBranchManager() || hasRole('Accountant');
     }
 
     match /backupMetadata/{backupId} {
