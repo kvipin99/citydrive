@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
@@ -78,14 +79,19 @@ export default function AttendancePage() {
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
   const filteredSearch = useMemo(() => {
-    if (!studentSearch || studentSearch.length < 2) return [];
-    return students?.filter(s => 
-      s.status !== 'Completed' && (
-        s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
-        s.id.toLowerCase().includes(studentSearch.toLowerCase()) ||
-        s.phone?.includes(studentSearch)
-      )
-    ).slice(0, 5) || [];
+    if (!students) return [];
+    
+    // Filter out students who have completed their courses
+    const activeOnes = students.filter(s => s.status !== 'Completed');
+
+    if (!studentSearch) return activeOnes;
+
+    const term = studentSearch.toLowerCase();
+    return activeOnes.filter(s => 
+      s.name.toLowerCase().includes(term) || 
+      s.id.toLowerCase().includes(term) ||
+      s.phone?.includes(term)
+    );
   }, [students, studentSearch]);
 
   const handleMarkAttendance = () => {
@@ -171,42 +177,48 @@ export default function AttendancePage() {
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Record Student Session</DialogTitle>
-                  <DialogDescription>Search for an active student and log their training time.</DialogDescription>
+                  <DialogDescription>Select a student and log their training time.</DialogDescription>
                 </DialogHeader>
                 
                 <div className="grid gap-6 py-4">
                   {!selectedStudent ? (
                     <div className="grid gap-2">
-                      <Label>Search Student (Active Only)</Label>
+                      <Label>Search or Select Student</Label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input 
-                          placeholder="Type Name, ID or Phone..." 
+                          placeholder="Search Name, ID or Phone..." 
                           className="pl-8" 
                           value={studentSearch} 
                           onChange={(e) => setStudentSearch(e.target.value)} 
                         />
                       </div>
-                      {filteredSearch.length > 0 && (
-                        <div className="border rounded-lg overflow-hidden divide-y mt-1 shadow-sm">
-                          {filteredSearch.map(s => (
-                            <div 
-                              key={s.id} 
-                              className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
-                              onClick={() => setSelectedStudent(s)}
-                            >
-                              <div className="flex items-center gap-3">
-                                <UserCircle className="h-8 w-8 text-primary/40" />
-                                <div className="grid">
-                                  <p className="font-bold text-sm">{s.name}</p>
-                                  <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
+                      <ScrollArea className="h-[300px] border rounded-lg mt-1">
+                        {filteredSearch.length === 0 ? (
+                          <div className="p-8 text-center text-muted-foreground italic text-sm">
+                            No students found.
+                          </div>
+                        ) : (
+                          <div className="divide-y">
+                            {filteredSearch.map(s => (
+                              <div 
+                                key={s.id} 
+                                className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
+                                onClick={() => setSelectedStudent(s)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <UserCircle className="h-8 w-8 text-primary/40" />
+                                  <div className="grid">
+                                    <p className="font-bold text-sm">{s.name}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.phone}</p>
+                                  </div>
                                 </div>
+                                <Badge variant="outline">Select</Badge>
                               </div>
-                              <Badge variant="outline">Select</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        )}
+                      </ScrollArea>
                     </div>
                   ) : (
                     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
