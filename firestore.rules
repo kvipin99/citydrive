@@ -33,7 +33,12 @@ service cloud.firestore {
       return hasRole('Instructor');
     }
 
+    function isStudent() {
+      return hasRole('Student');
+    }
+
     function isStaff() {
+      // Staff includes Admin, BranchManager, and Instructor
       return isAdmin() || isBranchManager() || isInstructor();
     }
 
@@ -59,12 +64,14 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // Prioritize UID check for efficient list queries
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isStaff();
       allow write: if isStaff();
     }
 
     match /attendance/{id} {
-      allow read: if isStaff() || isStudentRecord(resource.data);
+      // Prioritize studentUid check for efficient list queries
+      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid) || isStaff();
       allow write: if isStaff();
     }
 
@@ -74,7 +81,8 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read: if isStaff() || isStudentRecord(resource.data);
+      // Prioritize studentUid check for efficient list queries
+      allow read: if (isSignedIn() && resource.data.studentUid == request.auth.uid) || isStaff();
       allow write: if isAdmin() || isBranchManager();
     }
 
@@ -98,7 +106,8 @@ service cloud.firestore {
     }
 
     match /quizAttempts/{id} {
-      allow read: if isSignedIn() && (isStaff() || resource.data.userId == request.auth.uid);
+      // Prioritize userId check for efficient list queries
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isStaff();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
