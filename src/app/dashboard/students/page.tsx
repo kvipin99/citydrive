@@ -116,17 +116,27 @@ export default function StudentsPage() {
     ) || [];
   }, [students, searchQuery]);
 
+  // Generate Student ID: B<BranchNumber>XXXXX (e.g. B10001)
   const generateBranchStudentId = (branchName: string) => {
-    const branchPart = branchName.split(' ')[1] || "X";
-    const prefix = `B${branchPart}-`;
+    const branchNumber = branchName.split(' ')[1] || "1";
+    const prefix = `B${branchNumber}`;
+    
+    // We need to look at ALL students to ensure the series is continuous across the whole branch
+    // even if the current user only sees their own branch (already handled by fetching profile.branch)
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
-    const maxNumber = branchStudents.reduce((max, s) => {
-      const parts = s.id.split('-');
-      if (parts.length < 2) return max;
-      const num = parseInt(parts[1], 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 1000); 
-    return `${prefix}${maxNumber + 1}`;
+    
+    const maxSequence = branchStudents.reduce((max, s) => {
+      if (s.id && s.id.startsWith(prefix)) {
+        const seqPart = s.id.slice(prefix.length);
+        const seq = parseInt(seqPart, 10);
+        return !isNaN(seq) && seq > max ? seq : max;
+      }
+      return max;
+    }, 0);
+    
+    // Start from 0001 if no students exist, otherwise increment
+    const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
+    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   };
 
   const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
@@ -435,7 +445,7 @@ export default function StudentsPage() {
                 <DialogContent className="max-w-4xl">
                   <DialogHeader>
                     <DialogTitle>New Student Registration</DialogTitle>
-                    <DialogDescription>Fill in all details. IDs follow the branch series (e.g., B1-1001).</DialogDescription>
+                    <DialogDescription>Fill in all details. IDs follow the branch series (e.g., B10001, B10002).</DialogDescription>
                   </DialogHeader>
                   <ScrollArea className="max-h-[70vh] pr-4">
                     <div className="grid gap-6 py-4">
@@ -456,12 +466,17 @@ export default function StudentsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label className="text-primary font-bold">Branch Assignment</Label>
-                          <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v as any})} disabled={!isAdmin}>
+                          <Select 
+                            value={formData.branch} 
+                            onValueChange={(v) => setFormData({...formData, branch: v as any})} 
+                            disabled={!isAdmin}
+                          >
                             <SelectTrigger className="border-primary/50"><SelectValue placeholder="Select Branch" /></SelectTrigger>
                             <SelectContent>
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          {!isAdmin && <p className="text-[10px] text-muted-foreground">Auto-allocated to your branch.</p>}
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
