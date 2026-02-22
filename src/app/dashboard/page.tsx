@@ -6,6 +6,7 @@ import { RevenueChart, ProfitChart, ExpensesChart } from "@/components/dashboard
 import StatsCards from "@/components/dashboard/stats-cards";
 import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
 import UpcomingClasses from "@/components/dashboard/upcoming-classes";
+import FleetStatus from "@/components/dashboard/fleet-status";
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, where } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,9 +63,12 @@ export default function DashboardPage() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <UpcomingClasses />
-          <VehicleValidityAlerts />
+          <div className="space-y-6">
+            <FleetStatus />
+            <VehicleValidityAlerts />
+          </div>
         </div>
       </div>
     );
