@@ -16,10 +16,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
+import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
 import { type Student } from "@/lib/mock-data";
-import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, CheckCircle2, Clock } from "lucide-react";
+import { MoreHorizontal, User, MapPin, Edit2, Eye, Trash2, Search, PlusCircle, Receipt, Download, Upload, ArrowDownCircle, Phone, Calendar, Hash, Mail, ClipboardList, Camera, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
@@ -45,7 +45,6 @@ export default function StudentsPage() {
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    // Branch isolation logic: Admin sees all, managers see only their branch
     if (isAdmin) {
       return collection(db, 'students');
     }
@@ -93,7 +92,6 @@ export default function StudentsPage() {
     photoUrl: ""
   });
 
-  // Effect to initialize default branch when profile loads
   useEffect(() => {
     if (profile && !formData.branch) {
       const defaultBranch = profile.role === 'Admin' ? "Branch 1" : (profile.branch || "Branch 1");
@@ -101,7 +99,6 @@ export default function StudentsPage() {
     }
   }, [profile, formData.branch]);
 
-  // Query for classes associated with the selected student
   const classesQuery = useMemoFirebase(() => {
     if (!db || !user || !selectedStudent) return null;
     return query(collection(db, 'classes'), where('studentId', '==', selectedStudent.id));
@@ -121,6 +118,12 @@ export default function StudentsPage() {
       s.phone?.includes(searchQuery)
     ) || [];
   }, [students, searchQuery]);
+
+  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
+    const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
+    const totalWithSpecial = baseAmount + (courses.includes("Other Special Course") ? (specialFee || 0) : 0);
+    return Math.max(0, totalWithSpecial - (discount || 0));
+  };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -171,19 +174,12 @@ export default function StudentsPage() {
     }
   };
 
-  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
-    const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
-    const totalWithSpecial = baseAmount + (courses.includes("Other Special Course") ? (specialFee || 0) : 0);
-    return Math.max(0, totalWithSpecial - (discount || 0));
-  };
-
   const handleAddStudent = async () => {
     if (!formData.name || !formData.branch) {
       toast({ variant: "destructive", title: "Error", description: "Name and Branch are required." });
       return;
     }
 
-    // Safety check for branch selection
     const branchName = formData.branch;
     const branchPart = branchName.split(' ')[1] || "X";
     const studentId = `${branchPart}-${Date.now().toString().slice(-6)}`;
@@ -229,6 +225,37 @@ export default function StudentsPage() {
     updateDocumentNonBlocking(studentRef, updatedData);
     setIsEditDialogOpen(false);
     toast({ title: "Student Updated" });
+  };
+
+  const handleDeleteStudent = async (student: Student) => {
+    if (!isAdmin) {
+      toast({ variant: "destructive", title: "Unauthorized", description: "Only admins can delete student records." });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to permanently delete student ${student.name} (#${student.id}) and all their payment records? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const paymentsCol = collection(db, 'payments');
+      const q = query(paymentsCol, where('studentId', '==', student.id));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach((docSnap) => {
+        deleteDocumentNonBlocking(doc(db, 'payments', docSnap.id));
+      });
+
+      deleteDocumentNonBlocking(doc(db, 'students', student.id));
+
+      if (student.userId) {
+        deleteDocumentNonBlocking(doc(db, 'users', student.userId));
+      }
+
+      toast({ title: "Student Deleted", description: "All records for the student have been removed." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete records: " + error.message });
+    }
   };
 
   const resetForm = () => {
@@ -388,8 +415,6 @@ export default function StudentsPage() {
         const courses = coursesStr?.replace(/"/g, '').split(';').map(c => c.trim()) || [];
         const studentId = id || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         const studentRef = doc(db, 'students', studentId);
-        
-        // Ensure Admin imports default to a specific branch if not provided
         const finalBranch = branch || (profile?.role === 'Admin' ? "Branch 1" : profile?.branch || "Branch 1");
 
         const newStudentData = {
@@ -517,7 +542,6 @@ export default function StudentsPage() {
                               {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          {isAdmin && <p className="text-[10px] text-muted-foreground italic">Important: Select the correct branch for the student.</p>}
                         </div>
                         <div className="grid gap-2">
                           <Label>Full Name</Label>
@@ -684,9 +708,16 @@ export default function StudentsPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => { setSelectedStudent(student); setIsProfileOpen(true); }}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}><Trash2 className="mr-2 h-4 w-4" /> Deactivate</DropdownMenuItem>
+                            {isAdmin && (
+                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteStudent(student)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Full Data
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="text-muted-foreground" onClick={() => updateDocumentNonBlocking(doc(db, 'students', student.id), { status: 'Inactive' })}>
+                              <Hash className="mr-2 h-4 w-4" /> Mark Inactive
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -718,7 +749,6 @@ export default function StudentsPage() {
                 disabled={!isAdmin}
                 onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
               />
-              {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
             </div>
             <div className="grid gap-2">
               <Label>Amount Received (₹)</Label>
@@ -827,51 +857,6 @@ export default function StudentsPage() {
 
                     <Separator />
 
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-bold text-primary flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4" /> Class Attendance & Schedule
-                      </h3>
-                      <div className="border rounded-lg overflow-hidden bg-muted/10">
-                        <Table>
-                          <TableHeader className="bg-muted/30">
-                            <TableRow className="text-[10px] uppercase">
-                              <TableHead className="h-8">Date & Time</TableHead>
-                              <TableHead className="h-8">Instructor</TableHead>
-                              <TableHead className="h-8">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {studentClasses && studentClasses.length > 0 ? (
-                              studentClasses.sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).map((cls: any) => (
-                                <TableRow key={cls.id} className="text-xs">
-                                  <TableCell>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{format(new Date(cls.startTime), 'MMM dd, yyyy')}</span>
-                                      <span className="text-muted-foreground text-[10px]">{format(new Date(cls.startTime), 'p')} - {format(new Date(cls.endTime), 'p')}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-[10px] font-medium">{cls.instructorName}</TableCell>
-                                  <TableCell>
-                                    <Badge variant={cls.status === 'Completed' ? 'default' : cls.status === 'Scheduled' ? 'outline' : 'destructive'} className="text-[9px] px-1.5 py-0">
-                                      {cls.status}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            ) : (
-                              <TableRow>
-                                <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-xs italic">
-                                  No classes recorded for this student.
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </section>
-
-                    <Separator />
-
                     <section className="p-4 border rounded-xl bg-primary/5 space-y-4">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">Total Fees (Agreed)</span>
@@ -906,13 +891,6 @@ export default function StudentsPage() {
                         </Table>
                       </div>
                     </section>
-
-                    <section className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Office Remarks</p>
-                      <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-                        {selectedStudent.remarks || 'No specific remarks for this student.'}
-                      </div>
-                    </section>
                  </div>
                </div>
              </ScrollArea>
@@ -924,7 +902,7 @@ export default function StudentsPage() {
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Edit Student Profile</DialogTitle>
-            <DialogDescription>Note: The Agreed Amount remains fixed unless manually adjusted here.</DialogDescription>
+            <DialogDescription>Update information, courses, and pricing.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <div className="grid gap-6 py-4">
@@ -951,7 +929,6 @@ export default function StudentsPage() {
                     onChange={handlePhotoUpload} 
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Format: JPEG | Limit: 200KB</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -970,7 +947,7 @@ export default function StudentsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Full Name</Label>
-                  <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                  <Input value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Status</Label>
@@ -988,29 +965,49 @@ export default function StudentsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>Parent/Guardian Name</Label>
-                  <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+                  <Label>Parent/Guardian</Label>
+                  <Input value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Mobile No.</Label>
-                  <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                  <Input value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Aadhar No.</Label>
-                  <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
+              <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
+                <Label className="font-bold">Courses & Pricing</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {masterCourses?.map(course => (
+                    <div key={course.id} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`edit-course-${course.id}`} 
+                        checked={formData.courses?.includes(course.name)} 
+                        onCheckedChange={() => handleCourseToggle(course.name)}
+                      />
+                      <Label htmlFor={`edit-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
+                    </div>
+                  ))}
                 </div>
-                <div className="grid gap-2">
-                  <Label>Online App No.</Label>
-                  <Input placeholder="APP-1001" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                  <div className="grid gap-2">
+                    <Label>Discount (₹)</Label>
+                    <Input type="number" value={formData.discount} onChange={(e) => {
+                       const disc = Number(e.target.value);
+                       setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
+                    }} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-primary font-bold">Calculated Agreed Fee (₹)</Label>
+                    <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                    <p className="text-[10px] text-muted-foreground italic">You can manually override this value if needed.</p>
+                  </div>
                 </div>
               </div>
 
               <div className="grid gap-2">
                 <Label>Address</Label>
-                <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
+                <Textarea value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1025,13 +1022,8 @@ export default function StudentsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label className="text-primary font-bold">Agreed Fee (₹)</Label>
-                <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
-              </div>
-
-              <div className="grid gap-2">
                 <Label>Remarks</Label>
-                <Textarea placeholder="Any specific requirements or notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
+                <Textarea value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
               </div>
             </div>
           </ScrollArea>
