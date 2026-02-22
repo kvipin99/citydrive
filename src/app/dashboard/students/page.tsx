@@ -124,7 +124,8 @@ export default function StudentsPage() {
     learnersDate: "",
     testDate: "",
     remarks: "",
-    photoUrl: ""
+    photoUrl: "",
+    registrationDate: format(new Date(), 'yyyy-MM-dd')
   });
 
   useEffect(() => {
@@ -239,7 +240,7 @@ export default function StudentsPage() {
         id: studentId,
         userId: authUid,
         amount,
-        registrationDate: new Date().toISOString().split('T')[0],
+        registrationDate: formData.registrationDate || new Date().toISOString().split('T')[0],
         payments: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -315,7 +316,8 @@ export default function StudentsPage() {
       learnersDate: "",
       testDate: "",
       remarks: "",
-      photoUrl: ""
+      photoUrl: "",
+      registrationDate: format(new Date(), 'yyyy-MM-dd')
     });
   };
 
@@ -400,8 +402,8 @@ export default function StudentsPage() {
       toast({ variant: "destructive", title: "Export Failed", description: "No student data available." });
       return;
     }
-    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Total Amount", "Discount"];
-    const rows = students.map(s => [s.id, s.name, s.phone, s.email || '', s.branch, s.status, s.amount, s.discount]);
+    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Total Amount", "Discount", "Admission Date"];
+    const rows = students.map(s => [s.id, s.name, s.phone, s.email || '', s.branch, s.status, s.amount, s.discount, s.registrationDate]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -720,16 +722,24 @@ function StudentForm({
           </Select>
         </div>
         <div className="grid gap-2">
+          <Label>Admission Date</Label>
+          <Input 
+            type="date" 
+            value={formData.registrationDate || ''} 
+            onChange={(e) => setFormData({...formData, registrationDate: e.target.value})} 
+          />
+        </div>
+        <div className="grid gap-2">
           <Label>Parent/Guardian Name</Label>
           <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="grid gap-2">
           <Label>Aadhar No.</Label>
           <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2">
           <Label>Online App No.</Label>
           <Input placeholder="APP-12345" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
@@ -805,7 +815,6 @@ function StudentForm({
 function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student) return null;
-    // Removed specific branch query to ensure we see global attendance for this student
     return query(collection(db, 'attendance'), where('studentId', '==', student.id));
   }, [db, student]);
 
@@ -891,6 +900,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <User className="h-4 w-4" /> Personal & Licensing
           </h3>
           <div className="grid gap-4 text-sm">
+            <ProfileItem icon={<Calendar />} label="Admission Date" value={student.registrationDate ? format(new Date(student.registrationDate), 'MMM dd, yyyy') : 'N/A'} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar No" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
