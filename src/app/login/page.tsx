@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -11,10 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle, Car } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import Image from 'next/image';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
@@ -28,7 +25,6 @@ export default function LoginPage() {
   const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
-  const logo = PlaceHolderImages.find(p => p.id === 'app-logo');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,29 +81,20 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
-        <CardHeader className="space-y-1 text-center">
+      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary overflow-hidden">
+        <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 pt-10">
           <div className="flex justify-center mb-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-background border shadow-sm overflow-hidden p-2">
-              {logo && (
-                <Image 
-                  src={logo.imageUrl} 
-                  alt="Citydrive Logo" 
-                  width={64} 
-                  height={64} 
-                  className="object-contain"
-                  data-ai-hint={logo.imageHint}
-                />
-              )}
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-xl border-4 border-background transform -rotate-6">
+              <Car className="h-10 w-10" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Citydrive Portal</CardTitle>
-          <CardDescription>
-            Enter your credentials
+          <CardTitle className="text-3xl font-black tracking-tighter text-primary">CITYDRIVE</CardTitle>
+          <CardDescription className="font-medium text-muted-foreground">
+            Driving School Management Portal
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             {setupError && (
               <Alert variant="destructive" className="bg-destructive/10">
                 <AlertCircle className="h-4 w-4" />
@@ -125,7 +112,7 @@ export default function LoginPage() {
                 <Input
                   id="userId"
                   placeholder="e.g. admin or Branch1"
-                  className="pl-9"
+                  className="pl-9 h-11"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
                   required
@@ -139,7 +126,7 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  className="pl-9"
+                  className="pl-9 h-11"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -147,12 +134,12 @@ export default function LoginPage() {
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button className="w-full h-11 text-base" type="submit" disabled={isLoading}>
-              {isLoading ? 'Verifying...' : 'Sign In'}
+          <CardFooter className="flex flex-col gap-4 pb-10">
+            <Button className="w-full h-12 text-base font-bold shadow-lg" type="submit" disabled={isLoading}>
+              {isLoading ? 'Verifying...' : 'Sign In to Portal'}
             </Button>
-            <div className="text-[10px] text-center text-muted-foreground opacity-70">
-              &copy; {new Date().getFullYear()} Citydrive Management System
+            <div className="text-[10px] text-center text-muted-foreground uppercase tracking-widest font-bold opacity-50">
+              &copy; {new Date().getFullYear()} Citydrive Systems
             </div>
           </CardFooter>
         </form>
