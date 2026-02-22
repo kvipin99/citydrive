@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -121,6 +121,15 @@ function SettingsContent() {
   };
 
   const handleDeleteUserRecord = (targetUser: any) => {
+    if (targetUser.role === 'Admin') {
+      toast({
+        variant: "destructive",
+        title: "Action Denied",
+        description: "Administrator accounts cannot be deleted for system security.",
+      });
+      return;
+    }
+
     const targetRef = doc(db, "users", targetUser.id);
     deleteDocumentNonBlocking(targetRef);
     toast({
@@ -307,14 +316,25 @@ function SettingsContent() {
                               >
                                 <Key className="h-3 w-3 mr-1" /> Reset
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteUserRecord(u)}
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" /> Delete
-                              </Button>
+                              {u.role === 'Admin' ? (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  disabled
+                                  className="text-[10px] h-8 text-muted-foreground opacity-50 cursor-not-allowed"
+                                >
+                                  <Lock className="h-3 w-3 mr-1" /> Protected
+                                </Button>
+                              ) : (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDeleteUserRecord(u)}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" /> Delete
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
