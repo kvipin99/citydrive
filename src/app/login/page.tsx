@@ -27,9 +27,9 @@ const DEFAULT_PASSWORD = 'City123';
 const MASTER_SECRET = 'Citydrive123';
 
 export default function LoginPage() {
-  // Set default values to admin / City123 as requested
-  const [userId, setUserId] = useState('admin');
-  const [password, setPassword] = useState(DEFAULT_PASSWORD);
+  // Clear default values - user now enters their own ID/Password
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   
