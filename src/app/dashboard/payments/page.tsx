@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -15,7 +16,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBl
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 
 interface Student {
   id: string;
@@ -207,17 +208,24 @@ export default function StudentReceiptsPage() {
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
     
-    let result = allReceipts.filter(r => r.category === "Course Fee");
+    // Logic fix: Include records where category is Course Fee OR where studentId exists (handling legacy data)
+    let result = allReceipts.filter(r => 
+      r.category === "Course Fee" || (!!r.studentId && !r.category)
+    );
     
     if (listSearchTerm) {
       const term = listSearchTerm.toLowerCase();
       result = result.filter(r => 
-        r.studentName.toLowerCase().includes(term) ||
-        r.receiptNo.toLowerCase().includes(term)
+        r.studentName?.toLowerCase().includes(term) ||
+        r.receiptNo?.toLowerCase().includes(term)
       );
     }
     
-    return result.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+    return result.sort((a, b) => {
+      const timeA = a.date?.seconds || (isValid(new Date(a.date)) ? new Date(a.date).getTime() / 1000 : 0);
+      const timeB = b.date?.seconds || (isValid(new Date(b.date)) ? new Date(b.date).getTime() / 1000 : 0);
+      return timeB - timeA;
+    });
   }, [allReceipts, listSearchTerm]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
@@ -381,11 +389,12 @@ export default function StudentReceiptsPage() {
                   filteredReceipts.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/20">
                       <TableCell className="pl-6 text-muted-foreground text-xs">
-                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : '...'}
+                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
+                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}
                       </TableCell>
                       <TableCell>
                         <div className="grid gap-0.5">
-                          <span className="font-bold text-sm">#{r.receiptNo}</span>
+                          <span className="font-bold text-sm">#{r.receiptNo || 'N/A'}</span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <User className="h-3 w-3" /> {r.studentName}
                           </span>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -15,7 +16,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBl
 import { collection, doc, Timestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 
 const RECEIPT_CATEGORIES = [
   "Photostate / Printing",
@@ -36,6 +37,7 @@ interface ReceiptRecord {
   branch: string;
   receivedBy: string;
   description?: string;
+  studentId?: string;
 }
 
 export default function OtherReceiptsPage() {
@@ -124,8 +126,10 @@ export default function OtherReceiptsPage() {
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
     
-    // UI Filter: Only show items that are NOT Course Fees
-    let result = allReceipts.filter(r => r.category !== "Course Fee");
+    // Logic fix: Exclude any record that is explicitly Course Fee OR has a studentId (legacy data)
+    let result = allReceipts.filter(r => 
+      r.category !== "Course Fee" && !r.studentId
+    );
     
     if (listSearchTerm) {
       const term = listSearchTerm.toLowerCase();
@@ -136,7 +140,11 @@ export default function OtherReceiptsPage() {
       );
     }
     
-    return result.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+    return result.sort((a, b) => {
+      const timeA = a.date?.seconds || (isValid(new Date(a.date)) ? new Date(a.date).getTime() / 1000 : 0);
+      const timeB = b.date?.seconds || (isValid(new Date(b.date)) ? new Date(b.date).getTime() / 1000 : 0);
+      return timeB - timeA;
+    });
   }, [allReceipts, listSearchTerm]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading;
@@ -172,7 +180,7 @@ export default function OtherReceiptsPage() {
             <DialogDescription>Record non-student fee income for the branch.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="grid gap-6 px-6 py-4 pb-10">
               <div className="space-y-4">
                 <div className="grid gap-2">
@@ -273,7 +281,8 @@ export default function OtherReceiptsPage() {
                   filteredReceipts.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/20">
                       <TableCell className="pl-6 text-muted-foreground text-xs">
-                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 'Pending'}
+                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
+                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : 'Pending')}
                       </TableCell>
                       <TableCell>
                         <div className="grid gap-0.5">
