@@ -56,7 +56,6 @@ export default function StudentReceiptsPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
-  // Use simplified queries to avoid composite index requirements
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const baseCol = collection(db, 'payments');
@@ -208,7 +207,6 @@ export default function StudentReceiptsPage() {
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
     
-    // Filter by Category in UI to avoid composite index requirements
     let result = allReceipts.filter(r => r.category === "Course Fee");
     
     if (listSearchTerm) {
@@ -255,8 +253,8 @@ export default function StudentReceiptsPage() {
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1">
-            <div className="grid gap-6 px-6 py-4 pb-10">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-6 px-6 py-4 pb-20">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Search Student (ID/Name/Mobile)</Label>
@@ -270,9 +268,9 @@ export default function StudentReceiptsPage() {
                     />
                   </div>
                   {filteredStudents.length > 0 && (
-                    <div className="border rounded-md mt-1 divide-y bg-background shadow-sm">
+                    <div className="border rounded-md mt-1 divide-y bg-background shadow-sm overflow-hidden">
                       {filteredStudents.map(s => (
-                        <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center" onClick={() => setSelectedStudent(s)}>
+                        <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors" onClick={() => setSelectedStudent(s)}>
                           <div>
                             <p className="font-medium text-sm">{s.name}</p>
                             <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>

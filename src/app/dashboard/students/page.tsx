@@ -488,8 +488,8 @@ export default function StudentsPage() {
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
                       </DialogHeader>
-                      <ScrollArea className="flex-1">
-                        <div className="px-6 py-4 pb-10">
+                      <ScrollArea className="flex-1 min-h-0">
+                        <div className="px-6 py-4 pb-20">
                           <StudentForm 
                             formData={formData} 
                             setFormData={setFormData} 
@@ -644,8 +644,8 @@ export default function StudentsPage() {
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1">
-            <div className="grid gap-4 px-6 py-4 pb-10">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-4 px-6 py-4 pb-20">
               <div className="grid gap-2">
                 <Label>Receipt Date</Label>
                 <div className="relative">
@@ -684,8 +684,8 @@ export default function StudentsPage() {
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1">
-            <div className="px-6 py-4 pb-10">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-6 py-4 pb-20">
               <StudentForm 
                 formData={formData} 
                 setFormData={setFormData} 
