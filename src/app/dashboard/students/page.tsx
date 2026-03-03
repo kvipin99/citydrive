@@ -488,8 +488,8 @@ export default function StudentsPage() {
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
                       </DialogHeader>
-                      <ScrollArea className="flex-1 px-6">
-                        <div className="py-4">
+                      <ScrollArea className="flex-1">
+                        <div className="px-6 py-4 pb-10">
                           <StudentForm 
                             formData={formData} 
                             setFormData={setFormData} 
@@ -502,7 +502,7 @@ export default function StudentsPage() {
                             generateBranchStudentId={generateBranchStudentId}
                           />
                           
-                          <div className="mt-8 pt-6 border-t pb-10">
+                          <div className="mt-8 pt-6 border-t">
                             <div className="flex items-center gap-2 text-orange-600 mb-2">
                               <AlertCircle className="h-4 w-4" />
                               <h4 className="text-xs font-bold uppercase tracking-tight">Fix Conflicts</h4>
@@ -644,20 +644,24 @@ export default function StudentsPage() {
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-6">
-            <div className="grid gap-4 py-4 pb-10">
+          <ScrollArea className="flex-1">
+            <div className="grid gap-4 px-6 py-4 pb-10">
               <div className="grid gap-2">
                 <Label>Receipt Date</Label>
-                <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
+                <div className="relative">
+                  {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
+                  <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
+                </div>
+                {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Amount Received (₹)</Label>
-                <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
+                <Input type="number" placeholder="0.00" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label>Receipt No.</Label>
-                  <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
+                  <Input placeholder="e.g. 1001" value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Method</Label>
@@ -680,8 +684,8 @@ export default function StudentsPage() {
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-6">
-            <div className="py-4">
+          <ScrollArea className="flex-1">
+            <div className="px-6 py-4 pb-10">
               <StudentForm 
                 formData={formData} 
                 setFormData={setFormData} 

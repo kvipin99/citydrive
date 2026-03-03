@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -14,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -28,7 +27,7 @@ const RECEIPT_CATEGORIES = [
 
 interface ReceiptRecord {
   id: string;
-  category: typeof RECEIPT_CATEGORIES[number];
+  category: typeof RECEIPT_CATEGORIES[number] | "Course Fee";
   studentName: string;
   amount: number;
   date: any;
@@ -55,13 +54,8 @@ export default function OtherReceiptsPage() {
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const baseCol = collection(db, 'payments');
-    // Filter out Course Fees to show only "Other" receipts
-    const branchFilter = isAdmin ? null : (profile.branch || "Branch 1");
-    
-    // Note: Firestore doesn't support category != 'Course Fee' easily, 
-    // we use a collection query and filter categories in UI for simplicity in this MVP
     if (isAdmin) return baseCol;
-    return query(baseCol, where('branch', '==', branchFilter));
+    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
@@ -129,8 +123,9 @@ export default function OtherReceiptsPage() {
 
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
-    // Only show categories that are NOT Course Fee
-    let result = allReceipts.filter(r => r.category !== ("Course Fee" as any));
+    
+    // UI Filter: Only show items that are NOT Course Fees
+    let result = allReceipts.filter(r => r.category !== "Course Fee");
     
     if (listSearchTerm) {
       const term = listSearchTerm.toLowerCase();
@@ -177,8 +172,8 @@ export default function OtherReceiptsPage() {
             <DialogDescription>Record non-student fee income for the branch.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 px-6">
-            <div className="grid gap-6 py-4 pb-10">
+          <ScrollArea className="flex-1">
+            <div className="grid gap-6 px-6 py-4 pb-10">
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label>Income Category</Label>

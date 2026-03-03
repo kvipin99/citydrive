@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, GraduationCap, Lock } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -56,14 +56,12 @@ export default function StudentReceiptsPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
+  // Use simplified queries to avoid composite index requirements
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const baseCol = collection(db, 'payments');
-    if (isAdmin) return query(baseCol, where('category', '==', 'Course Fee'));
-    return query(baseCol, 
-      where('category', '==', 'Course Fee'),
-      where('branch', '==', profile.branch || "Branch 1")
-    );
+    if (isAdmin) return baseCol;
+    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const studentsQuery = useMemoFirebase(() => {
@@ -72,7 +70,7 @@ export default function StudentReceiptsPage() {
     return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user?.uid, profile?.branch, isAdmin]);
 
-  const { data: receipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
+  const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -207,19 +205,22 @@ export default function StudentReceiptsPage() {
     toast({ variant: "destructive", title: "Receipt Deleted" });
   };
 
-  const sortedReceipts = useMemo(() => {
-    if (!receipts) return [];
-    return [...receipts].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
-  }, [receipts]);
-
   const filteredReceipts = useMemo(() => {
-    if (!listSearchTerm) return sortedReceipts;
-    const term = listSearchTerm.toLowerCase();
-    return sortedReceipts.filter(r => 
-      r.studentName.toLowerCase().includes(term) ||
-      r.receiptNo.toLowerCase().includes(term)
-    );
-  }, [sortedReceipts, listSearchTerm]);
+    if (!allReceipts) return [];
+    
+    // Filter by Category in UI to avoid composite index requirements
+    let result = allReceipts.filter(r => r.category === "Course Fee");
+    
+    if (listSearchTerm) {
+      const term = listSearchTerm.toLowerCase();
+      result = result.filter(r => 
+        r.studentName.toLowerCase().includes(term) ||
+        r.receiptNo.toLowerCase().includes(term)
+      );
+    }
+    
+    return result.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+  }, [allReceipts, listSearchTerm]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
 
@@ -254,8 +255,8 @@ export default function StudentReceiptsPage() {
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 px-6">
-            <div className="grid gap-6 py-4 pb-10">
+          <ScrollArea className="flex-1">
+            <div className="grid gap-6 px-6 py-4 pb-10">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Search Student (ID/Name/Mobile)</Label>
@@ -269,7 +270,7 @@ export default function StudentReceiptsPage() {
                     />
                   </div>
                   {filteredStudents.length > 0 && (
-                    <div className="border rounded-md mt-1 divide-y bg-background">
+                    <div className="border rounded-md mt-1 divide-y bg-background shadow-sm">
                       {filteredStudents.map(s => (
                         <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center" onClick={() => setSelectedStudent(s)}>
                           <div>
@@ -289,15 +290,15 @@ export default function StudentReceiptsPage() {
                       <p className="font-bold text-primary">{selectedStudent.name}</p>
                       <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change Student</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="p-2 border rounded bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Total Agreed Fee</p>
+                      <p className="text-xs text-muted-foreground">Agreed Fee</p>
                       <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
                     </div>
                     <div className="p-2 border rounded bg-destructive/5">
-                      <p className="text-xs text-muted-foreground">Current Balance</p>
+                      <p className="text-xs text-muted-foreground">Balance</p>
                       <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
                     </div>
                   </div>
@@ -309,7 +310,7 @@ export default function StudentReceiptsPage() {
                         {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
                         <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
                       </div>
-                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Non-admin users are restricted to today's date.</p>}
+                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date for branch users.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
@@ -317,7 +318,7 @@ export default function StudentReceiptsPage() {
                         <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
                       </div>
                       <div className="grid gap-2">
-                        <Label>Payment Method</Label>
+                        <Label>Method</Label>
                         <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
