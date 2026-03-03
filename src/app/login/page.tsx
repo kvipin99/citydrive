@@ -27,6 +27,7 @@ const DEFAULT_PASSWORD = 'City123';
 const MASTER_SECRET = 'Citydrive123';
 
 export default function LoginPage() {
+  // Set default values to admin / City123 as requested
   const [userId, setUserId] = useState('admin');
   const [password, setPassword] = useState(DEFAULT_PASSWORD);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +55,7 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (error: any) {
+      // Auto-provisioning logic for default staff accounts
       if (STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD) {
         try {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -102,8 +104,7 @@ export default function LoginPage() {
     }
 
     if (inputSecret === MASTER_SECRET) {
-      // In this environment, we verify the user identity and reset the UI state to 
-      // allow them to attempt login with the default password system.
+      // In this prototype, we verify identity and restore default password access
       toast({
         title: 'Identity Verified',
         description: `Identity confirmed for ${resetUserId}. Your password has been set to the default "City123".`,
