@@ -8,8 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car } from "lucide-react";
-import { format } from "date-fns";
+import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint } from "lucide-react";
+import { format, isValid } from "date-fns";
 import { useMemo } from "react";
 
 export default function StudentProfilePage() {
@@ -57,6 +57,12 @@ export default function StudentProfilePage() {
     );
   }
 
+  const formatSafeDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       {/* Header */}
@@ -92,15 +98,23 @@ export default function StudentProfilePage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <UserIcon className="h-5 w-5 text-primary" />
-                Personal Information
+                Personal & Licensing Information
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <DetailItem label="Mobile Number" value={student.phone} icon={<Phone />} />
-                <DetailItem label="Aadhar Number" value={student.aadharNo} icon={<UserIcon />} />
-                <DetailItem label="Online App ID" value={student.onlineAppNo} icon={<Clock />} />
-                <DetailItem label="Admission Date" value={student.registrationDate} icon={<Calendar />} />
+                <DetailItem label="Aadhar Number" value={student.aadharNo} icon={<Fingerprint />} />
+                <DetailItem label="Online App ID" value={student.onlineAppNo} icon={<FileText />} />
+                <DetailItem label="Admission Date" value={formatSafeDate(student.registrationDate)} icon={<Calendar />} />
+                
+                <Separator className="col-span-full my-2" />
+                
+                <DetailItem label="Learners License No." value={student.learnersNo} icon={<Fingerprint className="text-primary/60" />} />
+                <DetailItem label="Learners Issue Date" value={formatSafeDate(student.learnersDate)} icon={<Calendar />} />
+                
+                <DetailItem label="Driving License No." value={student.drivingNo} icon={<Car className="text-green-600/60" />} />
+                <DetailItem label="Driving Test Date" value={formatSafeDate(student.testDate)} icon={<Calendar />} />
               </div>
               <DetailItem label="Residential Address" value={student.address} icon={<MapPin />} />
             </CardContent>
@@ -128,7 +142,7 @@ export default function StudentProfilePage() {
                   <TableBody>
                     {attendance.slice(0, 5).map((a: any) => (
                       <TableRow key={a.id}>
-                        <TableCell className="text-sm font-medium">{format(new Date(a.date), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell className="text-sm font-medium">{formatSafeDate(a.date)}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-[10px] uppercase">
                             {a.type === 'Practical' ? <Car className="h-3 w-3 mr-1 inline" /> : <BookOpen className="h-3 w-3 mr-1 inline" />}
@@ -162,7 +176,9 @@ export default function StudentProfilePage() {
             <CardContent className="space-y-3">
               {student.courses?.map((c: string, i: number) => (
                 <div key={i} className="p-3 rounded-xl border bg-muted/30 flex justify-between items-center">
-                  <span className="font-medium text-sm">{c}</span>
+                  <span className="font-medium text-sm">
+                    {c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}
+                  </span>
                   <Badge variant="outline" className="bg-background">Enrolled</Badge>
                 </div>
               ))}

@@ -40,7 +40,9 @@ export interface Student {
   parentName: string;
   aadharNo: string;
   onlineAppNo: string;
+  learnersNo: string;
   learnersDate: string;
+  drivingNo: string;
   testDate: string;
   remarks: string;
   photoUrl: string;
@@ -78,7 +80,6 @@ export default function StudentsPage() {
     if (isAdmin) {
       return collection(db, 'students');
     }
-    // Branch manager or staff filter
     const branchId = profile.branch || "Branch 1";
     return query(collection(db, 'students'), where('branch', '==', branchId));
   }, [db, user, profile, isAdmin, isStudent]);
@@ -101,7 +102,6 @@ export default function StudentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cleanupId, setCleanupId] = useState("");
 
-  // Auto-open self profile for students
   useEffect(() => {
     if (isStudent && students && students.length > 0 && !selectedStudent) {
       setSelectedStudent(students[0]);
@@ -128,7 +128,9 @@ export default function StudentsPage() {
     parentName: "",
     aadharNo: "",
     onlineAppNo: "",
+    learnersNo: "",
     learnersDate: "",
+    drivingNo: "",
     testDate: "",
     remarks: "",
     photoUrl: "",
@@ -362,7 +364,9 @@ export default function StudentsPage() {
       parentName: "",
       aadharNo: "",
       onlineAppNo: "",
+      learnersNo: "",
       learnersDate: "",
+      drivingNo: "",
       testDate: "",
       remarks: "",
       photoUrl: "",
@@ -821,7 +825,7 @@ function StudentForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2">
           <Label>Aadhar No.</Label>
           <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
@@ -830,21 +834,33 @@ function StudentForm({
           <Label>Online App No.</Label>
           <Input placeholder="APP-12345" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-primary/5">
+        <div className="grid gap-2">
+          <Label className="text-primary font-bold">Learners License No.</Label>
+          <Input placeholder="LL-123456789" value={formData.learnersNo || ''} onChange={(e) => setFormData({...formData, learnersNo: e.target.value})} />
+        </div>
         <div className="grid gap-2">
           <Label>Learners License Date</Label>
           <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50/30">
+        <div className="grid gap-2">
+          <Label className="text-green-700 font-bold">Driving License No.</Label>
+          <Input placeholder="DL-123456789" value={formData.drivingNo || ''} onChange={(e) => setFormData({...formData, drivingNo: e.target.value})} />
+        </div>
         <div className="grid gap-2">
           <Label>Driving Test Date</Label>
           <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
         </div>
-        <div className="grid gap-2">
-          <Label>Email (Optional)</Label>
-          <Input type="email" placeholder="student@example.com" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Email (Optional)</Label>
+        <Input type="email" placeholder="student@example.com" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} />
       </div>
 
       <div className="grid gap-2">
@@ -949,7 +965,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   const sortedAttendance = useMemo(() => {
     if (!attendance) return [];
-    // Spread operator ensures we sort a copy, not the original state
     return [...attendance].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
@@ -968,7 +983,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   return (
     <div className="space-y-8 pb-10">
-      {/* Profile Header */}
       <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
         <Avatar className="h-24 w-24 border-4 border-white shadow-xl">
           <AvatarImage src={student.photoUrl} alt={student.name} />
@@ -984,7 +998,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </div>
       </div>
 
-      {/* Financial Summary Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-primary/5 border-primary/10">
           <CardHeader className="p-4 pb-2">
@@ -1028,7 +1041,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </Card>
       </div>
 
-      {/* Main Details Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
@@ -1039,8 +1051,14 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar No" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
-            <ProfileItem icon={<Calendar />} label="Learners License" value={formatSafeDate(student.learnersDate)} />
-            <ProfileItem icon={<Calendar />} label="Driving Test" value={formatSafeDate(student.testDate)} />
+            <div className="grid grid-cols-2 gap-4 col-span-full">
+              <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
+              <ProfileItem icon={<Calendar />} label="Learners Date" value={formatSafeDate(student.learnersDate)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 col-span-full">
+              <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
+              <ProfileItem icon={<Calendar />} label="Driving Test" value={formatSafeDate(student.testDate)} />
+            </div>
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
           </div>
         </section>
@@ -1071,7 +1089,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
       <Separator />
 
-      {/* Attendance History Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between border-b pb-2">
           <h3 className="font-bold flex items-center gap-2 text-primary">
@@ -1119,7 +1136,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         )}
       </section>
 
-      {/* Payment History Section */}
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
           <CreditCard className="h-4 w-4" /> Transaction History
