@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
@@ -17,15 +17,6 @@ import { collection, doc, query, where, serverTimestamp } from "firebase/firesto
 import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-
-const TIME_OPTIONS = Array.from({ length: 18 }, (_, i) => {
-  const hour = i + 6; // Start from 6 AM
-  const period = hour >= 12 ? (hour === 24 ? 'AM' : (hour === 12 ? 'PM' : 'PM')) : 'AM';
-  const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-  const value = `${String(hour).padStart(2, '0')}:00`;
-  const label = `${displayHour}:00 ${period}`;
-  return { value, label, hour };
-});
 
 const SESSION_TYPES = [
   { value: 'Practical', label: 'Practical Class', icon: Car },
@@ -50,7 +41,6 @@ export default function AttendancePage() {
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
   
-  const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
 
@@ -95,22 +85,32 @@ export default function AttendancePage() {
     );
   }, [students, studentSearch]);
 
+  const calculateDuration = (start: string, end: string) => {
+    try {
+      const [sH, sM] = start.split(':').map(Number);
+      const [eH, eM] = end.split(':').map(Number);
+      const startTotal = sH * 60 + sM;
+      const endTotal = eH * 60 + eM;
+      const diff = endTotal - startTotal;
+      return Math.max(0, parseFloat((diff / 60).toFixed(1)));
+    } catch (e) {
+      return 0;
+    }
+  };
+
   const handleMarkAttendance = () => {
     if (!db || !user || !profile || !selectedStudent) return;
 
     const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
 
-    const startH = parseInt(startTime.split(':')[0]);
-    const endH = parseInt(endTime.split(':')[0]);
-    const duration = Math.max(0, endH - startH);
-
+    const duration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
 
     const record = {
       id: attendanceId,
       studentId: selectedStudent.id,
-      studentUid: selectedStudent.userId, // Critical for student access permissions
+      studentUid: selectedStudent.userId, 
       studentName: selectedStudent.name,
       date: selectedDate,
       status: 'Present',
@@ -153,7 +153,6 @@ export default function AttendancePage() {
 
   const sortedRecords = useMemo(() => {
     if (!attendanceRecords) return [];
-    // Spread operator ensures we sort a copy, preventing mutation of state
     return [...attendanceRecords].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
@@ -182,169 +181,164 @@ export default function AttendancePage() {
               />
             </div>
             
-            <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
-              <DialogTrigger asChild>
-                <Button size="lg" className="shadow-lg">
-                  <PlusCircle className="mr-2 h-5 w-5" />
-                  Record Session
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Record Student Session</DialogTitle>
-                  <DialogDescription>Select student and class details.</DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-6 py-4">
-                  {!selectedStudent ? (
-                    <div className="grid gap-2">
-                      <Label>Select Student (All Branches)</Label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          placeholder="Search Name, ID or Phone..." 
-                          className="pl-8" 
-                          value={studentSearch} 
-                          onChange={(e) => setStudentSearch(e.target.value)} 
-                        />
-                      </div>
-                      <ScrollArea className="h-[300px] border rounded-lg mt-1">
-                        {filteredSearch.length === 0 ? (
-                          <div className="p-8 text-center text-muted-foreground italic text-sm">
-                            No active students found.
-                          </div>
-                        ) : (
-                          <div className="divide-y">
-                            {filteredSearch.map(s => (
-                              <div 
-                                key={s.id} 
-                                className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
-                                onClick={() => setSelectedStudent(s)}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <UserCircle className="h-8 w-8 text-primary/40" />
-                                  <div className="grid">
-                                    <p className="font-bold text-sm">{s.name}</p>
-                                    <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.branch}</p>
-                                  </div>
-                                </div>
-                                <Badge variant="outline">Select</Badge>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </ScrollArea>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                      <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
-                            {selectedStudent.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-black text-primary">{selectedStudent.name}</p>
-                            <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id}</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label>Session Type</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {SESSION_TYPES.map(type => {
-                            const Icon = type.icon;
-                            const active = sessionType === type.value;
-                            return (
-                              <Button 
-                                key={type.value}
-                                variant={active ? 'default' : 'outline'}
-                                className="h-12 flex items-center gap-2 justify-center"
-                                onClick={() => setSessionType(type.value as any)}
-                              >
-                                <Icon className="h-4 w-4" />
-                                {type.label}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {sessionType === 'Practical' && (
-                        <div className="grid gap-2 animate-in slide-in-from-top-2">
-                          <Label className="flex items-center gap-2">
-                            <Car className="h-4 w-4 text-primary" />
-                            Assigned Vehicle
-                          </Label>
-                          <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
-                            <SelectTrigger className="bg-background">
-                              <SelectValue placeholder="Select Vehicle" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="None">No Vehicle Assigned</SelectItem>
-                              {vehicles?.map(v => (
-                                <SelectItem key={v.id} value={v.id}>
-                                  {v.regNumber} ({v.brandModel})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label>From Time</Label>
-                          <Select value={startTime} onValueChange={setStartTime}>
-                            <SelectTrigger className="bg-background">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>To Time</Label>
-                          <Select value={endTime} onValueChange={setEndTime}>
-                            <SelectTrigger className="bg-background">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIME_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
-                        <span className="text-sm font-medium">Session Duration:</span>
-                        <Badge variant="secondary" className="font-bold text-sm">
-                          {Math.max(0, parseInt(endTime.split(':')[0]) - parseInt(startTime.split(':')[0]))} Hours
-                        </Badge>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <DialogFooter>
-                  <Button 
-                    onClick={handleMarkAttendance} 
-                    className="w-full" 
-                    disabled={!selectedStudent}
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Confirm & Save Log
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button size="lg" className="shadow-lg" onClick={() => setIsDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-5 w-5" />
+              Record Session
+            </Button>
           </div>
         )}
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+          <CardHeader className="p-6 pb-2">
+            <DialogTitle>Record Student Session</DialogTitle>
+            <DialogDescription>Select student and class details.</DialogDescription>
+          </CardHeader>
+          
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-6 px-6 py-4 pb-32">
+              {!selectedStudent ? (
+                <div className="grid gap-2">
+                  <Label>Select Student (All Branches)</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search Name, ID or Phone..." 
+                      className="pl-8" 
+                      value={studentSearch} 
+                      onChange={(e) => setStudentSearch(e.target.value)} 
+                    />
+                  </div>
+                  <div className="border rounded-lg mt-1 divide-y bg-background shadow-sm max-h-[300px] overflow-auto">
+                    {filteredSearch.length === 0 ? (
+                      <div className="p-8 text-center text-muted-foreground italic text-sm">
+                        No active students found.
+                      </div>
+                    ) : (
+                      filteredSearch.map(s => (
+                        <div 
+                          key={s.id} 
+                          className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
+                          onClick={() => setSelectedStudent(s)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <UserCircle className="h-8 w-8 text-primary/40" />
+                            <div className="grid">
+                              <p className="font-bold text-sm">{s.name}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.branch}</p>
+                            </div>
+                          </div>
+                          <Badge variant="outline">Select</Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                        {selectedStudent.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-black text-primary">{selectedStudent.name}</p>
+                        <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id}</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Session Type</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SESSION_TYPES.map(type => {
+                        const Icon = type.icon;
+                        const active = sessionType === type.value;
+                        return (
+                          <Button 
+                            key={type.value}
+                            variant={active ? 'default' : 'outline'}
+                            className="h-12 flex items-center gap-2 justify-center"
+                            onClick={() => setSessionType(type.value as any)}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {type.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {sessionType === 'Practical' && (
+                    <div className="grid gap-2 animate-in slide-in-from-top-2">
+                      <Label className="flex items-center gap-2">
+                        <Car className="h-4 w-4 text-primary" />
+                        Assigned Vehicle
+                      </Label>
+                      <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Vehicle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="None">No Vehicle Assigned</SelectItem>
+                          {vehicles?.map(v => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.regNumber} ({v.brandModel})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>From Time</Label>
+                      <Input 
+                        type="time" 
+                        value={startTime} 
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>To Time</Label>
+                      <Input 
+                        type="time" 
+                        value={endTime} 
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
+                    <span className="text-sm font-medium">Session Duration:</span>
+                    <Badge variant="secondary" className="font-bold text-sm">
+                      {calculateDuration(startTime, endTime)} Hours
+                    </Badge>
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+            <Button 
+              onClick={handleMarkAttendance} 
+              className="w-full" 
+              disabled={!selectedStudent}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Confirm & Save Log
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader className="pb-3 border-b">
