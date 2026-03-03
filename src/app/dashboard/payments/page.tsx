@@ -259,14 +259,14 @@ export default function StudentReceiptsPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh]">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Collect Student Fee</DialogTitle>
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-24">
+            <div className="grid gap-6 px-6 py-4 pb-32">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Search Student (ID/Name/Mobile)</Label>

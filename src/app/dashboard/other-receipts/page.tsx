@@ -174,14 +174,14 @@ export default function OtherReceiptsPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Issue Other Receipt</DialogTitle>
             <DialogDescription>Record non-student fee income for the branch.</DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-10">
+            <div className="grid gap-6 px-6 py-4 pb-32">
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label>Income Category</Label>
