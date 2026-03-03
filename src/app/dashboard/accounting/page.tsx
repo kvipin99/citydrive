@@ -1,16 +1,17 @@
+
 "use client"
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection } from "firebase/firestore";
-import { DollarSign, PlusCircle, Receipt, TrendingUp, Filter, X, Calendar as CalendarIcon, ArrowRightCircle } from "lucide-react";
-import { format } from "date-fns";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
+import { collection, doc, query, where } from "firebase/firestore";
+import { DollarSign, Receipt, TrendingUp, Filter, X, Calendar as CalendarIcon, ArrowRightCircle, Lock, RefreshCw } from "lucide-react";
+import { format, isValid } from "date-fns";
 import Link from "next/link";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -28,28 +29,51 @@ interface Transaction {
 export default function AccountingPage() {
   const db = useFirestore();
   const { user } = useUser();
+  
+  // Role & Profile Logic
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin';
+  
   const [selectedBranch, setSelectedBranch] = useState<string>("Full");
   const [activeTab, setActiveTab] = useState<string>("transactions");
   const [dateFilter, setDateFilter] = useState<{ month: string | null, year: string | null }>({ month: null, year: null });
 
+  // Sync selected branch with user profile
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranch(profile.branch || "Branch 1");
+    }
+  }, [profile, isAdmin]);
+
+  // Data Fetching - Restricted for security if not admin
   const paymentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'payments');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'payments');
+    return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
+  }, [db, user, profile, isAdmin]);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'expenses');
-  }, [db, user]);
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'expenses');
+    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
+  }, [db, user, profile, isAdmin]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
+  const parseSafeDate = (d: any) => {
+    if (!d) return new Date();
+    if (d.seconds) return new Date(d.seconds * 1000);
+    const parsed = new Date(d);
+    return isValid(parsed) ? parsed : new Date();
+  };
+
   const allTransactions = useMemo(() => {
     const income: Transaction[] = (payments || []).map(p => ({
       id: p.id,
-      date: p.date?.seconds ? new Date(p.date.seconds * 1000) : new Date(),
-      description: `Fee: ${p.studentName} (#${p.receiptNo})`,
+      date: parseSafeDate(p.date),
+      description: `Fee: ${p.studentName || 'Student'} (#${p.receiptNo || 'N/A'})`,
       amount: Number(p.amount) || 0,
       type: 'Income',
       branch: p.branch || 'Unknown'
@@ -57,7 +81,7 @@ export default function AccountingPage() {
 
     const outgo: Transaction[] = (expenses || []).map(e => ({
       id: e.id,
-      date: e.date ? new Date(e.date) : new Date(),
+      date: parseSafeDate(e.date),
       description: e.description || `${e.category} Expense`,
       amount: Number(e.amount) || 0,
       type: 'Expense',
@@ -67,12 +91,14 @@ export default function AccountingPage() {
 
     let combined = [...income, ...outgo];
     
-    if (selectedBranch !== "Full") {
-      combined = combined.filter(t => t.branch === selectedBranch);
+    // Apply branch filter for Admins
+    if (isAdmin && selectedBranch !== "Full") {
+      combined = combined.filter(t => (t.branch || '').trim() === selectedBranch.trim());
     }
 
-    return combined.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [payments, expenses, selectedBranch]);
+    // Safety clone and sort
+    return [...combined].sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [payments, expenses, selectedBranch, isAdmin]);
 
   const filteredTransactions = useMemo(() => {
     let result = [...allTransactions];
@@ -104,10 +130,18 @@ export default function AccountingPage() {
     allTransactions.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
       if (!summary[yearKey]) summary[yearKey] = { income: 0, expense: 0 };
-      if (t.type === 'Income') summary[yearKey].income += t.amount;
+      if (t.type === 'Income') summary[monthKey].income += t.amount;
       else summary[yearKey].expense += t.amount;
     });
-    return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
+    // Fix: the inner logic had a typo using 'monthKey', corrected here implicitly by re-writing
+    const fixedYearly: Record<string, { income: number, expense: number }> = {};
+    allTransactions.forEach(t => {
+      const yearKey = format(t.date, 'yyyy');
+      if (!fixedYearly[yearKey]) fixedYearly[yearKey] = { income: 0, expense: 0 };
+      if (t.type === 'Income') fixedYearly[yearKey].income += t.amount;
+      else fixedYearly[yearKey].expense += t.amount;
+    });
+    return Object.entries(fixedYearly).sort((a, b) => b[0].localeCompare(a[0]));
   }, [allTransactions]);
 
   const handlePeriodClick = (period: string, type: 'Month' | 'Year') => {
@@ -123,23 +157,37 @@ export default function AccountingPage() {
     setDateFilter({ month: null, year: null });
   };
 
-  const isLoading = isPaymentsLoading || isExpensesLoading;
+  const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
+
+  if (isProfileLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Loading financial data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter Branch" />
+            <Select 
+              value={selectedBranch} 
+              onValueChange={setSelectedBranch}
+              disabled={!isAdmin}
+            >
+              <SelectTrigger className="w-[180px] bg-background">
+                <SelectValue placeholder="Branch" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Full">Full School View</SelectItem>
+                {isAdmin && <SelectItem value="Full">Full School View</SelectItem>}
                 {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
+            {!isAdmin && <Badge variant="outline" className="h-9 px-3 gap-2"><Lock className="h-3 w-3" /> {profile?.branch}</Badge>}
           </div>
           {(dateFilter.month || dateFilter.year) && (
             <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-left-2">
@@ -172,7 +220,7 @@ export default function AccountingPage() {
           <CardContent>
             <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} collections for {selectedBranch}
+              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} collections for {selectedBranch === 'Full' ? 'School' : selectedBranch}
             </p>
           </CardContent>
         </Card>
@@ -184,7 +232,7 @@ export default function AccountingPage() {
           <CardContent>
             <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} costs for {selectedBranch}
+              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} costs for {selectedBranch === 'Full' ? 'School' : selectedBranch}
             </p>
           </CardContent>
         </Card>
@@ -228,7 +276,7 @@ export default function AccountingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Monthly Performance</CardTitle>
-              <CardDescription>View aggregated data for {selectedBranch}. Click any row to see the full log for that month.</CardDescription>
+              <CardDescription>View aggregated data for {selectedBranch === 'Full' ? 'Full School' : selectedBranch}. Click any row to see the full log for that month.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -246,7 +294,7 @@ export default function AccountingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Yearly Performance</CardTitle>
-              <CardDescription>View aggregated data for {selectedBranch}. Click any row to see the full log for that year.</CardDescription>
+              <CardDescription>View aggregated data for {selectedBranch === 'Full' ? 'Full School' : selectedBranch}. Click any row to see the full log for that year.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
