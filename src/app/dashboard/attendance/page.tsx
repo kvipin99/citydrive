@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -72,6 +72,16 @@ export default function AttendancePage() {
   }, [db, user, profile, isStaff, isStudent, selectedDate]);
 
   const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+
+  const statsSummary = useMemo(() => {
+    if (!attendanceRecords) return { practical: 0, theory: 0 };
+    return attendanceRecords.reduce((acc, curr) => {
+      const hours = Number(curr.duration) || 0;
+      if (curr.type === 'Theory') acc.theory += hours;
+      else acc.practical += hours;
+      return acc;
+    }, { practical: 0, theory: 0 });
+  }, [attendanceRecords]);
 
   const filteredSearch = useMemo(() => {
     if (!students) return [];
@@ -187,6 +197,39 @@ export default function AttendancePage() {
             </Button>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card className="bg-blue-50/50 border-blue-100 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
+              <Car className="h-3.5 w-3.5" /> Total Practical
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-blue-700">{statsSummary.practical.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+          </CardContent>
+        </Card>
+        <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-orange-600 flex items-center gap-2">
+              <BookOpen className="h-3.5 w-3.5" /> Total Theory
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-orange-700">{statsSummary.theory.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+          </CardContent>
+        </Card>
+        <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
+              <Calculator className="h-3.5 w-3.5" /> Combined Total
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-primary">{(statsSummary.practical + statsSummary.theory).toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>

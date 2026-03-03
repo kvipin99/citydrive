@@ -841,9 +841,14 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  const totalHours = useMemo(() => {
-    if (!attendance) return 0;
-    return attendance.reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
+  const hourStats = useMemo(() => {
+    if (!attendance) return { practical: 0, theory: 0 };
+    return attendance.reduce((acc, curr) => {
+      const h = Number(curr.duration) || 0;
+      if (curr.type === 'Theory') acc.theory += h;
+      else acc.practical += h;
+      return acc;
+    }, { practical: 0, theory: 0 });
   }, [attendance]);
 
   const sortedAttendance = useMemo(() => {
@@ -885,10 +890,10 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatSummary label="Agreed Fee" value={`₹${(student.amount || 0).toLocaleString()}`} icon={<Tags className="h-3 w-3" />} color="primary" />
+        <StatSummary label="Practical Hr" value={`${hourStats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" />
+        <StatSummary label="Theory Hr" value={`${hourStats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
         <StatSummary label="Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
         <StatSummary label="Balance" value={`₹${balance.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
-        <StatSummary label="Training" value={`${totalHours} Hours`} icon={<Clock className="h-3 w-3" />} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -981,7 +986,8 @@ function StatSummary({ label, value, icon, color }: any) {
     primary: "bg-primary/5 border-primary/10 text-primary",
     green: "bg-green-50/50 border-green-100 text-green-700",
     red: "bg-red-50/50 border-red-100 text-red-700",
-    blue: "bg-blue-50/50 border-blue-100 text-blue-700"
+    blue: "bg-blue-50/50 border-blue-100 text-blue-700",
+    orange: "bg-orange-50/50 border-orange-100 text-orange-700"
   };
   return (
     <Card className={colorMap[color]}>

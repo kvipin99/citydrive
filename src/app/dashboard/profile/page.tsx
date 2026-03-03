@@ -39,8 +39,15 @@ export default function StudentProfilePage() {
 
   const balance = (student?.amount || 0) - paidAmount;
   
-  const totalHours = useMemo(() => {
-    return attendance?.reduce((sum: number, a: any) => sum + (Number(a.duration) || 0), 0) || 0;
+  const hourStats = useMemo(() => {
+    if (!attendance) return { practical: 0, theory: 0, total: 0 };
+    return attendance.reduce((acc, curr) => {
+      const h = Number(curr.duration) || 0;
+      if (curr.type === 'Theory') acc.theory += h;
+      else acc.practical += h;
+      acc.total += h;
+      return acc;
+    }, { practical: 0, theory: 0, total: 0 });
   }, [attendance]);
 
   if (isStudentLoading) {
@@ -89,10 +96,10 @@ export default function StudentProfilePage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Fee" value={`₹${student.amount?.toLocaleString()}`} icon={<Wallet className="text-primary" />} />
+        <StatCard label="Practical Log" value={`${hourStats.practical.toFixed(1)}h`} icon={<Car className="text-blue-600" />} />
+        <StatCard label="Theory Log" value={`${hourStats.theory.toFixed(1)}h`} icon={<BookOpen className="text-orange-600" />} />
         <StatCard label="Fees Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="text-green-600" />} />
         <StatCard label="Balance Due" value={`₹${balance.toLocaleString()}`} icon={<Clock className="text-destructive" />} />
-        <StatCard label="Training Hours" value={`${totalHours}h`} icon={<Clock className="text-blue-600" />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
