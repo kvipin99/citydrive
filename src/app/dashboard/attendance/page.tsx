@@ -23,8 +23,6 @@ const SESSION_TYPES = [
   { value: 'Theory', label: 'Theory Class', icon: BookOpen },
 ] as const;
 
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
-
 export default function AttendancePage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -48,7 +46,7 @@ export default function AttendancePage() {
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
   const isAdmin = profile?.role === 'Admin';
 
-  // Sync branch for managers/instructors
+  // Sync branch for managers/instructors, but Admin stays at "All"
   useEffect(() => {
     if (profile && !isAdmin && !isStudent) {
       setSelectedBranch(profile.branch || "Branch 1");
@@ -96,18 +94,17 @@ export default function AttendancePage() {
     return rawAttendance.filter(r => (r.branch || "").toLowerCase().trim() === targetBranch);
   }, [rawAttendance, selectedBranch, isStudent]);
 
-  // Client-side branch filtering for the student selection list in the popup
+  // Client-side filtering for the student selection list in the popup
   const filteredSearch = useMemo(() => {
     if (!students) return [];
     
-    // Step 1: Filter students by branch if a specific branch is selected in the context
+    // For Managers/Instructors, filter students by their assigned branch
     let list = [...students];
-    if (selectedBranch !== "All" && isStaff) {
+    if (selectedBranch !== "All" && !isAdmin) {
       const targetBranch = selectedBranch.toLowerCase().trim();
       list = list.filter(s => (s.branch || "").toLowerCase().trim() === targetBranch);
     }
 
-    // Step 2: Filter out completed students and apply search term
     const activeOnes = list.filter(s => s.status !== 'Completed');
     if (!studentSearch) return activeOnes;
     const term = studentSearch.toLowerCase();
@@ -116,7 +113,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [students, studentSearch, selectedBranch, isStaff]);
+  }, [students, studentSearch, selectedBranch, isAdmin]);
 
   const statsSummary = useMemo(() => {
     return filteredRecords.reduce((acc, curr) => {
@@ -207,31 +204,19 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : 'Global school training sessions history.'}
+            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
           </p>
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
             <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-              <Label className="text-[10px] font-black px-2 text-primary uppercase">Filters:</Label>
-              <div className="flex gap-2">
-                <Input 
-                  type="date" 
-                  value={selectedDate} 
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="h-9 w-[140px] bg-background border-primary/20 text-xs"
-                />
-                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
-                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs">
-                    <Filter className="h-3 w-3 mr-2 opacity-50" />
-                    <SelectValue placeholder="Branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Branches</SelectItem>
-                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Label className="text-[10px] font-black px-2 text-primary uppercase">Date Filter:</Label>
+              <Input 
+                type="date" 
+                value={selectedDate} 
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="h-9 w-[140px] bg-background border-primary/20 text-xs"
+              />
             </div>
             
             <Button size="lg" className="shadow-lg h-11" onClick={() => setIsDialogOpen(true)}>
@@ -252,7 +237,7 @@ export default function AttendancePage() {
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-blue-700">{statsSummary.practical.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
             <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
-              {selectedBranch === 'All' ? 'Combined Total' : `At ${selectedBranch}`}
+              {selectedBranch === 'All' ? 'School Total' : `At ${selectedBranch}`}
             </p>
           </CardContent>
         </Card>
@@ -265,7 +250,7 @@ export default function AttendancePage() {
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-orange-700">{statsSummary.theory.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
             <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
-              {selectedBranch === 'All' ? 'Combined Total' : `At ${selectedBranch}`}
+              {selectedBranch === 'All' ? 'School Total' : `At ${selectedBranch}`}
             </p>
           </CardContent>
         </Card>
@@ -297,7 +282,7 @@ export default function AttendancePage() {
             <div className="grid gap-6 px-6 py-4 pb-32">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Select Student {selectedBranch !== "All" && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
+                  <Label>Select Student {selectedBranch !== "All" && !isAdmin && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -443,7 +428,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')} at ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
+                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')} across ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
@@ -476,7 +461,7 @@ export default function AttendancePage() {
                     <TableCell colSpan={isStudent ? 6 : 8} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
-                        <p className="italic">No sessions logged for this {selectedBranch !== 'All' ? `branch` : 'period'}.</p>
+                        <p className="italic">No sessions logged for this period.</p>
                       </div>
                     </TableCell>
                   </TableRow>
