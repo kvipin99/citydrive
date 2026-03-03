@@ -695,7 +695,13 @@ export default function StudentsPage() {
             </div>
             <div className="grid gap-2">
               <Label>Payment Date</Label>
-              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
+              <Input 
+                type="date" 
+                value={paymentData.date} 
+                disabled={!isAdmin} 
+                onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
+              />
+              {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
             </div>
             <div className="grid gap-2">
               <Label>Amount Received (₹)</Label>
@@ -1103,7 +1109,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         ) : (
           <div className="rounded-xl border overflow-hidden shadow-sm">
             <Table>
-              <TableHeader className="bg-muted/50">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>
@@ -1145,7 +1151,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         ) : (
           <div className="rounded-xl border overflow-hidden shadow-sm">
             <Table>
-              <TableHeader className="bg-muted/50">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Receipt No.</TableHead>
