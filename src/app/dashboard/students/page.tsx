@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
@@ -483,13 +484,13 @@ export default function StudentsPage() {
                         Register Student
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90dvh]">
                       <DialogHeader className="p-6 pb-2">
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
                       </DialogHeader>
                       <ScrollArea className="flex-1 min-h-0">
-                        <div className="px-6 py-4 pb-20">
+                        <div className="px-6 py-4 pb-24">
                           <StudentForm 
                             formData={formData} 
                             setFormData={setFormData} 
@@ -639,13 +640,13 @@ export default function StudentsPage() {
       </AlertDialog>
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh]">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-4 px-6 py-4 pb-20">
+            <div className="grid gap-4 px-6 py-4 pb-24">
               <div className="grid gap-2">
                 <Label>Receipt Date</Label>
                 <div className="relative">
@@ -680,12 +681,12 @@ export default function StudentsPage() {
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90dvh]">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
           <ScrollArea className="flex-1 min-h-0">
-            <div className="px-6 py-4 pb-20">
+            <div className="px-6 py-4 pb-24">
               <StudentForm 
                 formData={formData} 
                 setFormData={setFormData} 

@@ -208,9 +208,9 @@ export default function StudentReceiptsPage() {
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
     
-    // Logic fix: Include records where category is Course Fee OR where studentId exists (handling legacy data)
+    // Partition: Include anything tagged Course Fee OR linked to a studentId
     let result = allReceipts.filter(r => 
-      r.category === "Course Fee" || (!!r.studentId && !r.category)
+      r.category === "Course Fee" || (!!r.studentId)
     );
     
     if (listSearchTerm) {
@@ -222,9 +222,13 @@ export default function StudentReceiptsPage() {
     }
     
     return result.sort((a, b) => {
-      const timeA = a.date?.seconds || (isValid(new Date(a.date)) ? new Date(a.date).getTime() / 1000 : 0);
-      const timeB = b.date?.seconds || (isValid(new Date(b.date)) ? new Date(b.date).getTime() / 1000 : 0);
-      return timeB - timeA;
+      const parseDate = (d: any) => {
+        if (!d) return 0;
+        if (d.seconds) return d.seconds;
+        const p = new Date(d);
+        return isValid(p) ? p.getTime() / 1000 : 0;
+      };
+      return parseDate(b.date) - parseDate(a.date);
     });
   }, [allReceipts, listSearchTerm]);
 
@@ -255,14 +259,14 @@ export default function StudentReceiptsPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh]">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle>Collect Student Fee</DialogTitle>
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-20">
+            <div className="grid gap-6 px-6 py-4 pb-24">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Search Student (ID/Name/Mobile)</Label>
@@ -290,7 +294,7 @@ export default function StudentReceiptsPage() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-4 animate-in fade-in zoom-in-95">
+                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center">
                     <div>
                       <p className="font-bold text-primary">{selectedStudent.name}</p>
