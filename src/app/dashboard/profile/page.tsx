@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint } from "lucide-react";
+import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint, FileText } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useMemo } from "react";
 
@@ -16,28 +16,32 @@ export default function StudentProfilePage() {
   const { user } = useUser();
   const db = useFirestore();
 
-  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user?.uid]);
   const { data: profile } = useDoc(userProfileRef);
 
   const studentQuery = useMemoFirebase(() => {
     if (!db || !user?.uid) return null;
     return query(collection(db, "students"), where("userId", "==", user.uid));
-  }, [db, user]);
+  }, [db, user?.uid]);
   const { data: studentRecords, isLoading: isStudentLoading } = useCollection(studentQuery);
   const student = studentRecords?.[0];
 
+  const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !user?.uid) return null;
-    return query(collection(db, "attendance"), where("studentUid", "==", user.uid));
-  }, [db, user]);
+    if (!db || !studentId) return null;
+    return query(collection(db, "attendance"), where("studentId", "==", studentId));
+  }, [db, studentId]);
   const { data: attendance } = useCollection(attendanceQuery);
 
   const paidAmount = useMemo(() => {
     return student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
-  }, [student]);
+  }, [student?.payments]);
 
   const balance = (student?.amount || 0) - paidAmount;
-  const totalHours = attendance?.reduce((sum: number, a: any) => sum + (Number(a.duration) || 0), 0) || 0;
+  
+  const totalHours = useMemo(() => {
+    return attendance?.reduce((sum: number, a: any) => sum + (Number(a.duration) || 0), 0) || 0;
+  }, [attendance]);
 
   if (isStudentLoading) {
     return (
@@ -52,7 +56,7 @@ export default function StudentProfilePage() {
       <div className="text-center py-12">
         <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
         <h2 className="text-xl font-bold">Profile Not Found</h2>
-        <p className="text-muted-foreground">Your student record could not be located. Please contact the office.</p>
+        <p className="text-muted-foreground">Your student record could not be located.</p>
       </div>
     );
   }
@@ -140,7 +144,7 @@ export default function StudentProfilePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {attendance.slice(0, 5).map((a: any) => (
+                    {[...attendance].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5).map((a: any) => (
                       <TableRow key={a.id}>
                         <TableCell className="text-sm font-medium">{formatSafeDate(a.date)}</TableCell>
                         <TableCell>
@@ -223,7 +227,7 @@ function DetailItem({ label, value, icon }: { label: string, value: string, icon
         <span className="text-primary/50">{icon}</span>
         {label}
       </p>
-      <p className="font-bold text-sm bg-muted/20 p-2.5 rounded-lg border border-transparent hover:border-primary/10 transition-colors">
+      <p className="font-bold text-sm bg-muted/20 p-2.5 rounded-lg border border-transparent">
         {value || 'N/A'}
       </p>
     </div>

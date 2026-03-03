@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,11 +66,12 @@ export default function StudentsPage() {
   const userProfileRef = useMemoFirebase(() => {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
-  }, [db, user]);
+  }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
   const isStudent = profile?.role === 'Student';
+  const profileBranch = profile?.branch;
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -80,14 +81,14 @@ export default function StudentsPage() {
     if (isAdmin) {
       return collection(db, 'students');
     }
-    const branchId = profile.branch || "Branch 1";
+    const branchId = profileBranch || "Branch 1";
     return query(collection(db, 'students'), where('branch', '==', branchId));
-  }, [db, user, profile, isAdmin, isStudent]);
+  }, [db, user?.uid, profileBranch, isAdmin, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'courses');
-  }, [db, user]);
+  }, [db, user?.uid]);
   
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
   const { data: masterCourses, isLoading: isCoursesLoading } = useCollection<any>(coursesQuery);
@@ -141,10 +142,13 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (profile && isAddDialogOpen) {
-      const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profile.branch || "Branch 1");
-      setFormData(prev => ({ ...prev, branch: defaultBranch }));
+      const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profileBranch || "Branch 1");
+      setFormData(prev => {
+        if (prev.branch === defaultBranch) return prev;
+        return { ...prev, branch: defaultBranch };
+      });
     }
-  }, [profile, isAddDialogOpen, isAdmin]);
+  }, [profileBranch, isAddDialogOpen, isAdmin]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -153,14 +157,20 @@ export default function StudentsPage() {
   }, [masterCourses]);
 
   const filteredStudents = useMemo(() => {
-    return students?.filter(s => 
+    if (!students) return [];
+    return students.filter(s => 
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
       s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.phone?.includes(searchQuery)
-    ) || [];
+    );
   }, [students, searchQuery]);
 
-  const generateBranchStudentId = (branchName: string) => {
+  const calculateFees = useCallback((courses: string[], discount: number, specialFee: number = 0) => {
+    const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
+    return Math.max(0, baseAmount + (specialFee || 0) - (discount || 0));
+  }, [coursePriceMap]);
+
+  const generateBranchStudentId = useCallback((branchName: string) => {
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
@@ -177,12 +187,7 @@ export default function StudentsPage() {
     
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
-  };
-
-  const calculateFees = (courses: string[], discount: number, specialFee: number = 0) => {
-    const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
-    return Math.max(0, baseAmount + specialFee - (discount || 0));
-  };
+  }, [students]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -197,7 +202,7 @@ export default function StudentsPage() {
     }
     const reader = new FileReader();
     reader.onload = (event) => {
-      setFormData({ ...formData, photoUrl: event.target?.result as string });
+      setFormData(prev => ({ ...prev, photoUrl: event.target?.result as string }));
     };
     reader.readAsDataURL(file);
   };
@@ -239,11 +244,6 @@ export default function StudentsPage() {
       return;
     }
 
-    if (isStudentsLoading) {
-      toast({ variant: "destructive", title: "Database Syncing", description: "Please wait for the student list to load before registering." });
-      return;
-    }
-
     setIsSubmitting(true);
     const branchName = formData.branch!;
     const studentId = generateBranchStudentId(branchName);
@@ -272,11 +272,9 @@ export default function StudentsPage() {
       resetForm();
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
-      let errorMsg = "An unexpected error occurred during registration.";
+      let errorMsg = "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID Conflict: Login for "${studentId}" already exists. Use the "Conflict ID" cleanup tool at the bottom of this form.`;
-      } else if (error.message) {
-        errorMsg = error.message;
+        errorMsg = `ID Conflict: Login for "${studentId}" already exists. Use the cleanup tool.`;
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -300,8 +298,6 @@ export default function StudentsPage() {
     if (!selectedStudent || !isAdmin) return;
 
     setIsSubmitting(true);
-    toast({ title: "Removing Student", description: "Cleaning up profile and payments..." });
-
     try {
       const paymentsCol = collection(db, 'payments');
       const q = query(paymentsCol, where('studentId', '==', selectedStudent.id));
@@ -315,9 +311,9 @@ export default function StudentsPage() {
 
       setIsDeleteAlertOpen(false);
       setSelectedStudent(null);
-      toast({ title: "Student Removed", description: "Database has been fully cleaned." });
+      toast({ title: "Student Removed" });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Operation Failed", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -325,13 +321,10 @@ export default function StudentsPage() {
 
   const handleCleanupGhost = async () => {
     if (!cleanupId) return;
+    setIsSubmitting(true);
     const studentId = cleanupId.trim().toUpperCase();
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
-
-    setIsSubmitting(true);
-    toast({ title: "Cleanup Started", description: `Attempting to force-delete student login for ${studentId}...` });
-
     const secondaryAppName = `cleanup-s-${studentId}-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
     const secondaryAuth = getAuth(secondaryApp);
@@ -340,18 +333,18 @@ export default function StudentsPage() {
       const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
       await deleteUser(cred.user);
       await deleteApp(secondaryApp);
-      toast({ title: "Cleanup Successful", description: `Login account for ${studentId} has been removed. You can now register this student.` });
+      toast({ title: "Cleanup Successful" });
       setCleanupId("");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone or uses a changed password." });
+      toast({ variant: "destructive", title: "Cleanup Failed" });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    const defaultBranch = profile?.role === 'Admin' ? "Branch 1" : (profile?.branch || "Branch 1");
+  const resetForm = useCallback(() => {
+    const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
     setFormData({ 
       branch: defaultBranch, 
       status: "Active", 
@@ -375,7 +368,7 @@ export default function StudentsPage() {
       specialCourseFee: 0
     });
     setCleanupId("");
-  };
+  }, [isAdmin, profileBranch]);
 
   const handleCourseToggle = (course: string) => {
     const currentCourses = formData.courses || [];
@@ -388,20 +381,20 @@ export default function StudentsPage() {
     
     const hasOthers = newCourses.includes('Others');
     const specialFee = hasOthers ? (formData.specialCourseFee || 0) : 0;
-
     const newAmount = calculateFees(newCourses, formData.discount || 0, specialFee);
-    setFormData({ 
-      ...formData, 
+    
+    setFormData(prev => ({ 
+      ...prev, 
       courses: newCourses, 
       amount: newAmount,
       ...(!hasOthers ? { specialCourseName: '', specialCourseFee: 0 } : {})
-    });
+    }));
   };
 
-  const calculateBalanceDue = (student: Student) => {
+  const calculateBalanceDue = useCallback((student: Student) => {
     const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
     return Math.max(0, (student.amount || 0) - paid);
-  };
+  }, []);
 
   const handleReceivePayment = async () => {
     if (!selectedStudent || paymentData.amount <= 0 || !paymentData.receiptNo) {
@@ -453,32 +446,7 @@ export default function StudentsPage() {
     }
 
     setIsPaymentDialogOpen(false);
-    setPaymentData({ 
-      amount: 0, 
-      receiptNo: '', 
-      method: 'Cash',
-      date: new Date().toISOString().split('T')[0]
-    });
-    toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} saved.` });
-  };
-
-  const handleExportCSV = () => {
-    if (!students || students.length === 0) {
-      toast({ variant: "destructive", title: "Export Failed", description: "No student data available." });
-      return;
-    }
-    const headers = ["ID", "Name", "Phone", "Email", "Branch", "Status", "Total Amount", "Discount", "Admission Date"];
-    const rows = students.map(s => [s.id, s.name, s.phone, s.email || '', s.branch, s.status, s.amount, s.discount, s.registrationDate]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `citydrive_students_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast({ title: "Export Successful" });
+    toast({ title: "Payment Recorded" });
   };
 
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
@@ -491,7 +459,7 @@ export default function StudentsPage() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profile?.branch || 'your branch'}.`}
+                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profileBranch || 'your branch'}.`}
               </CardDescription>
             </div>
             {!isStudent && (
@@ -506,13 +474,6 @@ export default function StudentsPage() {
                   />
                 </div>
                 
-                {isAdmin && (
-                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export CSV
-                  </Button>
-                )}
-
                 {!isAdmin && (
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
                     <DialogTrigger asChild>
@@ -524,7 +485,7 @@ export default function StudentsPage() {
                     <DialogContent className="max-w-4xl">
                       <DialogHeader>
                         <DialogTitle>New Student Registration</DialogTitle>
-                        <DialogDescription>Fill in all details. IDs are auto-generated based on the series.</DialogDescription>
+                        <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
                       </DialogHeader>
                       <ScrollArea className="max-h-[70vh] pr-4">
                         <StudentForm 
@@ -542,11 +503,8 @@ export default function StudentsPage() {
                         <div className="mt-8 pt-6 border-t">
                           <div className="flex items-center gap-2 text-orange-600 mb-2">
                             <AlertCircle className="h-4 w-4" />
-                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Registration Conflicts</h4>
+                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Conflicts</h4>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mb-4">
-                            If you get an "Email already in use" error, it means an old login exists for this ID. Enter the ID below to force-clear it before trying again.
-                          </p>
                           <div className="flex gap-2 max-w-sm">
                             <Input 
                               placeholder="Conflict ID (e.g. B10001)" 
@@ -589,7 +547,7 @@ export default function StudentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredStudents.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No student records found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
                   filteredStudents.map((student) => (
                     <TableRow key={student.id}>
@@ -627,7 +585,7 @@ export default function StudentsPage() {
                                 <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (
-                                  <DropdownMenuItem className="text-destructive font-bold focus:bg-destructive focus:text-white" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
+                                  <DropdownMenuItem className="text-destructive font-bold" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
                                   </DropdownMenuItem>
                                 )}
@@ -645,7 +603,6 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* Profile Detail Sheet */}
       <Sheet open={isProfileSheetOpen} onOpenChange={(open) => { setIsProfileSheetOpen(open); if(!open && !isStudent) setSelectedStudent(null); }}>
         <SheetContent className="sm:max-w-3xl overflow-y-auto">
           <SheetHeader className="pb-6">
@@ -663,17 +620,10 @@ export default function StudentsPage() {
       </Sheet>
 
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
-        <AlertDialogContent className="border-destructive/20 shadow-2xl">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <AlertTriangle className="h-6 w-6" />
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            </div>
-            <AlertDialogDescription className="text-base">
-              This action will permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.
-              <br/><br/>
-              <span className="text-destructive font-black uppercase tracking-tighter">This action cannot be undone.</span>
-            </AlertDialogDescription>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
@@ -685,23 +635,13 @@ export default function StudentsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); } }}>
+      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Receive Payment</DialogTitle><DialogDescription>Record fee collection for {selectedStudent?.name}.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="p-3 border rounded-lg bg-muted/50 flex justify-between">
-               <span className="text-sm">Balance Due:</span>
-               <span className="font-bold text-destructive">₹{selectedStudent ? calculateBalanceDue(selectedStudent).toLocaleString() : 0}</span>
-            </div>
             <div className="grid gap-2">
               <Label>Payment Date</Label>
-              <Input 
-                type="date" 
-                value={paymentData.date} 
-                disabled={!isAdmin} 
-                onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
-              />
-              {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
+              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
             </div>
             <div className="grid gap-2">
               <Label>Amount Received (₹)</Label>
@@ -727,7 +667,7 @@ export default function StudentsPage() {
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update all student details, courses, and pricing.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-4">
             <StudentForm 
               formData={formData} 
@@ -778,36 +718,26 @@ function StudentForm({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="grid gap-2">
-          <Label className="text-primary font-bold flex items-center gap-1.5">
-            Branch Assignment {!isAdmin && <Lock className="h-3 w-3" />}
-          </Label>
-          <Select 
-            value={formData.branch} 
-            onValueChange={(v) => setFormData({...formData, branch: v as any})} 
-            disabled={!isAdmin && !isEdit}
-          >
-            <SelectTrigger className={`border-primary/50 ${(!isAdmin && !isEdit) ? 'bg-muted cursor-not-allowed' : ''}`}>
-              <SelectValue placeholder="Select Branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-            </SelectContent>
+          <Label className="text-primary font-bold">Branch {!isAdmin && <Lock className="h-3 w-3" />}</Label>
+          <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
+            <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
+            <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="grid gap-2">
           <Label>Full Name</Label>
-          <Input placeholder="Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+          <Input placeholder=" Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} />
         </div>
         <div className="grid gap-2">
           <Label>Mobile No.</Label>
-          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="grid gap-2">
           <Label>Status</Label>
-          <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+          <Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="Active">Active</SelectItem>
@@ -819,154 +749,80 @@ function StudentForm({
         </div>
         <div className="grid gap-2">
           <Label>Admission Date</Label>
-          <Input 
-            type="date" 
-            value={formData.registrationDate || ''} 
-            onChange={(e) => setFormData({...formData, registrationDate: e.target.value})} 
-          />
+          <Input type="date" value={formData.registrationDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registrationDate: e.target.value}))} />
         </div>
         <div className="grid gap-2">
-          <Label>Parent/Guardian Name</Label>
-          <Input placeholder="Robert Johnson" value={formData.parentName || ''} onChange={(e) => setFormData({...formData, parentName: e.target.value})} />
+          <Label>Parent/Guardian</Label>
+          <Input value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label>Aadhar No.</Label>
-          <Input placeholder="XXXX-XXXX-XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData({...formData, aadharNo: e.target.value})} />
-        </div>
-        <div className="grid gap-2">
-          <Label>Online App No.</Label>
-          <Input placeholder="APP-12345" value={formData.onlineAppNo || ''} onChange={(e) => setFormData({...formData, onlineAppNo: e.target.value})} />
-        </div>
+        <div className="grid gap-2"><Label>Aadhar No.</Label><Input value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div>
+        <div className="grid gap-2"><Label>Online App No.</Label><Input value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-primary/5">
-        <div className="grid gap-2">
-          <Label className="text-primary font-bold">Learners License No.</Label>
-          <Input placeholder="LL-123456789" value={formData.learnersNo || ''} onChange={(e) => setFormData({...formData, learnersNo: e.target.value})} />
-        </div>
-        <div className="grid gap-2">
-          <Label>Learners License Date</Label>
-          <Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData({...formData, learnersDate: e.target.value})} />
-        </div>
+        <div className="grid gap-2"><Label className="text-primary font-bold">Learners License No.</Label><Input value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div>
+        <div className="grid gap-2"><Label>Learners Date</Label><Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersDate: e.target.value}))} /></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50/30">
-        <div className="grid gap-2">
-          <Label className="text-green-700 font-bold">Driving License No.</Label>
-          <Input placeholder="DL-123456789" value={formData.drivingNo || ''} onChange={(e) => setFormData({...formData, drivingNo: e.target.value})} />
-        </div>
-        <div className="grid gap-2">
-          <Label>Driving Test Date</Label>
-          <Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData({...formData, testDate: e.target.value})} />
-        </div>
+        <div className="grid gap-2"><Label className="text-green-700 font-bold">Driving License No.</Label><Input value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div>
+        <div className="grid gap-2"><Label>Test Date</Label><Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, testDate: e.target.value}))} /></div>
       </div>
 
-      <div className="grid gap-2">
-        <Label>Email (Optional)</Label>
-        <Input type="email" placeholder="student@example.com" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-      </div>
-
-      <div className="grid gap-2">
-        <Label>Address</Label>
-        <Textarea placeholder="123 Main St, Cityville" value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} />
-      </div>
+      <div className="grid gap-2"><Label>Address</Label><Textarea value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div>
 
       <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
         <Label className="font-bold">Courses Selection</Label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {masterCourses?.map((course: any) => (
             <div key={course.id} className="flex items-center space-x-2">
-              <Checkbox id={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
-              <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
+              <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
+              <Label htmlFor={`course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
             </div>
           ))}
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id={`${isEdit ? 'edit' : 'add'}-course-others`} 
-              checked={formData.courses?.includes('Others')} 
-              onCheckedChange={() => handleCourseToggle('Others')} 
-            />
-            <Label htmlFor={`${isEdit ? 'edit' : 'add'}-course-others`} className="text-sm cursor-pointer font-bold text-primary">Others / Custom Batch</Label>
+            <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} />
+            <Label htmlFor="course-others" className="text-sm cursor-pointer font-bold text-primary">Others / Custom</Label>
           </div>
         </div>
 
         {formData.courses?.includes('Others') && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-primary/10 animate-in fade-in slide-in-from-top-2">
-            <div className="grid gap-2">
-              <Label className="text-xs">Custom Course Name</Label>
-              <Input 
-                placeholder="e.g. Special Weekend Batch" 
-                value={formData.specialCourseName || ''} 
-                onChange={(e) => setFormData({...formData, specialCourseName: e.target.value})}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label className="text-xs">Custom Fee (₹)</Label>
-              <Input 
-                type="number"
-                placeholder="0"
-                value={formData.specialCourseFee || ''} 
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setFormData({
-                    ...formData, 
-                    specialCourseFee: val,
-                    amount: calculateFees(formData.courses || [], formData.discount || 0, val)
-                  });
-                }}
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+            <div className="grid gap-2"><Label className="text-xs">Custom Course Name</Label><Input value={formData.specialCourseName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div>
+            <div className="grid gap-2"><Label className="text-xs">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label className={!isAdmin ? "text-muted-foreground flex items-center gap-1" : ""}>
-            Discount (₹) {!isAdmin && <Lock className="h-3 w-3" />}
-          </Label>
-          <Input 
-            type="number" 
-            value={formData.discount} 
-            disabled={!isAdmin}
-            className={!isAdmin ? "bg-muted cursor-not-allowed" : ""}
-            onChange={(e) => {
-               const disc = Number(e.target.value);
-               setFormData({...formData, discount: disc, amount: calculateFees(formData.courses || [], disc, formData.specialCourseFee || 0)});
-            }} 
-          />
-          {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Only Administrators can modify discounts.</p>}
+          <Label className={!isAdmin ? "text-muted-foreground" : ""}>Discount (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label>
+          <Input type="number" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} />
         </div>
         <div className="grid gap-2">
           <Label className="text-primary font-bold">Total Payable Amount</Label>
-          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold flex items-center justify-between">
-            <span>₹{formData.amount?.toLocaleString() || '0'}</span>
-            {!isEdit && <span className="text-[10px] text-muted-foreground uppercase">Next ID: {formData.branch ? generateBranchStudentId(formData.branch) : '...'}</span>}
-          </div>
+          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold">₹{formData.amount?.toLocaleString() || '0'}</div>
         </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label>Remarks</Label>
-        <Textarea placeholder="Any specific notes..." value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} />
       </div>
     </div>
   );
 }
 
 function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
+  const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !student) return null;
-    return query(collection(db, 'attendance'), where('studentId', '==', student.id));
-  }, [db, student]);
+    if (!db || !studentId) return null;
+    return query(collection(db, 'attendance'), where('studentId', '==', studentId));
+  }, [db, studentId]);
 
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
   const totalHours = useMemo(() => {
-    return attendance?.reduce((sum, a) => sum + (Number(a.duration) || 0), 0) || 0;
+    if (!attendance) return 0;
+    return attendance.reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
   }, [attendance]);
 
   const sortedAttendance = useMemo(() => {
@@ -978,7 +834,10 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
     });
   }, [attendance]);
 
-  const paidAmount = student.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+  const paidAmount = useMemo(() => {
+    return student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+  }, [student?.payments]);
+
   const balance = calculateBalanceDue(student);
 
   const formatSafeDate = (dateStr: string) => {
@@ -997,96 +856,47 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         <div className="grid gap-1">
           <h2 className="text-2xl font-black tracking-tight">{student.name}</h2>
           <div className="flex items-center justify-center gap-2">
-            <Badge variant="secondary" className="font-mono font-bold tracking-tighter">{student.id}</Badge>
-            <Badge variant="outline" className="uppercase font-bold text-[10px] tracking-widest">{student.branch}</Badge>
+            <Badge variant="secondary" className="font-mono font-bold">{student.id}</Badge>
+            <Badge variant="outline" className="uppercase font-bold text-[10px]">{student.branch}</Badge>
           </div>
           <Badge className="mx-auto mt-2" variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-primary/5 border-primary/10">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
-              <Tags className="h-3 w-3" /> Agreed Fee
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-black text-primary">₹{(student.amount || 0).toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50/50 border-green-100">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-green-600 flex items-center gap-2">
-              <CreditCard className="h-3 w-3" /> Paid
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-black text-green-700">₹{paidAmount.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-red-50/50 border-red-100">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-red-600 flex items-center gap-2">
-              <Wallet className="h-3 w-3" /> Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-black text-red-700">₹{balance.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-blue-50/50 border-blue-100">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
-              <Clock className="h-3 w-3" /> Training
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-black text-blue-700">{totalHours} Hours</div>
-          </CardContent>
-        </Card>
+        <StatSummary label="Agreed Fee" value={`₹${(student.amount || 0).toLocaleString()}`} icon={<Tags className="h-3 w-3" />} color="primary" />
+        <StatSummary label="Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
+        <StatSummary label="Balance" value={`₹${balance.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
+        <StatSummary label="Training" value={`${totalHours} Hours`} icon={<Clock className="h-3 w-3" />} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section className="space-y-4">
-          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-            <User className="h-4 w-4" /> Personal & Licensing
-          </h3>
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
           <div className="grid gap-4 text-sm">
             <ProfileItem icon={<Calendar />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
-            <ProfileItem icon={<Fingerprint />} label="Aadhar No" value={student.aadharNo} />
+            <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
-            <div className="grid grid-cols-2 gap-4 col-span-full">
-              <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
-              <ProfileItem icon={<Calendar />} label="Learners Date" value={formatSafeDate(student.learnersDate)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4 col-span-full">
-              <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
-              <ProfileItem icon={<Calendar />} label="Driving Test" value={formatSafeDate(student.testDate)} />
-            </div>
+            <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
+            <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
           </div>
         </section>
 
         <section className="space-y-4">
-          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-            <CheckCircle2 className="h-4 w-4" /> Enrolled Courses
-          </h3>
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CheckCircle2 className="h-4 w-4" /> Courses</h3>
           <div className="space-y-2">
             {student.courses?.map((c: string, i: number) => (
               <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
-                <span className="font-medium text-sm">
-                  {c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}
-                </span>
+                <span className="font-medium text-sm">{c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}</span>
                 <Badge variant="outline">Enrolled</Badge>
               </div>
             ))}
-            {(!student.courses || student.courses.length === 0) && <p className="text-xs italic text-muted-foreground">No courses listed.</p>}
           </div>
           {student.remarks && (
             <div className="mt-6 p-4 rounded-lg bg-orange-50 border border-orange-100">
-              <p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Staff Remarks</p>
+              <p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Remarks</p>
               <p className="text-xs text-orange-800 italic">{student.remarks}</p>
             </div>
           )}
@@ -1096,43 +906,21 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
       <Separator />
 
       <section className="space-y-4">
-        <div className="flex items-center justify-between border-b pb-2">
-          <h3 className="font-bold flex items-center gap-2 text-primary">
-            <Clock className="h-4 w-4" /> Attendance Log
-          </h3>
-          <Badge variant="outline" className="text-[10px] uppercase">Real-time Sync</Badge>
-        </div>
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Clock className="h-4 w-4" /> Attendance</h3>
         {isAttendanceLoading ? (
           <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : sortedAttendance.length === 0 ? (
-          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No training sessions recorded yet.</p>
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No logs found.</p>
         ) : (
-          <div className="rounded-xl border overflow-hidden shadow-sm">
+          <div className="rounded-xl border overflow-hidden">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead className="text-right">Duration</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader>
               <TableBody>
                 {sortedAttendance.map((a: any) => (
                   <TableRow key={a.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs font-medium">{formatSafeDate(a.date)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0">
-                        {a.type || 'Practical'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-[10px] text-muted-foreground">
-                      <div className="flex flex-col">
-                        <span>{a.startTime} - {a.endTime}</span>
-                        {a.type === 'Practical' && <span className="flex items-center gap-1 font-bold text-primary"><Car className="h-2 w-2" /> {a.vehicleReg || 'N/A'}</span>}
-                        {a.type === 'Theory' && <span className="flex items-center gap-1 text-orange-600 font-bold"><BookOpen className="h-2 w-2" /> Classroom</span>}
-                      </div>
-                    </TableCell>
+                    <TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell>
+                    <TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell>
                     <TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell>
                   </TableRow>
                 ))}
@@ -1143,28 +931,18 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
       </section>
 
       <section className="space-y-4">
-        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2">
-          <CreditCard className="h-4 w-4" /> Transaction History
-        </h3>
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Payments</h3>
         {student.payments?.length === 0 ? (
-          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No payments received yet.</p>
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No payments recorded.</p>
         ) : (
-          <div className="rounded-xl border overflow-hidden shadow-sm">
+          <div className="rounded-xl border overflow-hidden">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Receipt No.</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
               <TableBody>
                 {student.payments?.map((p: any) => (
                   <TableRow key={p.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell>
                     <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
-                    <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{p.method}</Badge></TableCell>
                     <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
@@ -1177,6 +955,25 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
   );
 }
 
+function StatSummary({ label, value, icon, color }: any) {
+  const colorMap: Record<string, string> = {
+    primary: "bg-primary/5 border-primary/10 text-primary",
+    green: "bg-green-50/50 border-green-100 text-green-700",
+    red: "bg-red-50/50 border-red-100 text-red-700",
+    blue: "bg-blue-50/50 border-blue-100 text-blue-700"
+  };
+  return (
+    <Card className={colorMap[color]}>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-xs font-bold uppercase flex items-center gap-2">{icon} {label}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        <div className="text-xl font-black">{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProfileItem({ icon, label, value, fullWidth = false }: any) {
   return (
     <div className={`grid gap-1 ${fullWidth ? 'col-span-full' : ''}`}>
@@ -1184,8 +981,8 @@ function ProfileItem({ icon, label, value, fullWidth = false }: any) {
         <span className="text-primary/60">{icon}</span>
         {label}
       </div>
-      <div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent hover:border-muted transition-colors">
-        {value || 'Not provided'}
+      <div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent">
+        {value || 'N/A'}
       </div>
     </div>
   );
