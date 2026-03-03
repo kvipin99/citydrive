@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -59,7 +58,6 @@ export default function StudentReceiptsPage() {
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    // Base query for Course Fees
     const baseCol = collection(db, 'payments');
     if (isAdmin) return query(baseCol, where('category', '==', 'Course Fee'));
     return query(baseCol, 

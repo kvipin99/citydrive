@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
@@ -484,43 +483,45 @@ export default function StudentsPage() {
                         Register Student
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-4xl">
-                      <DialogHeader>
+                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+                      <DialogHeader className="p-6 pb-2">
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
                       </DialogHeader>
-                      <ScrollArea className="max-h-[70vh] pr-4">
-                        <StudentForm 
-                          formData={formData} 
-                          setFormData={setFormData} 
-                          isAdmin={isAdmin} 
-                          masterCourses={masterCourses} 
-                          calculateFees={calculateFees} 
-                          handlePhotoUpload={handlePhotoUpload} 
-                          photoInputRef={photoInputRef}
-                          handleCourseToggle={handleCourseToggle}
-                          generateBranchStudentId={generateBranchStudentId}
-                        />
-                        
-                        <div className="mt-8 pt-6 border-t">
-                          <div className="flex items-center gap-2 text-orange-600 mb-2">
-                            <AlertCircle className="h-4 w-4" />
-                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Conflicts</h4>
-                          </div>
-                          <div className="flex gap-2 max-w-sm">
-                            <Input 
-                              placeholder="Conflict ID (e.g. B10001)" 
-                              className="h-9 text-xs" 
-                              value={cleanupId} 
-                              onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
-                            />
-                            <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                              <Eraser className="h-3 w-3 mr-1.5" /> Force Delete Auth
-                            </Button>
+                      <ScrollArea className="flex-1 px-6">
+                        <div className="py-4">
+                          <StudentForm 
+                            formData={formData} 
+                            setFormData={setFormData} 
+                            isAdmin={isAdmin} 
+                            masterCourses={masterCourses} 
+                            calculateFees={calculateFees} 
+                            handlePhotoUpload={handlePhotoUpload} 
+                            photoInputRef={photoInputRef}
+                            handleCourseToggle={handleCourseToggle}
+                            generateBranchStudentId={generateBranchStudentId}
+                          />
+                          
+                          <div className="mt-8 pt-6 border-t pb-10">
+                            <div className="flex items-center gap-2 text-orange-600 mb-2">
+                              <AlertCircle className="h-4 w-4" />
+                              <h4 className="text-xs font-bold uppercase tracking-tight">Fix Conflicts</h4>
+                            </div>
+                            <div className="flex gap-2 max-w-sm">
+                              <Input 
+                                placeholder="Conflict ID (e.g. B10001)" 
+                                className="h-9 text-xs" 
+                                value={cleanupId} 
+                                onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
+                              />
+                              <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                                <Eraser className="h-3 w-3 mr-1.5" /> Force Delete Auth
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </ScrollArea>
-                      <DialogFooter>
+                      <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
                         <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
                           {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
                           Confirm Registration
@@ -638,52 +639,65 @@ export default function StudentsPage() {
       </AlertDialog>
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Issue Receipt</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Receipt Date</Label>
-              <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
-            </div>
-            <div className="grid gap-2">
-              <Label>Amount Received (₹)</Label>
-              <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Issue Receipt</DialogTitle>
+            <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6">
+            <div className="grid gap-4 py-4 pb-10">
               <div className="grid gap-2">
-                <Label>Receipt No.</Label>
-                <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
+                <Label>Receipt Date</Label>
+                <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
               </div>
               <div className="grid gap-2">
-                <Label>Method</Label>
-                <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
-                </Select>
+                <Label>Amount Received (₹)</Label>
+                <Input type="number" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Receipt No.</Label>
+                  <Input value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Method</Label>
+                  <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button></DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+            <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>Edit Student Profile</DialogTitle></DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
-            <StudentForm 
-              formData={formData} 
-              setFormData={setFormData} 
-              isAdmin={isAdmin} 
-              masterCourses={masterCourses} 
-              calculateFees={calculateFees} 
-              handlePhotoUpload={handlePhotoUpload} 
-              photoInputRef={editPhotoInputRef}
-              handleCourseToggle={handleCourseToggle}
-              isEdit={true}
-            />
+        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Edit Student Profile</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6">
+            <div className="py-4">
+              <StudentForm 
+                formData={formData} 
+                setFormData={setFormData} 
+                isAdmin={isAdmin} 
+                masterCourses={masterCourses} 
+                calculateFees={calculateFees} 
+                handlePhotoUpload={handlePhotoUpload} 
+                photoInputRef={editPhotoInputRef}
+                handleCourseToggle={handleCourseToggle}
+                isEdit={true}
+              />
+            </div>
           </ScrollArea>
-          <DialogFooter><Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button></DialogFooter>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+            <Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
