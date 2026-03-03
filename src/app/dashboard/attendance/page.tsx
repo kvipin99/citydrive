@@ -48,7 +48,7 @@ export default function AttendancePage() {
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
   const isAdmin = profile?.role === 'Admin';
 
-  // Sync branch for managers
+  // Sync branch for managers/instructors
   useEffect(() => {
     if (profile && !isAdmin && !isStudent) {
       setSelectedBranch(profile.branch || "Branch 1");
@@ -91,7 +91,10 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     if (isStudent) return rawAttendance;
     if (selectedBranch === "All") return rawAttendance;
-    return rawAttendance.filter(r => r.branch === selectedBranch);
+    
+    // Use robust case-insensitive comparison for safety
+    const targetBranch = selectedBranch.toLowerCase();
+    return rawAttendance.filter(r => r.branch?.toLowerCase() === targetBranch);
   }, [rawAttendance, selectedBranch, isStudent]);
 
   const statsSummary = useMemo(() => {
