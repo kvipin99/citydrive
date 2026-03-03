@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,12 +23,15 @@ const SESSION_TYPES = [
   { value: 'Theory', label: 'Theory Class', icon: BookOpen },
 ] as const;
 
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
 export default function AttendancePage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
   
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedBranch, setSelectedBranch] = useState<string>("All");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -43,6 +46,14 @@ export default function AttendancePage() {
   
   const isStudent = profile?.role === 'Student';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
+  const isAdmin = profile?.role === 'Admin';
+
+  // Sync branch for managers
+  useEffect(() => {
+    if (profile && !isAdmin && !isStudent) {
+      setSelectedBranch(profile.branch || "Branch 1");
+    }
+  }, [profile, isAdmin, isStudent]);
 
   // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
@@ -61,27 +72,36 @@ export default function AttendancePage() {
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance records
+  // Fetch Attendance records for the date
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isStudent) {
       return query(collection(db, 'attendance'), where('studentUid', '==', user.uid));
     }
-    if (isStaff) return query(collection(db, 'attendance'), where('date', '==', selectedDate));
+    if (isStaff) {
+      return query(collection(db, 'attendance'), where('date', '==', selectedDate));
+    }
     return null;
   }, [db, user, profile, isStaff, isStudent, selectedDate]);
 
-  const { data: attendanceRecords, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+  const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+
+  // Client-side branch filtering
+  const filteredRecords = useMemo(() => {
+    if (!rawAttendance) return [];
+    if (isStudent) return rawAttendance;
+    if (selectedBranch === "All") return rawAttendance;
+    return rawAttendance.filter(r => r.branch === selectedBranch);
+  }, [rawAttendance, selectedBranch, isStudent]);
 
   const statsSummary = useMemo(() => {
-    if (!attendanceRecords) return { practical: 0, theory: 0 };
-    return attendanceRecords.reduce((acc, curr) => {
+    return filteredRecords.reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
       if (curr.type === 'Theory') acc.theory += hours;
       else acc.practical += hours;
       return acc;
     }, { practical: 0, theory: 0 });
-  }, [attendanceRecords]);
+  }, [filteredRecords]);
 
   const filteredSearch = useMemo(() => {
     if (!students) return [];
@@ -162,13 +182,12 @@ export default function AttendancePage() {
   };
 
   const sortedRecords = useMemo(() => {
-    if (!attendanceRecords) return [];
-    return [...attendanceRecords].sort((a, b) => {
+    return [...filteredRecords].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
       return (b.startTime || '').localeCompare(a.startTime || '');
     });
-  }, [attendanceRecords]);
+  }, [filteredRecords]);
 
   return (
     <div className="space-y-6">
@@ -180,18 +199,30 @@ export default function AttendancePage() {
           </p>
         </div>
         {!isStudent && (
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-              <Label className="text-xs font-bold px-2 text-primary">SELECT DATE:</Label>
-              <Input 
-                type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="h-9 w-[150px] bg-background border-primary/20"
-              />
+              <Label className="text-[10px] font-black px-2 text-primary uppercase">Filters:</Label>
+              <div className="flex gap-2">
+                <Input 
+                  type="date" 
+                  value={selectedDate} 
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="h-9 w-[140px] bg-background border-primary/20 text-xs"
+                />
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
+                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs">
+                    <Filter className="h-3 w-3 mr-2 opacity-50" />
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Branches</SelectItem>
+                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
-            <Button size="lg" className="shadow-lg" onClick={() => setIsDialogOpen(true)}>
+            <Button size="lg" className="shadow-lg h-11" onClick={() => setIsDialogOpen(true)}>
               <PlusCircle className="mr-2 h-5 w-5" />
               Record Session
             </Button>
@@ -203,31 +234,34 @@ export default function AttendancePage() {
         <Card className="bg-blue-50/50 border-blue-100 shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
-              <Car className="h-3.5 w-3.5" /> Total Practical
+              <Car className="h-3.5 w-3.5" /> Practical Hours
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-blue-700">{statsSummary.practical.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'Combined Total' : selectedBranch}</p>
           </CardContent>
         </Card>
         <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-orange-600 flex items-center gap-2">
-              <BookOpen className="h-3.5 w-3.5" /> Total Theory
+              <BookOpen className="h-3.5 w-3.5" /> Theory Hours
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-orange-700">{statsSummary.theory.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'Combined Total' : selectedBranch}</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
-              <Calculator className="h-3.5 w-3.5" /> Combined Total
+              <Calculator className="h-3.5 w-3.5" /> Total Hours
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-primary">{(statsSummary.practical + statsSummary.theory).toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'All Locations' : selectedBranch}</p>
           </CardContent>
         </Card>
       </div>
@@ -243,7 +277,7 @@ export default function AttendancePage() {
             <div className="grid gap-6 px-6 py-4 pb-32">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Select Student (All Branches)</Label>
+                  <Label>Select Student</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -389,7 +423,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `All training sessions recorded for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
+                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
