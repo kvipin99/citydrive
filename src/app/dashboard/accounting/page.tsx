@@ -7,14 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Filter, X, Calendar as CalendarIcon, ArrowRightCircle, Lock, RefreshCw } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, X, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw, Lock } from "lucide-react";
 import { format, isValid } from "date-fns";
 import Link from "next/link";
-
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -34,19 +31,10 @@ export default function AccountingPage() {
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
-  // Explicitly check for Admin role to avoid flickering filter bypass
   const isAdmin = profile?.role === 'Admin';
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("Full");
   const [activeTab, setActiveTab] = useState<string>("transactions");
   const [dateFilter, setDateFilter] = useState<{ month: string | null, year: string | null }>({ month: null, year: null });
-
-  // Sync selected branch with user profile for non-admins
-  useEffect(() => {
-    if (profile && profile.role !== 'Admin') {
-      setSelectedBranch(profile.branch || "Branch 1");
-    }
-  }, [profile]);
 
   // Data Fetching - Admins fetch everything, Managers fetch by branch
   const paymentsQuery = useMemoFirebase(() => {
@@ -91,18 +79,9 @@ export default function AccountingPage() {
       category: e.category
     }));
 
-    let combined = [...income, ...outgo];
-    
-    // Apply robust branch filter for Admins
-    // We check profile.role directly to ensure filtering logic is stable
-    if (profile?.role === 'Admin' && selectedBranch !== "Full") {
-      const target = selectedBranch.toLowerCase().trim();
-      combined = combined.filter(t => (t.branch || '').toLowerCase().trim() === target);
-    }
-
-    // Safety clone and sort by date descending
+    const combined = [...income, ...outgo];
     return [...combined].sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [payments, expenses, selectedBranch, profile?.role]);
+  }, [payments, expenses]);
 
   const filteredTransactions = useMemo(() => {
     let result = [...allTransactions];
@@ -159,7 +138,7 @@ export default function AccountingPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-medium text-muted-foreground">Loading financial data...</p>
+        <p className="text-sm font-medium text-muted-foreground">Loading financial records...</p>
       </div>
     );
   }
@@ -168,23 +147,11 @@ export default function AccountingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select 
-              value={selectedBranch} 
-              onValueChange={setSelectedBranch}
-              disabled={!isAdmin}
-            >
-              <SelectTrigger className="w-[180px] bg-background">
-                <SelectValue placeholder="Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {isAdmin && <SelectItem value="Full">Full School View</SelectItem>}
-                {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {!isAdmin && <Badge variant="outline" className="h-9 px-3 gap-2"><Lock className="h-3 w-3" /> {profile?.branchName || profile?.branch}</Badge>}
-          </div>
+          {!isAdmin && (
+            <Badge variant="outline" className="h-9 px-3 gap-2">
+              <Lock className="h-3 w-3" /> {profile?.branchName || profile?.branch}
+            </Badge>
+          )}
           {(dateFilter.month || dateFilter.year) && (
             <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-left-2">
               <CalendarIcon className="h-3.5 w-3.5 text-primary" />
@@ -210,25 +177,25 @@ export default function AccountingPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-green-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} collections for {selectedBranch === 'Full' ? 'School' : selectedBranch}
+              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} school collections
             </p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-red-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Expenses</CardTitle>
+            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Total Expenses</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} costs for {selectedBranch === 'Full' ? 'School' : selectedBranch}
+              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} school costs
             </p>
           </CardContent>
         </Card>
@@ -240,7 +207,7 @@ export default function AccountingPage() {
           <CardContent>
             <div className="text-2xl font-bold">₹{netProfit.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'Total'} earnings after expenses
+              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} earnings
             </p>
           </CardContent>
         </Card>
@@ -256,9 +223,9 @@ export default function AccountingPage() {
         <TabsContent value="transactions" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Transaction Log</CardTitle>
+              <CardTitle>Global Transaction Log</CardTitle>
               <CardDescription>
-                Detailed list for {selectedBranch === "Full" ? 'Full School' : selectedBranch}
+                Detailed audit trail for the entire school
                 {dateFilter.month ? ` in ${format(new Date(dateFilter.month + "-01"), 'MMMM yyyy')}` : dateFilter.year ? ` in ${dateFilter.year}` : ''}.
               </CardDescription>
             </CardHeader>
@@ -271,8 +238,8 @@ export default function AccountingPage() {
         <TabsContent value="monthly">
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Performance</CardTitle>
-              <CardDescription>View aggregated data for {selectedBranch === 'Full' ? 'Full School' : selectedBranch}. Click any row to see the full log for that month.</CardDescription>
+              <CardTitle>School-wide Monthly Performance</CardTitle>
+              <CardDescription>Aggregated financial data across all branches. Click any row to see details.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -289,8 +256,8 @@ export default function AccountingPage() {
         <TabsContent value="yearly">
           <Card>
             <CardHeader>
-              <CardTitle>Yearly Performance</CardTitle>
-              <CardDescription>View aggregated data for {selectedBranch === 'Full' ? 'Full School' : selectedBranch}. Click any row to see the full log for that year.</CardDescription>
+              <CardTitle>Annual Performance Overview</CardTitle>
+              <CardDescription>Consolidated yearly stats for the organization. Click any row to see details.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -330,7 +297,7 @@ function TransactionTable({ transactions }: { transactions: Transaction[] }) {
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">No transactions found for this selection.</TableCell>
+            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">No records found for this period.</TableCell>
           </TableRow>
         ) : (
           transactions.map((t) => (
@@ -377,7 +344,7 @@ function SummaryTable({
       <TableBody>
         {data.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No data available for this selection.</TableCell>
+            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No summary data available.</TableCell>
           </TableRow>
         ) : (
           data.map(([period, values]) => {
