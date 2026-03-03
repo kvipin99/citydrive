@@ -31,7 +31,7 @@ export default function AccountingPage() {
   const { user } = useUser();
   
   // Role & Profile Logic
-  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
   
@@ -51,13 +51,13 @@ export default function AccountingPage() {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
     return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'expenses');
     return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
@@ -130,18 +130,10 @@ export default function AccountingPage() {
     allTransactions.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
       if (!summary[yearKey]) summary[yearKey] = { income: 0, expense: 0 };
-      if (t.type === 'Income') summary[monthKey].income += t.amount;
+      if (t.type === 'Income') summary[yearKey].income += t.amount;
       else summary[yearKey].expense += t.amount;
     });
-    // Fix: the inner logic had a typo using 'monthKey', corrected here implicitly by re-writing
-    const fixedYearly: Record<string, { income: number, expense: number }> = {};
-    allTransactions.forEach(t => {
-      const yearKey = format(t.date, 'yyyy');
-      if (!fixedYearly[yearKey]) fixedYearly[yearKey] = { income: 0, expense: 0 };
-      if (t.type === 'Income') fixedYearly[yearKey].income += t.amount;
-      else fixedYearly[yearKey].expense += t.amount;
-    });
-    return Object.entries(fixedYearly).sort((a, b) => b[0].localeCompare(a[0]));
+    return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
   }, [allTransactions]);
 
   const handlePeriodClick = (period: string, type: 'Month' | 'Year') => {
