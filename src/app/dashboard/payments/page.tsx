@@ -14,9 +14,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Filter, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, isValid } from 'date-fns';
+import { format, isValid, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 interface Student {
   id: string;
@@ -78,6 +78,11 @@ export default function StudentReceiptsPage() {
   const [listSearchTerm, setListSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
+
   const [formData, setFormData] = useState({
     amount: 0,
     receiptNo: '',
@@ -212,6 +217,19 @@ export default function StudentReceiptsPage() {
     let result = allReceipts.filter(r => 
       r.category === "Course Fee" || (!!r.studentId)
     );
+
+    // Date Range Filtering
+    if (dateRange.from || dateRange.to) {
+      result = result.filter(r => {
+        const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
+        if (!isValid(rDate)) return true;
+        
+        const rDateStr = format(rDate, 'yyyy-MM-dd');
+        const isAfterFrom = !dateRange.from || rDateStr >= dateRange.from;
+        const isBeforeTo = !dateRange.to || rDateStr <= dateRange.to;
+        return isAfterFrom && isBeforeTo;
+      });
+    }
     
     if (listSearchTerm) {
       const term = listSearchTerm.toLowerCase();
@@ -222,15 +240,15 @@ export default function StudentReceiptsPage() {
     }
     
     return result.sort((a, b) => {
-      const parseDate = (d: any) => {
+      const parseDateToUnix = (d: any) => {
         if (!d) return 0;
         if (d.seconds) return d.seconds;
-        const p = new Date(d);
+        const p = typeof d === 'string' ? parseISO(d) : new Date(d);
         return isValid(p) ? p.getTime() / 1000 : 0;
       };
-      return parseDate(b.date) - parseDate(a.date);
+      return parseDateToUnix(b.date) - parseDateToUnix(a.date);
     });
-  }, [allReceipts, listSearchTerm]);
+  }, [allReceipts, listSearchTerm, dateRange]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
 
@@ -241,12 +259,12 @@ export default function StudentReceiptsPage() {
           <h2 className="text-2xl font-bold tracking-tight">Student Receipts</h2>
           <p className="text-muted-foreground">{isAdmin ? 'Global course fee collections.' : `Fee collections for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
            <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <input 
               placeholder="Search Name or Receipt..." 
-              className="flex h-9 w-[200px] lg:w-[300px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 pl-8"
+              className="flex h-9 w-[200px] lg:w-[250px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pl-8"
               value={listSearchTerm} 
               onChange={(e) => setListSearchTerm(e.target.value)} 
             />
@@ -257,6 +275,120 @@ export default function StudentReceiptsPage() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3 border-b">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <ReceiptIcon className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle className="text-lg">Fee Collection Log</CardTitle>
+                <CardDescription>History of receipts issued to students.</CardDescription>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
+                <Input 
+                  type="date" 
+                  className="h-8 w-[130px] text-xs bg-background" 
+                  value={dateRange.from} 
+                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
+                <Input 
+                  type="date" 
+                  className="h-8 w-[130px] text-xs bg-background" 
+                  value={dateRange.to} 
+                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
+                />
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10"
+                onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
+              >
+                Today
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isActuallyLoading ? (
+            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : (
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow>
+                  <TableHead className="pl-6">Date</TableHead>
+                  <TableHead>Receipt & Student</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead className="text-right">Amount (₹)</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredReceipts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2 opacity-50">
+                        <CalendarIcon className="h-10 w-10" />
+                        <p className="italic text-sm font-medium">No records found for the selected period.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredReceipts.map((r) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20">
+                      <TableCell className="pl-6 text-muted-foreground text-xs">
+                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
+                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="grid gap-0.5">
+                          <span className="font-bold text-sm">#{r.receiptNo || 'N/A'}</span>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <User className="h-3 w-3" /> {r.studentName}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px] uppercase font-bold">{r.branch}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-medium">
+                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          {r.method}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-black text-green-600 pr-6">
+                        ₹{r.amount?.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem className="text-destructive focus:text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Receipt
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
@@ -360,82 +492,6 @@ export default function StudentReceiptsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Card>
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <ReceiptIcon className="h-5 w-5 text-primary" />
-            Fee Collection Log
-          </CardTitle>
-          <CardDescription>History of course fee receipts issued to students.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isActuallyLoading ? (
-            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow>
-                  <TableHead className="pl-6">Date</TableHead>
-                  <TableHead>Receipt & Student</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Amount (₹)</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredReceipts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No student receipts found.</TableCell>
-                  </TableRow>
-                ) : (
-                  filteredReceipts.map((r) => (
-                    <TableRow key={r.id} className="hover:bg-muted/20">
-                      <TableCell className="pl-6 text-muted-foreground text-xs">
-                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
-                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}
-                      </TableCell>
-                      <TableCell>
-                        <div className="grid gap-0.5">
-                          <span className="font-bold text-sm">#{r.receiptNo || 'N/A'}</span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <User className="h-3 w-3" /> {r.studentName}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell><Badge variant="outline" className="text-[10px]">{r.branch}</Badge></TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-xs font-medium">
-                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                          {r.method}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-green-600 pr-6">
-                        ₹{r.amount?.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {isAdmin && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteReceipt(r)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete Receipt
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
