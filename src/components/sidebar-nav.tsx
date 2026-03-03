@@ -28,6 +28,7 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Student Receipts', staffOnly: true },
+  { href: '/dashboard/other-receipts', icon: Layers, label: 'Other Receipts', staffOnly: true },
   { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
   { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
