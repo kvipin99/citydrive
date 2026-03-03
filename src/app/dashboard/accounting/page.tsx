@@ -1,15 +1,15 @@
 
 "use client"
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
-import { collection, doc, query, where } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, X, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw, Lock } from "lucide-react";
+import { collection, doc } from "firebase/firestore";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw } from "lucide-react";
 import { format, isValid } from "date-fns";
 import Link from "next/link";
 
@@ -39,15 +39,13 @@ export default function AccountingPage() {
   // Data Fetching - Admins fetch everything, Managers fetch by branch
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (profile.role === 'Admin') return collection(db, 'payments');
-    return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, profile?.role]);
+    return collection(db, 'payments');
+  }, [db, user?.uid, profile?.role]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (profile.role === 'Admin') return collection(db, 'expenses');
-    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, profile?.role]);
+    return collection(db, 'expenses');
+  }, [db, user?.uid, profile?.role]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
@@ -85,13 +83,19 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = [...allTransactions];
+    
+    // For non-admins, filter by their branch
+    if (!isAdmin && profile?.branch) {
+      result = result.filter(t => t.branch === profile.branch);
+    }
+
     if (dateFilter.month) {
       result = result.filter(t => format(t.date, 'yyyy-MM') === dateFilter.month);
     } else if (dateFilter.year) {
       result = result.filter(t => format(t.date, 'yyyy') === dateFilter.year);
     }
     return result;
-  }, [allTransactions, dateFilter]);
+  }, [allTransactions, dateFilter, isAdmin, profile?.branch]);
 
   const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
@@ -99,25 +103,29 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    allTransactions.forEach(t => {
+    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => t.branch === profile?.branch);
+    
+    sourceData.forEach(t => {
       const monthKey = format(t.date, 'yyyy-MM');
       if (!summary[monthKey]) summary[monthKey] = { income: 0, expense: 0 };
       if (t.type === 'Income') summary[monthKey].income += t.amount;
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions]);
+  }, [allTransactions, isAdmin, profile?.branch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    allTransactions.forEach(t => {
+    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => t.branch === profile?.branch);
+    
+    sourceData.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
       if (!summary[yearKey]) summary[yearKey] = { income: 0, expense: 0 };
       if (t.type === 'Income') summary[yearKey].income += t.amount;
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions]);
+  }, [allTransactions, isAdmin, profile?.branch]);
 
   const handlePeriodClick = (period: string, type: 'Month' | 'Year') => {
     if (type === 'Month') {
@@ -149,7 +157,7 @@ export default function AccountingPage() {
         <div className="flex flex-wrap items-center gap-3">
           {!isAdmin && (
             <Badge variant="outline" className="h-9 px-3 gap-2">
-              <Lock className="h-3 w-3" /> {profile?.branchName || profile?.branch}
+              {profile?.branchName || profile?.branch}
             </Badge>
           )}
           {(dateFilter.month || dateFilter.year) && (
@@ -159,7 +167,7 @@ export default function AccountingPage() {
                 {dateFilter.month ? format(new Date(dateFilter.month + "-01"), 'MMMM yyyy') : dateFilter.year}
               </span>
               <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent text-primary hover:text-destructive" onClick={clearDateFilter}>
-                <X className="h-3 w-3" />
+                <CalendarIcon className="h-3 w-3" />
               </Button>
             </Badge>
           )}
@@ -238,8 +246,8 @@ export default function AccountingPage() {
         <TabsContent value="monthly">
           <Card>
             <CardHeader>
-              <CardTitle>School-wide Monthly Performance</CardTitle>
-              <CardDescription>Aggregated financial data across all branches. Click any row to see details.</CardDescription>
+              <CardTitle>Monthly Performance</CardTitle>
+              <CardDescription>Aggregated financial data. Click any row to see details.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (
@@ -257,7 +265,7 @@ export default function AccountingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Annual Performance Overview</CardTitle>
-              <CardDescription>Consolidated yearly stats for the organization. Click any row to see details.</CardDescription>
+              <CardDescription>Consolidated yearly stats. Click any row to see details.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <LoadingSpinner /> : (

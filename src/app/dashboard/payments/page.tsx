@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -14,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, Phone, MoreHorizontal, Trash2, RefreshCw, Layers, GraduationCap, Lock } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Layers, GraduationCap, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -132,7 +133,6 @@ export default function ReceiptsPage() {
       return;
     }
     
-    // Receipt No is only mandatory for Fees to maintain serial audit
     if (isFee && !formData.receiptNo) {
       toast({ variant: "destructive", title: "Error", description: "Receipt Number is required for student fees." });
       return;
@@ -165,7 +165,6 @@ export default function ReceiptsPage() {
 
     setDocumentNonBlocking(receiptRef, record, { merge: true });
 
-    // Update student payment array if it's a fee
     if (isFee && selectedStudent) {
       const studentRef = doc(db, 'students', selectedStudent.id);
       try {
@@ -261,150 +260,149 @@ export default function ReceiptsPage() {
               onChange={(e) => setListSearchTerm(e.target.value)} 
             />
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="shadow-lg">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Issue Receipt
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Issue New Receipt</DialogTitle>
-                <DialogDescription>Collect fees or record miscellaneous income.</DialogDescription>
-              </DialogHeader>
-              
-              <ScrollArea className="max-h-[65vh] pr-4">
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-2">
-                  <TabsList className="grid w-full grid-cols-2 mb-4">
-                    <TabsTrigger value="fee">Student Fee</TabsTrigger>
-                    <TabsTrigger value="misc">Other Receipt</TabsTrigger>
-                  </TabsList>
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="shadow-lg">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Issue Receipt
+          </Button>
+        </div>
+      </div>
 
-                  <div className="grid gap-6 py-2">
-                    {activeTab === "fee" ? (
-                      !selectedStudent ? (
-                        <div className="grid gap-2">
-                          <Label>Search Student (ID/Name/Mobile)</Label>
-                          <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              placeholder="Start typing..." 
-                              className="pl-8" 
-                              value={searchTerm} 
-                              onChange={(e) => setSearchTerm(e.target.value)} 
-                            />
-                          </div>
-                          {filteredStudents.length > 0 && (
-                            <div className="border rounded-md mt-1 divide-y bg-background">
-                              {filteredStudents.map(s => (
-                                <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center" onClick={() => setSelectedStudent(s)}>
-                                  <div>
-                                    <p className="font-medium text-sm">{s.name}</p>
-                                    <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
-                                  </div>
-                                  <Badge variant="outline">Select</Badge>
-                                </div>
-                              ))}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Issue New Receipt</DialogTitle>
+            <DialogDescription>Collect fees or record miscellaneous income.</DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="flex-1 px-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-2">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="fee">Student Fee</TabsTrigger>
+                <TabsTrigger value="misc">Other Receipt</TabsTrigger>
+              </TabsList>
+
+              <div className="grid gap-6 py-2 pb-10">
+                {activeTab === "fee" ? (
+                  !selectedStudent ? (
+                    <div className="grid gap-2">
+                      <Label>Search Student (ID/Name/Mobile)</Label>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Start typing..." 
+                          className="pl-8" 
+                          value={searchTerm} 
+                          onChange={(e) => setSearchTerm(e.target.value)} 
+                        />
+                      </div>
+                      {filteredStudents.length > 0 && (
+                        <div className="border rounded-md mt-1 divide-y bg-background">
+                          {filteredStudents.map(s => (
+                            <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center" onClick={() => setSelectedStudent(s)}>
+                              <div>
+                                <p className="font-medium text-sm">{s.name}</p>
+                                <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
+                              </div>
+                              <Badge variant="outline">Select</Badge>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center animate-in fade-in zoom-in-95">
-                            <div>
-                              <p className="font-bold text-primary">{selectedStudent.name}</p>
-                              <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="p-2 border rounded bg-muted/30">
-                              <p className="text-xs text-muted-foreground">Total Fee</p>
-                              <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
-                            </div>
-                            <div className="p-2 border rounded bg-destructive/5">
-                              <p className="text-xs text-muted-foreground">Balance Due</p>
-                              <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
-                            </div>
-                          </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center animate-in fade-in zoom-in-95">
+                        <div>
+                          <p className="font-bold text-primary">{selectedStudent.name}</p>
+                          <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
                         </div>
-                      )
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="grid gap-2">
-                          <Label>Income Category</Label>
-                          <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {RECEIPT_CATEGORIES.filter(c => c !== "Course Fee").map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="p-2 border rounded bg-muted/30">
+                          <p className="text-xs text-muted-foreground">Total Fee</p>
+                          <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
                         </div>
-                        <div className="grid gap-2">
-                          <Label>Received From (Name) <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span></Label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
-                          </div>
+                        <div className="p-2 border rounded bg-destructive/5">
+                          <p className="text-xs text-muted-foreground">Balance Due</p>
+                          <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label>Income Category</Label>
+                      <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {RECEIPT_CATEGORIES.filter(c => c !== "Course Fee").map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Received From (Name) <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span></Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                    {(activeTab === "misc" || selectedStudent) && (
-                      <div className="grid gap-4 pt-2 border-t animate-in slide-in-from-top-2">
-                        <div className="grid gap-2">
-                          <Label>Receipt Date</Label>
-                          <div className="relative">
-                            {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                            <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-                          </div>
-                          {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Branch users are locked to today's date.</p>}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2">
-                            <Label>Amount (₹)</Label>
-                            <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label>Method</Label>
-                            <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                                <SelectItem value="Online">Online</SelectItem>
-                                <SelectItem value="Cheque">Cheque</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Receipt No. {activeTab === "misc" && <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span>}</Label>
-                          <Input placeholder="e.g. REC-1001" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
-                        </div>
-                        {activeTab === "misc" && (
-                          <div className="grid gap-2">
-                            <Label>Description (Optional)</Label>
-                            <Input placeholder="e.g. 10 sets of photostate" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
-                          </div>
-                        )}
+                {(activeTab === "misc" || selectedStudent) && (
+                  <div className="grid gap-4 pt-2 border-t animate-in slide-in-from-top-2">
+                    <div className="grid gap-2">
+                      <Label>Receipt Date</Label>
+                      <div className="relative">
+                        {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
+                        <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                      </div>
+                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Branch users are locked to today's date.</p>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Amount (₹)</Label>
+                        <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Method</Label>
+                        <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Cash">Cash</SelectItem>
+                            <SelectItem value="Online">Online</SelectItem>
+                            <SelectItem value="Cheque">Cheque</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Receipt No. {activeTab === "misc" && <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span>}</Label>
+                      <Input placeholder="e.g. REC-1001" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
+                    </div>
+                    {activeTab === "misc" && (
+                      <div className="grid gap-2">
+                        <Label>Description (Optional)</Label>
+                        <Input placeholder="e.g. 10 sets of photostate" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
                       </div>
                     )}
                   </div>
-                </Tabs>
-              </ScrollArea>
+                )}
+              </div>
+            </Tabs>
+          </ScrollArea>
 
-              <DialogFooter className="mt-4">
-                <Button disabled={(activeTab === "fee" && !selectedStudent)} onClick={handleCreateReceipt} className="w-full">
-                  Generate Receipt
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+            <Button disabled={(activeTab === "fee" && !selectedStudent)} onClick={handleCreateReceipt} className="w-full">
+              Generate Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader className="pb-3 border-b">
