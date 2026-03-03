@@ -40,12 +40,12 @@ export default function AccountingPage() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'payments');
-  }, [db, user?.uid, profile?.role]);
+  }, [db, user?.uid]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'expenses');
-  }, [db, user?.uid, profile?.role]);
+  }, [db, user?.uid]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
@@ -173,9 +173,6 @@ export default function AccountingPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/dashboard/payments">Collect Fee</Link>
-          </Button>
           <Button size="sm" asChild>
             <Link href="/dashboard/expenses">Add Expense</Link>
           </Button>

@@ -29,8 +29,6 @@ const navItems = [
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
   { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
   { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
-  { href: '/dashboard/payments', icon: CreditCard, label: 'Student Receipts', staffOnly: true },
-  { href: '/dashboard/other-receipts', icon: Layers, label: 'Other Receipts', staffOnly: true },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
   { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles', adminOnly: true },
