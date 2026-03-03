@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, Download, ArrowDownCircle, RefreshCw, AlertTriangle, Lock, Camera, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -409,6 +409,7 @@ export default function StudentsPage() {
 
     const paymentRecord = {
       id: payId,
+      category: "Course Fee",
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
       studentPhone: selectedStudent.phone,
@@ -434,6 +435,7 @@ export default function StudentsPage() {
             date: transactionDate.toISOString(),
             receiptNo: paymentData.receiptNo,
             method: paymentData.method,
+            category: "Course Fee"
           }
         ];
         updateDocumentNonBlocking(studentRef, {
@@ -446,7 +448,7 @@ export default function StudentsPage() {
     }
 
     setIsPaymentDialogOpen(false);
-    toast({ title: "Payment Recorded" });
+    toast({ title: "Receipt Generated" });
   };
 
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
@@ -581,7 +583,7 @@ export default function StudentsPage() {
                                 <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Collect Payment</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Issue Receipt</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (
@@ -637,10 +639,10 @@ export default function StudentsPage() {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Issue Receipt</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>Payment Date</Label>
+              <Label>Receipt Date</Label>
               <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
             </div>
             <div className="grid gap-2">
@@ -661,7 +663,7 @@ export default function StudentsPage() {
               </div>
             </div>
           </div>
-          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm Payment</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -931,9 +933,9 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
       </section>
 
       <section className="space-y-4">
-        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Payments</h3>
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
         {student.payments?.length === 0 ? (
-          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No payments recorded.</p>
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts issued.</p>
         ) : (
           <div className="rounded-xl border overflow-hidden">
             <Table>

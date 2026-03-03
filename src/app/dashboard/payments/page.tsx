@@ -11,11 +11,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt, User, Phone, MoreHorizontal, Trash2, RefreshCw } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, Phone, MoreHorizontal, Trash2, RefreshCw, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+
+const RECEIPT_CATEGORIES = [
+  "Course Fee",
+  "Photostate / Printing",
+  "Admission Charge",
+  "Late Fee / Fine",
+  "Convenience Fee",
+  "Other Income"
+] as const;
 
 interface Student {
   id: string;
@@ -27,10 +37,11 @@ interface Student {
   payments: any[];
 }
 
-interface PaymentRecord {
+interface ReceiptRecord {
   id: string;
-  studentId: string;
-  studentUid?: string; // UID for security rule cross-referencing
+  category: typeof RECEIPT_CATEGORIES[number];
+  studentId?: string;
+  studentUid?: string;
   studentName: string;
   studentPhone?: string;
   amount: number;
@@ -39,9 +50,10 @@ interface PaymentRecord {
   method: 'Cash' | 'Online' | 'Cheque';
   branch: string;
   receivedBy: string;
+  description?: string;
 }
 
-export default function PaymentsPage() {
+export default function ReceiptsPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
@@ -54,40 +66,48 @@ export default function PaymentsPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
-  const paymentsQuery = useMemoFirebase(() => {
+  const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'payments');
     return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     if (isAdmin) return collection(db, 'students');
     return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+  }, [db, user?.uid, profile?.branch, isAdmin]);
 
-  const { data: payments, isLoading: isPaymentsLoading } = useCollection<PaymentRecord>(paymentsQuery);
+  const { data: receipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"fee" | "misc">("fee");
   const [searchTerm, setSearchTerm] = useState('');
   const [listSearchTerm, setListSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [paymentData, setPaymentData] = useState({
+  
+  const [formData, setFormData] = useState({
     amount: 0,
     receiptNo: '',
     method: 'Cash' as const,
     date: new Date().toISOString().split('T')[0],
+    payerName: '',
+    category: 'Photostate / Printing' as ReceiptRecord['category'],
+    description: ''
   });
 
   const resetForm = () => {
     setSelectedStudent(null);
     setSearchTerm('');
-    setPaymentData({ 
+    setFormData({ 
       amount: 0, 
       receiptNo: '', 
       method: 'Cash',
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      payerName: '',
+      category: 'Photostate / Printing',
+      description: ''
     });
   };
 
@@ -105,131 +125,134 @@ export default function PaymentsPage() {
     return Math.max(0, (student.amount || 0) - paid);
   };
 
-  const handleReceivePayment = async () => {
-    if (!selectedStudent || paymentData.amount <= 0 || !paymentData.receiptNo) {
+  const handleCreateReceipt = async () => {
+    const isFee = activeTab === "fee";
+    if (isFee && !selectedStudent) {
+      toast({ variant: "destructive", title: "Error", description: "Please select a student." });
+      return;
+    }
+    if (!isFee && !formData.payerName) {
+      toast({ variant: "destructive", title: "Error", description: "Please enter payer name." });
+      return;
+    }
+    if (formData.amount <= 0 || !formData.receiptNo) {
       toast({ variant: "destructive", title: "Error", description: "Please complete all fields." });
       return;
     }
 
-    const paymentId = `PAY-${Date.now()}`;
-    const paymentRef = doc(db, 'payments', paymentId);
-    const studentRef = doc(db, 'students', selectedStudent.id);
-
-    const transactionDate = new Date(paymentData.date);
+    const receiptId = `REC-${Date.now()}`;
+    const receiptRef = doc(db, 'payments', receiptId);
+    const transactionDate = new Date(formData.date);
     
-    const fullPaymentRecord: PaymentRecord = {
-      id: paymentId,
-      studentId: selectedStudent.id,
-      studentUid: selectedStudent.userId, 
-      studentName: selectedStudent.name,
-      studentPhone: selectedStudent.phone,
-      amount: paymentData.amount,
+    const record: ReceiptRecord = {
+      id: receiptId,
+      category: isFee ? "Course Fee" : formData.category,
+      studentId: isFee ? selectedStudent!.id : undefined,
+      studentUid: isFee ? selectedStudent!.userId : undefined, 
+      studentName: isFee ? selectedStudent!.name : formData.payerName,
+      studentPhone: isFee ? selectedStudent!.phone : '',
+      amount: formData.amount,
       date: Timestamp.fromDate(transactionDate),
-      receiptNo: paymentData.receiptNo,
-      method: paymentData.method,
-      branch: selectedStudent.branch,
+      receiptNo: formData.receiptNo,
+      method: formData.method,
+      branch: isFee ? selectedStudent!.branch : (profile?.branch || "Branch 1"),
       receivedBy: user?.uid!,
+      description: formData.description
     };
 
-    setDocumentNonBlocking(paymentRef, fullPaymentRecord, { merge: true });
+    setDocumentNonBlocking(receiptRef, record, { merge: true });
 
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = [
-          ...currentPayments,
-          {
-            id: paymentId,
-            amount: paymentData.amount,
-            date: transactionDate.toISOString(),
-            receiptNo: paymentData.receiptNo,
-            method: paymentData.method,
-          }
-        ];
-
-        updateDocumentNonBlocking(studentRef, {
-          payments: updatedPayments,
-          updatedAt: serverTimestamp(),
-        });
+    // Update student payment array if it's a fee
+    if (isFee && selectedStudent) {
+      const studentRef = doc(db, 'students', selectedStudent.id);
+      try {
+        const studentSnap = await getDoc(studentRef);
+        if (studentSnap.exists()) {
+          const currentPayments = studentSnap.data().payments || [];
+          const updatedPayments = [
+            ...currentPayments,
+            {
+              id: receiptId,
+              amount: formData.amount,
+              date: transactionDate.toISOString(),
+              receiptNo: formData.receiptNo,
+              method: formData.method,
+              category: "Course Fee"
+            }
+          ];
+          updateDocumentNonBlocking(studentRef, {
+            payments: updatedPayments,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to update student payments array:", e);
       }
-    } catch (e) {
-      console.error("Failed to update student payments array:", e);
     }
 
     setIsDialogOpen(false);
     resetForm();
-    toast({ title: "Payment Recorded", description: `Receipt #${paymentData.receiptNo} for ${selectedStudent.name}.` });
+    toast({ title: "Receipt Generated", description: `Receipt #${formData.receiptNo} for ${record.studentName} saved.` });
   };
 
-  const handleDeletePayment = async (payment: PaymentRecord) => {
+  const handleDeleteReceipt = async (receipt: ReceiptRecord) => {
     if (!isAdmin) return;
 
-    const paymentRef = doc(db, 'payments', payment.id);
-    const studentRef = doc(db, 'students', payment.studentId);
+    const receiptRef = doc(db, 'payments', receipt.id);
+    deleteDocumentNonBlocking(receiptRef);
 
-    deleteDocumentNonBlocking(paymentRef);
-
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = currentPayments.filter((p: any) => p.id !== payment.id && p.receiptNo !== payment.receiptNo);
-        
-        updateDocumentNonBlocking(studentRef, {
-          payments: updatedPayments,
-          updatedAt: serverTimestamp(),
-        });
+    if (receipt.category === "Course Fee" && receipt.studentId) {
+      const studentRef = doc(db, 'students', receipt.studentId);
+      try {
+        const studentSnap = await getDoc(studentRef);
+        if (studentSnap.exists()) {
+          const currentPayments = studentSnap.data().payments || [];
+          const updatedPayments = currentPayments.filter((p: any) => p.id !== receipt.id && p.receiptNo !== receipt.receiptNo);
+          updateDocumentNonBlocking(studentRef, {
+            payments: updatedPayments,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (e) {
+        console.error("Failed to delete payment from student record:", e);
       }
-      toast({ 
-        title: "Payment Deleted", 
-        description: `Receipt #${payment.receiptNo} for ${payment.studentName} has been removed.` 
-      });
-    } catch (e) {
-      console.error("Failed to delete payment from student record:", e);
     }
+    toast({ variant: "destructive", title: "Receipt Deleted" });
   };
 
-  const sortedPayments = useMemo(() => {
-    if (!payments) return [];
-    // Spread ensures sorting a copy, preventing mutation of original state
-    return [...payments].sort((a, b) => {
-      const dateA = a.date?.seconds || 0;
-      const dateB = b.date?.seconds || 0;
-      return dateB - dateA;
-    });
-  }, [payments]);
+  const sortedReceipts = useMemo(() => {
+    if (!receipts) return [];
+    return [...receipts].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+  }, [receipts]);
 
-  const filteredPayments = useMemo(() => {
-    if (!listSearchTerm) return sortedPayments;
+  const filteredReceipts = useMemo(() => {
+    if (!listSearchTerm) return sortedReceipts;
     const term = listSearchTerm.toLowerCase();
-    return sortedPayments.filter(p => {
-      const dateStr = p.date?.seconds 
-        ? format(new Date(p.date.seconds * 1000), 'MMM d, yyyy').toLowerCase() 
-        : '';
+    return sortedReceipts.filter(r => {
+      const dateStr = r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy').toLowerCase() : '';
       return (
-        p.studentName.toLowerCase().includes(term) ||
-        p.receiptNo.toLowerCase().includes(term) ||
-        p.studentPhone?.includes(term) ||
+        r.studentName.toLowerCase().includes(term) ||
+        r.receiptNo.toLowerCase().includes(term) ||
+        r.category.toLowerCase().includes(term) ||
         dateStr.includes(term)
       );
     });
-  }, [sortedPayments, listSearchTerm]);
+  }, [sortedReceipts, listSearchTerm]);
 
-  const isActuallyLoading = isProfileLoading || isPaymentsLoading || isStudentsLoading;
+  const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
-          <h2 className="text-2xl font-bold tracking-tight">Fee Collection</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Global school collection log.' : `Collection log for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
+          <h2 className="text-2xl font-bold tracking-tight">Receipts & Billing</h2>
+          <p className="text-muted-foreground">{isAdmin ? 'Global transaction history.' : `Billing log for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
         </div>
         <div className="flex items-center gap-2">
            <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Search Name, Phone, Date..." 
+              placeholder="Search Name, Receipt, Date..." 
               className="pl-8 w-[200px] lg:w-[300px]" 
               value={listSearchTerm} 
               onChange={(e) => setListSearchTerm(e.target.value)} 
@@ -237,99 +260,110 @@ export default function PaymentsPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm}>
+              <Button onClick={resetForm} className="shadow-lg">
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Receive Payment
+                Issue Receipt
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Receive New Payment</DialogTitle>
-                <DialogDescription>
-                  Search for a student and record the amount received.
-                </DialogDescription>
+                <DialogTitle>Issue New Receipt</DialogTitle>
+                <DialogDescription>Collect fees or record miscellaneous income.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-6 py-4">
-                {!selectedStudent ? (
-                  <div className="grid gap-2">
-                    <Label>Search Student (ID/Name/Mobile)</Label>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        placeholder="Start typing..." 
-                        className="pl-8" 
-                        value={searchTerm} 
-                        onChange={(e) => setSearchTerm(e.target.value)} 
-                      />
-                    </div>
-                    {filteredStudents.length > 0 && (
-                      <div className="border rounded-md mt-1 divide-y bg-background">
-                        {filteredStudents.map(s => (
-                          <div 
-                            key={s.id} 
-                            className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center"
-                            onClick={() => setSelectedStudent(s)}
-                          >
-                            <div>
-                              <p className="font-medium text-sm">{s.name}</p>
-                              <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
-                            </div>
-                            <Badge variant="outline">Select</Badge>
+              
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-2">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="fee">Student Fee</TabsTrigger>
+                  <TabsTrigger value="misc">Other Receipt</TabsTrigger>
+                </TabsList>
+
+                <div className="grid gap-6 py-2">
+                  {activeTab === "fee" ? (
+                    !selectedStudent ? (
+                      <div className="grid gap-2">
+                        <Label>Search Student (ID/Name/Mobile)</Label>
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            placeholder="Start typing..." 
+                            className="pl-8" 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                          />
+                        </div>
+                        {filteredStudents.length > 0 && (
+                          <div className="border rounded-md mt-1 divide-y bg-background">
+                            {filteredStudents.map(s => (
+                              <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center" onClick={() => setSelectedStudent(s)}>
+                                <div>
+                                  <p className="font-medium text-sm">{s.name}</p>
+                                  <p className="text-xs text-muted-foreground">{s.id} • {s.phone}</p>
+                                </div>
+                                <Badge variant="outline">Select</Badge>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-primary">{selectedStudent.name}</p>
-                        <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center animate-in fade-in zoom-in-95">
+                          <div>
+                            <p className="font-bold text-primary">{selectedStudent.name}</p>
+                            <p className="text-xs text-muted-foreground">{selectedStudent.id}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="p-2 border rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">Total Fee</p>
+                            <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
+                          </div>
+                          <div className="p-2 border rounded bg-destructive/5">
+                            <p className="text-xs text-muted-foreground">Balance Due</p>
+                            <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
+                          </div>
+                        </div>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="p-2 border rounded bg-muted/30">
-                        <p className="text-xs text-muted-foreground">Total Fee</p>
-                        <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
-                      </div>
-                      <div className="p-2 border rounded bg-destructive/5">
-                        <p className="text-xs text-muted-foreground">Balance Due</p>
-                        <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <div className="grid gap-4 pt-2">
+                    )
+                  ) : (
+                    <div className="space-y-4">
                       <div className="grid gap-2">
-                        <Label>Payment Date</Label>
-                        <Input 
-                          type="date" 
-                          value={paymentData.date} 
-                          disabled={!isAdmin}
-                          onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} 
-                        />
-                        {!isAdmin && <p className="text-[10px] text-muted-foreground">Only Admins can adjust the payment date.</p>}
+                        <Label>Income Category</Label>
+                        <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {RECEIPT_CATEGORIES.filter(c => c !== "Course Fee").map(cat => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label>Amount Received (₹)</Label>
-                        <Input 
-                          type="number" 
-                          value={paymentData.amount || ''} 
-                          onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} 
-                        />
+                        <Label>Received From (Name)</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input className="pl-9" placeholder="Liam Johnson" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(activeTab === "misc" || selectedStudent) && (
+                    <div className="grid gap-4 pt-2 border-t animate-in slide-in-from-top-2">
+                      <div className="grid gap-2">
+                        <Label>Receipt Date</Label>
+                        <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                        {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Branch users are locked to today's date.</p>}
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <Label>Receipt No.</Label>
-                          <Input 
-                            placeholder="e.g. REC-1001" 
-                            value={paymentData.receiptNo} 
-                            onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} 
-                          />
+                          <Label>Amount (₹)</Label>
+                          <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
                         </div>
                         <div className="grid gap-2">
                           <Label>Method</Label>
-                          <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
+                          <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Cash">Cash</SelectItem>
@@ -339,13 +373,24 @@ export default function PaymentsPage() {
                           </Select>
                         </div>
                       </div>
+                      <div className="grid gap-2">
+                        <Label>Receipt No.</Label>
+                        <Input placeholder="e.g. REC-1001" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
+                      </div>
+                      {activeTab === "misc" && (
+                        <div className="grid gap-2">
+                          <Label>Description (Optional)</Label>
+                          <Input placeholder="e.g. 10 sets of photostate" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              </Tabs>
+
               <DialogFooter>
-                <Button disabled={!selectedStudent} onClick={handleReceivePayment} className="w-full">
-                  Confirm Payment
+                <Button disabled={(activeTab === "fee" && !selectedStudent) || (activeTab === "misc" && !formData.payerName)} onClick={handleCreateReceipt} className="w-full">
+                  Generate Receipt
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -354,24 +399,23 @@ export default function PaymentsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-primary" />
-            Recent Transactions
+        <CardHeader className="pb-3 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ReceiptIcon className="h-5 w-5 text-primary" />
+            Receipt Log
           </CardTitle>
-          <CardDescription>Fee collections for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
+          <CardDescription>Daily collections and fee transactions.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isActuallyLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Receipt & Student</TableHead>
+                  <TableHead className="pl-6">Date</TableHead>
+                  <TableHead>Receipt & Payer</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount (₹)</TableHead>
@@ -379,58 +423,49 @@ export default function PaymentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayments.length === 0 ? (
+                {filteredReceipts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      {listSearchTerm ? 'No payments match your search.' : 'No payment transactions found for this branch.'}
-                    </TableCell>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">No transactions found matching your search.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredPayments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {p.date?.seconds ? format(new Date(p.date.seconds * 1000), 'MMM d, yyyy') : 'Pending...'}
+                  filteredReceipts.map((r) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20">
+                      <TableCell className="pl-6 text-muted-foreground text-xs">
+                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 'Pending...'}
                       </TableCell>
                       <TableCell>
                         <div className="grid gap-0.5">
-                          <span className="font-bold text-sm">#{p.receiptNo}</span>
+                          <span className="font-bold text-sm">#{r.receiptNo}</span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <User className="h-3 w-3" /> {p.studentName}
+                            <User className="h-3 w-3" /> {r.studentName}
                           </span>
-                          {p.studentPhone && (
-                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-2 w-2" /> {p.studentPhone}
-                            </span>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px]">{p.branch}</Badge>
+                        <Badge variant="outline" className={`text-[10px] gap-1 ${r.category === 'Course Fee' ? 'text-blue-600 bg-blue-50' : 'text-orange-600 bg-orange-50'}`}>
+                          {r.category === 'Course Fee' ? <GraduationCap className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
+                          {r.category}
+                        </Badge>
                       </TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{r.branch}</Badge></TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm">
-                          <CreditCard className="h-4 w-4 text-muted-foreground" />
-                          {p.method}
+                        <div className="flex items-center gap-2 text-xs font-medium">
+                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          {r.method}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-bold text-green-600">
-                        ₹{p.amount?.toLocaleString()}
+                      <TableCell className="text-right font-bold text-green-600 pr-6">
+                        ₹{r.amount?.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         {isAdmin && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem 
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDeletePayment(p)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Payment
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteReceipt(r)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Receipt
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

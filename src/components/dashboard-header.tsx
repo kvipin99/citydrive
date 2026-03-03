@@ -50,7 +50,7 @@ export default function DashboardHeader() {
       case '/dashboard/expenses':
         return 'Expenses';
       case '/dashboard/payments':
-        return 'Fee Collection';
+        return 'Receipts';
       case '/dashboard/courses':
         return 'Course Catalog';
       case '/dashboard/reports':

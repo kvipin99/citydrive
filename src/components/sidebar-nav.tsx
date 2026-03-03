@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from 'next/navigation';
@@ -27,7 +28,7 @@ const navItems = [
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
   { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
   { href: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
-  { href: '/dashboard/payments', icon: CreditCard, label: 'Payments', staffOnly: true },
+  { href: '/dashboard/payments', icon: CreditCard, label: 'Receipts', staffOnly: true },
   { href: '/dashboard/expenses', icon: Wallet, label: 'Expenses', staffOnly: true },
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
   { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles', adminOnly: true },
