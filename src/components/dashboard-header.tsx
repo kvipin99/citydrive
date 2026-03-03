@@ -50,7 +50,9 @@ export default function DashboardHeader() {
       case '/dashboard/expenses':
         return 'Expenses';
       case '/dashboard/payments':
-        return 'Receipts';
+        return 'Student Receipts';
+      case '/dashboard/other-receipts':
+        return 'Other Receipts';
       case '/dashboard/courses':
         return 'Course Catalog';
       case '/dashboard/reports':
@@ -61,6 +63,12 @@ export default function DashboardHeader() {
         return 'Settings';
       case '/dashboard/attendance':
         return 'Attendance';
+      case '/dashboard/profile':
+        return 'My Profile';
+      case '/dashboard/quizzes':
+        return 'Quizzes';
+      case '/dashboard/resources':
+        return 'Learning Resources';
       default:
         return 'Dashboard';
     }
