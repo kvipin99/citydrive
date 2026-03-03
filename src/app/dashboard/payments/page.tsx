@@ -131,12 +131,15 @@ export default function ReceiptsPage() {
       toast({ variant: "destructive", title: "Error", description: "Please select a student." });
       return;
     }
-    if (!isFee && !formData.payerName) {
-      toast({ variant: "destructive", title: "Error", description: "Please enter payer name." });
+    
+    // Receipt No is only mandatory for Fees to maintain serial audit
+    if (isFee && !formData.receiptNo) {
+      toast({ variant: "destructive", title: "Error", description: "Receipt Number is required for student fees." });
       return;
     }
-    if (formData.amount <= 0 || !formData.receiptNo) {
-      toast({ variant: "destructive", title: "Error", description: "Please complete all fields." });
+
+    if (formData.amount <= 0) {
+      toast({ variant: "destructive", title: "Error", description: "Please enter a valid amount." });
       return;
     }
 
@@ -149,11 +152,11 @@ export default function ReceiptsPage() {
       category: isFee ? "Course Fee" : formData.category,
       studentId: isFee ? selectedStudent!.id : undefined,
       studentUid: isFee ? selectedStudent!.userId : undefined, 
-      studentName: isFee ? selectedStudent!.name : formData.payerName,
+      studentName: isFee ? selectedStudent!.name : (formData.payerName || "Walk-in Customer"),
       studentPhone: isFee ? selectedStudent!.phone : '',
       amount: formData.amount,
       date: Timestamp.fromDate(transactionDate),
-      receiptNo: formData.receiptNo,
+      receiptNo: formData.receiptNo || receiptId,
       method: formData.method,
       branch: isFee ? selectedStudent!.branch : (profile?.branch || "Branch 1"),
       receivedBy: user?.uid!,
@@ -175,7 +178,7 @@ export default function ReceiptsPage() {
               id: receiptId,
               amount: formData.amount,
               date: transactionDate.toISOString(),
-              receiptNo: formData.receiptNo,
+              receiptNo: formData.receiptNo || receiptId,
               method: formData.method,
               category: "Course Fee"
             }
@@ -192,7 +195,7 @@ export default function ReceiptsPage() {
 
     setIsDialogOpen(false);
     resetForm();
-    toast({ title: "Receipt Generated", description: `Receipt #${formData.receiptNo} for ${record.studentName} saved.` });
+    toast({ title: "Receipt Generated", description: `Receipt #${record.receiptNo} for ${record.studentName} saved.` });
   };
 
   const handleDeleteReceipt = async (receipt: ReceiptRecord) => {
@@ -341,10 +344,10 @@ export default function ReceiptsPage() {
                           </Select>
                         </div>
                         <div className="grid gap-2">
-                          <Label>Received From (Name)</Label>
+                          <Label>Received From (Name) <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span></Label>
                           <div className="relative">
                             <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input className="pl-9" placeholder="Liam Johnson" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
+                            <Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
                           </div>
                         </div>
                       </div>
@@ -378,7 +381,7 @@ export default function ReceiptsPage() {
                           </div>
                         </div>
                         <div className="grid gap-2">
-                          <Label>Receipt No.</Label>
+                          <Label>Receipt No. {activeTab === "misc" && <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span>}</Label>
                           <Input placeholder="e.g. REC-1001" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
                         </div>
                         {activeTab === "misc" && (
@@ -394,7 +397,7 @@ export default function ReceiptsPage() {
               </ScrollArea>
 
               <DialogFooter className="mt-4">
-                <Button disabled={(activeTab === "fee" && !selectedStudent) || (activeTab === "misc" && !formData.payerName)} onClick={handleCreateReceipt} className="w-full">
+                <Button disabled={(activeTab === "fee" && !selectedStudent)} onClick={handleCreateReceipt} className="w-full">
                   Generate Receipt
                 </Button>
               </DialogFooter>
