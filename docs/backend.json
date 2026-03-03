@@ -65,9 +65,11 @@
         "id": { "type": "string" },
         "studentId": { "type": "string" },
         "studentUid": { "type": "string" },
+        "studentName": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "type": { "type": "string" },
-        "branch": { "type": "string" }
+        "branch": { "type": "string" },
+        "duration": { "type": "number" }
       }
     },
     "Class": {

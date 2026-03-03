@@ -86,16 +86,37 @@ export default function AttendancePage() {
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  // Client-side branch filtering
+  // Client-side branch filtering for the log table
   const filteredRecords = useMemo(() => {
     if (!rawAttendance) return [];
     if (isStudent) return rawAttendance;
     if (selectedBranch === "All") return rawAttendance;
     
-    // Use robust case-insensitive comparison for safety
-    const targetBranch = selectedBranch.toLowerCase();
-    return rawAttendance.filter(r => r.branch?.toLowerCase() === targetBranch);
+    const targetBranch = selectedBranch.toLowerCase().trim();
+    return rawAttendance.filter(r => (r.branch || "").toLowerCase().trim() === targetBranch);
   }, [rawAttendance, selectedBranch, isStudent]);
+
+  // Client-side branch filtering for the student selection list in the popup
+  const filteredSearch = useMemo(() => {
+    if (!students) return [];
+    
+    // Step 1: Filter students by branch if a specific branch is selected in the context
+    let list = [...students];
+    if (selectedBranch !== "All" && isStaff) {
+      const targetBranch = selectedBranch.toLowerCase().trim();
+      list = list.filter(s => (s.branch || "").toLowerCase().trim() === targetBranch);
+    }
+
+    // Step 2: Filter out completed students and apply search term
+    const activeOnes = list.filter(s => s.status !== 'Completed');
+    if (!studentSearch) return activeOnes;
+    const term = studentSearch.toLowerCase();
+    return activeOnes.filter(s => 
+      s.name.toLowerCase().includes(term) || 
+      s.id.toLowerCase().includes(term) ||
+      s.phone?.includes(term)
+    );
+  }, [students, studentSearch, selectedBranch, isStaff]);
 
   const statsSummary = useMemo(() => {
     return filteredRecords.reduce((acc, curr) => {
@@ -105,18 +126,6 @@ export default function AttendancePage() {
       return acc;
     }, { practical: 0, theory: 0 });
   }, [filteredRecords]);
-
-  const filteredSearch = useMemo(() => {
-    if (!students) return [];
-    const activeOnes = students.filter(s => s.status !== 'Completed');
-    if (!studentSearch) return activeOnes;
-    const term = studentSearch.toLowerCase();
-    return activeOnes.filter(s => 
-      s.name.toLowerCase().includes(term) || 
-      s.id.toLowerCase().includes(term) ||
-      s.phone?.includes(term)
-    );
-  }, [students, studentSearch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -242,7 +251,9 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-blue-700">{statsSummary.practical.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'Combined Total' : selectedBranch}</p>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
+              {selectedBranch === 'All' ? 'Combined Total' : `At ${selectedBranch}`}
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
@@ -253,7 +264,9 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-orange-700">{statsSummary.theory.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'Combined Total' : selectedBranch}</p>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
+              {selectedBranch === 'All' ? 'Combined Total' : `At ${selectedBranch}`}
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
@@ -264,7 +277,9 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-black text-primary">{(statsSummary.practical + statsSummary.theory).toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">{selectedBranch === 'All' ? 'All Locations' : selectedBranch}</p>
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
+              {selectedBranch === 'All' ? 'All Locations' : `At ${selectedBranch}`}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -273,14 +288,16 @@ export default function AttendancePage() {
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
           <CardHeader className="p-6 pb-2">
             <DialogTitle>Record Student Session</DialogTitle>
-            <DialogDescription>Select student and class details.</DialogDescription>
+            <DialogDescription>
+              {selectedBranch !== "All" ? `Recording session for ${selectedBranch}` : 'Select student and class details.'}
+            </DialogDescription>
           </CardHeader>
           
           <ScrollArea className="flex-1 min-h-0">
             <div className="grid gap-6 px-6 py-4 pb-32">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Select Student</Label>
+                  <Label>Select Student {selectedBranch !== "All" && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -293,7 +310,7 @@ export default function AttendancePage() {
                   <div className="border rounded-lg mt-1 divide-y bg-background shadow-sm max-h-[300px] overflow-auto">
                     {filteredSearch.length === 0 ? (
                       <div className="p-8 text-center text-muted-foreground italic text-sm">
-                        No active students found.
+                        No active students found {selectedBranch !== "All" ? `in ${selectedBranch}` : ''}.
                       </div>
                     ) : (
                       filteredSearch.map(s => (
@@ -426,7 +443,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')}`}
+                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')} at ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
@@ -459,7 +476,7 @@ export default function AttendancePage() {
                     <TableCell colSpan={isStudent ? 6 : 8} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
-                        <p className="italic">No sessions logged for this period.</p>
+                        <p className="italic">No sessions logged for this {selectedBranch !== 'All' ? `branch` : 'period'}.</p>
                       </div>
                     </TableCell>
                   </TableRow>
