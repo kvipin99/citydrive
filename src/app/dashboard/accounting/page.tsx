@@ -33,31 +33,33 @@ export default function AccountingPage() {
   // Role & Profile Logic
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+  
+  // Explicitly check for Admin role to avoid flickering filter bypass
   const isAdmin = profile?.role === 'Admin';
   
   const [selectedBranch, setSelectedBranch] = useState<string>("Full");
   const [activeTab, setActiveTab] = useState<string>("transactions");
   const [dateFilter, setDateFilter] = useState<{ month: string | null, year: string | null }>({ month: null, year: null });
 
-  // Sync selected branch with user profile
+  // Sync selected branch with user profile for non-admins
   useEffect(() => {
-    if (profile && !isAdmin) {
+    if (profile && profile.role !== 'Admin') {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile, isAdmin]);
+  }, [profile]);
 
-  // Data Fetching - Restricted for security if not admin
+  // Data Fetching - Admins fetch everything, Managers fetch by branch
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'payments');
+    if (profile.role === 'Admin') return collection(db, 'payments');
     return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
+  }, [db, user?.uid, profile?.branch, profile?.role]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'expenses');
+    if (profile.role === 'Admin') return collection(db, 'expenses');
     return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
+  }, [db, user?.uid, profile?.branch, profile?.role]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
@@ -91,14 +93,16 @@ export default function AccountingPage() {
 
     let combined = [...income, ...outgo];
     
-    // Apply branch filter for Admins
-    if (isAdmin && selectedBranch !== "Full") {
-      combined = combined.filter(t => (t.branch || '').trim() === selectedBranch.trim());
+    // Apply robust branch filter for Admins
+    // We check profile.role directly to ensure filtering logic is stable
+    if (profile?.role === 'Admin' && selectedBranch !== "Full") {
+      const target = selectedBranch.toLowerCase().trim();
+      combined = combined.filter(t => (t.branch || '').toLowerCase().trim() === target);
     }
 
-    // Safety clone and sort
+    // Safety clone and sort by date descending
     return [...combined].sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [payments, expenses, selectedBranch, isAdmin]);
+  }, [payments, expenses, selectedBranch, profile?.role]);
 
   const filteredTransactions = useMemo(() => {
     let result = [...allTransactions];
@@ -179,7 +183,7 @@ export default function AccountingPage() {
                 {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
-            {!isAdmin && <Badge variant="outline" className="h-9 px-3 gap-2"><Lock className="h-3 w-3" /> {profile?.branch}</Badge>}
+            {!isAdmin && <Badge variant="outline" className="h-9 px-3 gap-2"><Lock className="h-3 w-3" /> {profile?.branchName || profile?.branch}</Badge>}
           </div>
           {(dateFilter.month || dateFilter.year) && (
             <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-left-2">
