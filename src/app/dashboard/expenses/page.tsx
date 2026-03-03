@@ -16,7 +16,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBl
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 
 const EXPENSE_CATEGORIES = ["Fuel", "Salaries", "Maintenance", "Rent", "Utility", "Others"] as const;
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -127,7 +127,9 @@ export default function ExpensesPage() {
   };
 
   const sortedExpenses = useMemo(() => {
-    return expenses?.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
+    if (!expenses) return [];
+    // Always copy the array before sorting to avoid state mutation loops
+    return [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [expenses]);
 
   const isActuallyLoading = isProfileLoading || isExpensesLoading;
@@ -140,7 +142,7 @@ export default function ExpensesPage() {
           <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profile?.branch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()}>
-          <PlusCircle className="mr-2 h-5 w-5" />
+          <PlusCircle className="mr-2 h-4 w-4" />
           Add Expense
         </Button>
       </div>
@@ -181,7 +183,7 @@ export default function ExpensesPage() {
                   sortedExpenses.map((exp) => (
                     <TableRow key={exp.id}>
                       <TableCell className="text-sm">
-                        {format(new Date(exp.date), 'MMM dd, yyyy')}
+                        {exp.date ? format(new Date(exp.date), 'MMM dd, yyyy') : 'N/A'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="font-medium">{exp.category}</Badge>

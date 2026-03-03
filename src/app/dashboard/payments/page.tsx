@@ -191,11 +191,13 @@ export default function PaymentsPage() {
   };
 
   const sortedPayments = useMemo(() => {
-    return payments?.sort((a, b) => {
+    if (!payments) return [];
+    // Spread ensures sorting a copy, preventing mutation of original state
+    return [...payments].sort((a, b) => {
       const dateA = a.date?.seconds || 0;
       const dateB = b.date?.seconds || 0;
       return dateB - dateA;
-    }) || [];
+    });
   }, [payments]);
 
   const filteredPayments = useMemo(() => {

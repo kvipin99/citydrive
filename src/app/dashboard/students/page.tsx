@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -270,15 +270,12 @@ export default function StudentsPage() {
       resetForm();
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
-      // Avoid using console.error directly here as it can trigger dev overlays
       let errorMsg = "An unexpected error occurred during registration.";
-      
       if (error.code === 'auth/email-already-in-use') {
         errorMsg = `ID Conflict: Login for "${studentId}" already exists. Use the "Conflict ID" cleanup tool at the bottom of this form.`;
       } else if (error.message) {
         errorMsg = error.message;
       }
-      
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
       setIsSubmitting(false);
@@ -951,11 +948,23 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
   }, [attendance]);
 
   const sortedAttendance = useMemo(() => {
-    return attendance?.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)) || [];
+    if (!attendance) return [];
+    // Spread operator ensures we sort a copy, not the original state
+    return [...attendance].sort((a, b) => {
+      const dateCompare = (b.date || '').localeCompare(a.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      return (b.startTime || '').localeCompare(a.startTime || '');
+    });
   }, [attendance]);
 
   const paidAmount = student.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
   const balance = calculateBalanceDue(student);
+
+  const formatSafeDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+  };
 
   return (
     <div className="space-y-8 pb-10">
@@ -1026,12 +1035,12 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <User className="h-4 w-4" /> Personal & Licensing
           </h3>
           <div className="grid gap-4 text-sm">
-            <ProfileItem icon={<Calendar />} label="Admission Date" value={student.registrationDate ? format(new Date(student.registrationDate), 'MMM dd, yyyy') : 'N/A'} />
+            <ProfileItem icon={<Calendar />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar No" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
-            <ProfileItem icon={<Calendar />} label="Learners License" value={student.learnersDate ? format(new Date(student.learnersDate), 'MMM dd, yyyy') : 'N/A'} />
-            <ProfileItem icon={<Calendar />} label="Driving Test" value={student.testDate ? format(new Date(student.testDate), 'MMM dd, yyyy') : 'N/A'} />
+            <ProfileItem icon={<Calendar />} label="Learners License" value={formatSafeDate(student.learnersDate)} />
+            <ProfileItem icon={<Calendar />} label="Driving Test" value={formatSafeDate(student.testDate)} />
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
           </div>
         </section>
@@ -1088,7 +1097,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
               <TableBody>
                 {sortedAttendance.map((a: any) => (
                   <TableRow key={a.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs font-medium">{format(new Date(a.date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell className="text-xs font-medium">{formatSafeDate(a.date)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0">
                         {a.type || 'Practical'}
@@ -1131,7 +1140,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
               <TableBody>
                 {student.payments?.map((p: any) => (
                   <TableRow key={p.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs">{format(new Date(p.date), 'MMM dd, yyyy')}</TableCell>
+                    <TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell>
                     <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
                     <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{p.method}</Badge></TableCell>
                     <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>

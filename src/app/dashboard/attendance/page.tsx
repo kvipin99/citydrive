@@ -15,7 +15,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
 import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 const TIME_OPTIONS = Array.from({ length: 18 }, (_, i) => {
@@ -152,7 +152,13 @@ export default function AttendancePage() {
   };
 
   const sortedRecords = useMemo(() => {
-    return attendanceRecords?.sort((a, b) => b.date.localeCompare(a.date) || a.startTime.localeCompare(b.startTime)) || [];
+    if (!attendanceRecords) return [];
+    // Spread operator ensures we sort a copy, preventing mutation of state
+    return [...attendanceRecords].sort((a, b) => {
+      const dateCompare = (b.date || '').localeCompare(a.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      return (b.startTime || '').localeCompare(a.startTime || '');
+    });
   }, [attendanceRecords]);
 
   return (
@@ -370,13 +376,13 @@ export default function AttendancePage() {
                   <TableHead>Timing</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Branch</TableHead>
-                  {!isStudent && <TableHead className="text-right pr-6">Action</TableHead>}
+                  {!isStaff ? null : <TableHead className="text-right pr-6">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isStudent ? 6 : 7} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 6 : 8} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
                         <p className="italic">No sessions logged for this period.</p>
@@ -388,7 +394,7 @@ export default function AttendancePage() {
                     <TableRow key={record.id} className="hover:bg-muted/20">
                       {isStudent && (
                         <TableCell className="pl-6 font-medium text-xs">
-                          {format(new Date(record.date), 'MMM dd, yyyy')}
+                          {record.date ? format(new Date(record.date), 'MMM dd, yyyy') : 'N/A'}
                         </TableCell>
                       )}
                       {!isStudent && (
@@ -434,7 +440,7 @@ export default function AttendancePage() {
                       <TableCell>
                         <Badge variant="outline" className="text-[10px] uppercase">{record.branch}</Badge>
                       </TableCell>
-                      {!isStudent && (
+                      {isStaff && (
                         <TableCell className="text-right pr-6">
                           <Button 
                             variant="ghost" 
