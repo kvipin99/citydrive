@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
 import { FileDown, Printer, Filter, DollarSign, Users, Receipt, RefreshCw, Calendar as CalendarIcon } from "lucide-react";
@@ -91,8 +92,8 @@ export default function ReportsPage() {
   const financialData = useMemo(() => {
     if (!payments || !expenses) return [];
     
-    let filteredPayments = payments.filter(p => isWithinRange(p.date));
-    let filteredExpenses = expenses.filter(e => isWithinRange(e.date));
+    let filteredPayments = (payments || []).filter(p => isWithinRange(p.date));
+    let filteredExpenses = (expenses || []).filter(e => isWithinRange(e.date));
 
     if (isAdmin && selectedBranch !== "Full") {
       filteredPayments = filteredPayments.filter(p => p.branch === selectedBranch);
@@ -102,14 +103,16 @@ export default function ReportsPage() {
     const months: Record<string, { income: number; expense: number }> = {};
 
     filteredPayments.forEach(p => {
-      const date = p.date?.seconds ? new Date(p.date.seconds * 1000) : new Date();
+      const date = p.date?.seconds ? new Date(p.date.seconds * 1000) : (typeof p.date === 'string' ? parseISO(p.date) : new Date(p.date));
+      if (!isValid(date)) return;
       const key = format(date, 'yyyy-MM');
       if (!months[key]) months[key] = { income: 0, expense: 0 };
       months[key].income += Number(p.amount) || 0;
     });
 
     filteredExpenses.forEach(e => {
-      const date = e.date ? new Date(e.date) : new Date();
+      const date = e.date ? parseISO(e.date) : new Date();
+      if (!isValid(date)) return;
       const key = format(date, 'yyyy-MM');
       if (!months[key]) months[key] = { income: 0, expense: 0 };
       months[key].expense += Number(e.amount) || 0;
