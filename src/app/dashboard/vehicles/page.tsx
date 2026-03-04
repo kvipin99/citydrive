@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,8 +25,8 @@ interface Vehicle {
   regNumber: string;
   type: typeof VEHICLE_TYPES[number];
   brandModel: string;
-  regValidity: string;
-  insuranceValidity: string;
+  regValidity: any; // Can be string or Timestamp
+  insuranceValidity: any; // Can be string or Timestamp
   status: typeof VEHICLE_STATUSES[number];
   createdAt?: any;
   updatedAt?: any;
@@ -64,6 +64,20 @@ export default function VehiclesPage() {
     status: 'Available' as typeof VEHICLE_STATUSES[number]
   });
 
+  // Defensive Date Normalization for Input Fields
+  const toInputDate = (val: any) => {
+    if (!val) return '';
+    try {
+      let d: Date;
+      if (typeof val === 'string') d = parseISO(val);
+      else if (val.seconds) d = new Date(val.seconds * 1000);
+      else d = new Date(val);
+      return isValid(d) ? format(d, 'yyyy-MM-dd') : '';
+    } catch {
+      return '';
+    }
+  };
+
   const handleOpenDialog = (vehicle: Vehicle | null = null) => {
     if (vehicle) {
       setSelectedVehicle(vehicle);
@@ -71,8 +85,8 @@ export default function VehiclesPage() {
         regNumber: vehicle.regNumber || '',
         type: vehicle.type || '4wlr',
         brandModel: vehicle.brandModel || '',
-        regValidity: vehicle.regValidity || '',
-        insuranceValidity: vehicle.insuranceValidity || '',
+        regValidity: toInputDate(vehicle.regValidity),
+        insuranceValidity: toInputDate(vehicle.insuranceValidity),
         status: vehicle.status || 'Available'
       });
     } else {
@@ -119,13 +133,20 @@ export default function VehiclesPage() {
     toast({ variant: "destructive", title: "Vehicle Deleted", description: "The vehicle has been removed from the fleet." });
   };
 
-  const formatSafeDate = (dateStr: any) => {
-    if (!dateStr) return 'N/A';
+  const formatSafeDate = (dateVal: any) => {
+    if (!dateVal) return 'N/A';
     try {
-      const d = typeof dateStr === 'string' ? parseISO(dateStr) : new Date(dateStr);
-      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'Invalid Date';
+      let d: Date;
+      if (typeof dateVal === 'string') {
+        d = parseISO(dateVal);
+      } else if (dateVal.seconds) {
+        d = new Date(dateVal.seconds * 1000);
+      } else {
+        d = new Date(dateVal);
+      }
+      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
     } catch (e) {
-      return 'Error Date';
+      return 'N/A';
     }
   };
 
