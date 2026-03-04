@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
-import { FileDown, Printer, Filter, DollarSign, Users, Receipt, RefreshCw } from "lucide-react";
-import { format } from "date-fns";
+import { FileDown, Printer, Filter, DollarSign, Users, Receipt, RefreshCw, Calendar as CalendarIcon } from "lucide-react";
+import { format, isValid, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -29,6 +31,12 @@ export default function ReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("Full");
   const [studentStatus, setStudentStatus] = useState<string>("All");
   const [paymentStatus, setPaymentStatus] = useState<string>("All");
+  
+  // Date Range State
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
 
   // Sync selected branch with user profile for non-admins
   useEffect(() => {
@@ -62,12 +70,29 @@ export default function ReportsPage() {
 
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isPaymentsLoading || isExpensesLoading;
 
+  // Helper to check if a date is within selected range
+  const isWithinRange = (dateVal: any) => {
+    if (!dateVal) return false;
+    let d: Date;
+    if (dateVal.seconds) {
+      d = new Date(dateVal.seconds * 1000);
+    } else if (typeof dateVal === 'string') {
+      d = parseISO(dateVal);
+    } else {
+      d = new Date(dateVal);
+    }
+    
+    if (!isValid(d)) return false;
+    const dStr = format(d, 'yyyy-MM-dd');
+    return dStr >= dateRange.from && dStr <= dateRange.to;
+  };
+
   // --- REPORT LOGIC: FINANCIAL ---
   const financialData = useMemo(() => {
     if (!payments || !expenses) return [];
     
-    let filteredPayments = [...payments];
-    let filteredExpenses = [...expenses];
+    let filteredPayments = payments.filter(p => isWithinRange(p.date));
+    let filteredExpenses = expenses.filter(e => isWithinRange(e.date));
 
     if (isAdmin && selectedBranch !== "Full") {
       filteredPayments = filteredPayments.filter(p => p.branch === selectedBranch);
@@ -98,12 +123,12 @@ export default function ReportsPage() {
         profit: vals.income - vals.expense
       }))
       .sort((a, b) => b.period.localeCompare(a.period));
-  }, [payments, expenses, selectedBranch, isAdmin]);
+  }, [payments, expenses, selectedBranch, isAdmin, dateRange]);
 
   // --- REPORT LOGIC: STUDENTS ---
   const filteredStudents = useMemo(() => {
     if (!students) return [];
-    let result = [...students];
+    let result = students.filter(s => isWithinRange(s.registrationDate));
 
     if (isAdmin && selectedBranch !== "Full") {
       result = result.filter(s => s.branch === selectedBranch);
@@ -114,13 +139,13 @@ export default function ReportsPage() {
     }
 
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
-  }, [students, selectedBranch, studentStatus, isAdmin]);
+  }, [students, selectedBranch, studentStatus, isAdmin, dateRange]);
 
   // --- REPORT LOGIC: PAYMENT DUES ---
   const paymentDuesData = useMemo(() => {
     if (!students) return [];
     
-    const dues = students.map(s => {
+    const dues = students.filter(s => isWithinRange(s.registrationDate)).map(s => {
       const totalAgreed = Number(s.amount) || 0;
       const totalPaid = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
       const balance = totalAgreed - totalPaid;
@@ -142,7 +167,7 @@ export default function ReportsPage() {
     }
 
     return result.sort((a, b) => b.balance - a.balance);
-  }, [students, selectedBranch, paymentStatus, isAdmin]);
+  }, [students, selectedBranch, paymentStatus, isAdmin, dateRange]);
 
   // --- EXPORT TOOLS ---
   const handleExportCSV = (type: string) => {
@@ -204,9 +229,44 @@ export default function ReportsPage() {
               <Filter className="h-4 w-4" /> Report Filters
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Date Range Block */}
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
+              <div className="space-y-2">
+                <div className="grid gap-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs" 
+                    value={dateRange.from} 
+                    onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase">To</span>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs" 
+                    value={dateRange.to} 
+                    onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-8 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5"
+                  onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
+                >
+                  <CalendarIcon className="h-3 w-3 mr-1.5" />
+                  Today
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Branch View</label>
+              <label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Branch View</label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Branch" />
@@ -221,7 +281,7 @@ export default function ReportsPage() {
 
             {activeTab === 'students' && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Student Status</label>
+                <label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Student Status</label>
                 <Select value={studentStatus} onValueChange={setStudentStatus}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -239,7 +299,7 @@ export default function ReportsPage() {
 
             {activeTab === 'dues' && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Payment Status</label>
+                <label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Payment Status</label>
                 <Select value={paymentStatus} onValueChange={setPaymentStatus}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -269,15 +329,18 @@ export default function ReportsPage() {
               
               <TabsContent value="financial" className="m-0">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       <DollarSign className="h-5 w-5 text-green-600" />
-                      Monthly Profit & Loss Statement
+                      Profit & Loss Statement
                     </h3>
-                    <Badge variant="outline">{selectedBranch === 'Full' ? 'All Branches' : selectedBranch}</Badge>
+                    <div className="flex gap-2">
+                      <Badge variant="outline">{selectedBranch === 'Full' ? 'All Branches' : selectedBranch}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{dateRange.from} to {dateRange.to}</Badge>
+                    </div>
                   </div>
                   
-                  <div className="border rounded-lg">
+                  <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -311,18 +374,19 @@ export default function ReportsPage() {
 
               <TabsContent value="students" className="m-0">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       <Users className="h-5 w-5 text-primary" />
-                      Student Registration Report
+                      Registration Report
                     </h3>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">{selectedBranch === 'Full' ? 'All Branches' : selectedBranch}</Badge>
                       <Badge variant="secondary">{studentStatus}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{dateRange.from} to {dateRange.to}</Badge>
                     </div>
                   </div>
 
-                  <div className="border rounded-lg">
+                  <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -358,18 +422,19 @@ export default function ReportsPage() {
 
               <TabsContent value="dues" className="m-0">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       <Receipt className="h-5 w-5 text-orange-600" />
-                      Payment Status & Dues Report
+                      Fee Status & Dues
                     </h3>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">{selectedBranch === 'Full' ? 'All Branches' : selectedBranch}</Badge>
                       <Badge variant="destructive">{paymentStatus === 'All' ? 'All Dues' : paymentStatus}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{dateRange.from} to {dateRange.to}</Badge>
                     </div>
                   </div>
 
-                  <div className="border rounded-lg">
+                  <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -445,7 +510,7 @@ function NoData({ colSpan }: { colSpan: number }) {
   return (
     <TableRow>
       <TableCell colSpan={colSpan} className="text-center py-12 text-muted-foreground italic">
-        No records found for the selected criteria.
+        No records found for the selected period and criteria.
       </TableCell>
     </TableRow>
   );
