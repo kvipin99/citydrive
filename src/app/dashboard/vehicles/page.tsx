@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,8 +25,8 @@ interface Vehicle {
   regNumber: string;
   type: typeof VEHICLE_TYPES[number];
   brandModel: string;
-  regValidity: any; // Can be string or Timestamp
-  insuranceValidity: any; // Can be string or Timestamp
+  regValidity: any; 
+  insuranceValidity: any;
   status: typeof VEHICLE_STATUSES[number];
   createdAt?: any;
   updatedAt?: any;
@@ -54,7 +54,7 @@ export default function VehiclesPage() {
   const { data: vehicles, isLoading: isVehiclesLoading } = useCollection<Vehicle>(vehiclesQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     regNumber: '',
     type: '4wlr' as typeof VEHICLE_TYPES[number],
@@ -65,22 +65,29 @@ export default function VehiclesPage() {
   });
 
   // Defensive Date Normalization for Input Fields
-  const toInputDate = (val: any) => {
+  const toInputDate = useCallback((val: any) => {
     if (!val) return '';
     try {
       let d: Date;
-      if (typeof val === 'string') d = parseISO(val);
-      else if (val.seconds) d = new Date(val.seconds * 1000);
-      else d = new Date(val);
+      // Handle Firestore Timestamp specifically
+      if (val && typeof val.toDate === 'function') {
+        d = val.toDate();
+      } else if (val && typeof val.seconds === 'number') {
+        d = new Date(val.seconds * 1000);
+      } else if (typeof val === 'string') {
+        d = parseISO(val);
+      } else {
+        d = new Date(val);
+      }
       return isValid(d) ? format(d, 'yyyy-MM-dd') : '';
     } catch {
       return '';
     }
-  };
+  }, []);
 
-  const handleOpenDialog = (vehicle: Vehicle | null = null) => {
+  const handleOpenDialog = useCallback((vehicle: Vehicle | null = null) => {
     if (vehicle) {
-      setSelectedVehicle(vehicle);
+      setSelectedVehicleId(vehicle.id);
       setFormData({
         regNumber: vehicle.regNumber || '',
         type: vehicle.type || '4wlr',
@@ -90,7 +97,7 @@ export default function VehiclesPage() {
         status: vehicle.status || 'Available'
       });
     } else {
-      setSelectedVehicle(null);
+      setSelectedVehicleId(null);
       setFormData({
         regNumber: '',
         type: '4wlr',
@@ -101,7 +108,7 @@ export default function VehiclesPage() {
       });
     }
     setIsDialogOpen(true);
-  };
+  }, [toInputDate]);
 
   const handleSaveVehicle = () => {
     if (!formData.regNumber || !formData.brandModel) {
@@ -109,21 +116,31 @@ export default function VehiclesPage() {
       return;
     }
 
-    const vehicleId = selectedVehicle ? selectedVehicle.id : `V-${Date.now()}`;
+    const vehicleId = selectedVehicleId ? selectedVehicleId : `V-${Date.now()}`;
     const vehicleRef = doc(db, 'vehicles', vehicleId);
 
-    const data = {
-      ...formData,
+    // Prepare clean data for Firestore (shallow copy of strings/numbers)
+    const updateData = {
+      regNumber: formData.regNumber.trim().toUpperCase(),
+      type: formData.type,
+      brandModel: formData.brandModel.trim(),
+      regValidity: formData.regValidity,
+      insuranceValidity: formData.insuranceValidity,
+      status: formData.status,
       id: vehicleId,
       updatedAt: serverTimestamp(),
-      ...(selectedVehicle ? {} : { createdAt: serverTimestamp(), createdBy: user?.uid })
+      ...(selectedVehicleId ? {} : { createdAt: serverTimestamp(), createdBy: user?.uid })
     };
 
-    setDocumentNonBlocking(vehicleRef, data, { merge: true });
+    setDocumentNonBlocking(vehicleRef, updateData, { merge: true });
+    
+    // Close dialog and reset state to avoid transition conflicts
     setIsDialogOpen(false);
+    setSelectedVehicleId(null);
+    
     toast({ 
-      title: selectedVehicle ? "Vehicle Updated" : "Vehicle Added", 
-      description: `${formData.regNumber} has been saved to the fleet.` 
+      title: selectedVehicleId ? "Vehicle Updated" : "Vehicle Added", 
+      description: `${formData.regNumber} has been saved successfully.` 
     });
   };
 
@@ -133,22 +150,24 @@ export default function VehiclesPage() {
     toast({ variant: "destructive", title: "Vehicle Deleted", description: "The vehicle has been removed from the fleet." });
   };
 
-  const formatSafeDate = (dateVal: any) => {
+  const formatSafeDate = useCallback((dateVal: any) => {
     if (!dateVal) return 'N/A';
     try {
       let d: Date;
-      if (typeof dateVal === 'string') {
-        d = parseISO(dateVal);
-      } else if (dateVal.seconds) {
+      if (dateVal && typeof dateVal.toDate === 'function') {
+        d = dateVal.toDate();
+      } else if (dateVal && typeof dateVal.seconds === 'number') {
         d = new Date(dateVal.seconds * 1000);
+      } else if (typeof dateVal === 'string') {
+        d = parseISO(dateVal);
       } else {
         d = new Date(dateVal);
       }
       return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
-    } catch (e) {
+    } catch {
       return 'N/A';
     }
-  };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -195,26 +214,26 @@ export default function VehiclesPage() {
                   </TableRow>
                 ) : (
                   vehicles.map((v) => (
-                    <TableRow key={v.id}>
+                    <TableRow key={v.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell>
                         <div className="grid gap-0.5">
                           <span className="font-bold text-primary">{v.regNumber}</span>
-                          <Badge variant="outline" className="w-fit text-[10px] uppercase">{v.type}</Badge>
+                          <Badge variant="outline" className="w-fit text-[10px] uppercase font-mono">{v.type}</Badge>
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">{v.brandModel}</TableCell>
                       <TableCell>
-                        <div className="grid gap-1 text-xs">
+                        <div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight">
                           <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <FileText className="h-3 w-3" /> Reg: {formatSafeDate(v.regValidity)}
+                            <FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <ShieldCheck className="h-3 w-3" /> Ins: {formatSafeDate(v.insuranceValidity)}
+                            <ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={v.status === 'Available' ? 'default' : 'secondary'}>
+                        <Badge variant={v.status === 'Available' ? 'default' : 'secondary'} className="text-[10px] font-bold">
                           {v.status}
                         </Badge>
                       </TableCell>
@@ -222,13 +241,13 @@ export default function VehiclesPage() {
                         {canWrite && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handleOpenDialog(v)}>
                                 <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteVehicle(v.id)}>
+                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteVehicle(v.id)}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Vehicle
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -244,10 +263,10 @@ export default function VehiclesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) setSelectedVehicleId(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{selectedVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
+            <DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
             <DialogDescription>Enter registration and validity details for the fleet vehicle.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -313,7 +332,7 @@ export default function VehiclesPage() {
           </div>
           <DialogFooter>
             <Button onClick={handleSaveVehicle} className="w-full">
-              {selectedVehicle ? 'Update Vehicle' : 'Save Vehicle'}
+              {selectedVehicleId ? 'Update Vehicle' : 'Save Vehicle'}
             </Button>
           </DialogFooter>
         </DialogContent>
