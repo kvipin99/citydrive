@@ -41,6 +41,8 @@ export default function DashboardHeader() {
         return 'Dashboard';
       case '/dashboard/students':
         return 'Students';
+      case '/dashboard/test-search':
+        return 'Test Search';
       case '/dashboard/instructors':
         return 'Instructors';
       case '/dashboard/vehicles':

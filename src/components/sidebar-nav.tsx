@@ -20,6 +20,7 @@ import {
   GraduationCap,
   ClipboardCheck,
   Layers,
+  Search,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -27,6 +28,7 @@ import { doc } from 'firebase/firestore';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/students', icon: Users, label: 'Students', staffOnly: true },
+  { href: '/dashboard/test-search', icon: Search, label: 'Test Search', staffOnly: true },
   { href: '/dashboard/payments', icon: CreditCard, label: 'Student Receipts', staffOnly: true },
   { href: '/dashboard/other-receipts', icon: Layers, label: 'Other Receipts', staffOnly: true },
   { href: '/dashboard/profile', icon: GraduationCap, label: 'My Profile', studentOnly: true },
