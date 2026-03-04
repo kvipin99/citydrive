@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw, Filter, Layers, BookOpen } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Filter, Layers } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 
@@ -55,7 +55,7 @@ export default function AccountingPage() {
     }
   }, [profile, isAdmin]);
 
-  // Data Fetching - We fetch all and filter on client to ensure accuracy across ID prefixes
+  // Data Fetching
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'payments');
@@ -76,21 +76,15 @@ export default function AccountingPage() {
     return isValid(parsed) ? parsed : new Date();
   };
 
-  // --- SMART BRANCH FILTERING UTILITY ---
   const isFromBranch = (record: any, branchName: string) => {
     if (branchName === "All") return true;
-    
-    // 1. Direct match on branch field
     if (record.branch === branchName) return true;
-    
-    // 2. Match by Student ID prefix (B1, B2, B3, etc.)
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
       if (record.id?.startsWith(prefix)) return true;
       if (record.studentId?.startsWith(prefix)) return true;
     }
-    
     return false;
   };
 
@@ -127,17 +121,17 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
-    
-    // Filter by branch (respecting Smart ID detection)
     if (selectedBranch !== "All") {
       result = result.filter(t => isFromBranch(t, selectedBranch));
     }
-
     return result;
   }, [allTransactions, dateRange, selectedBranch]);
 
-  const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpenses = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
+  const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
+  const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
+
+  const totalIncome = incomeTransactions.reduce((acc, t) => acc + t.amount, 0);
+  const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
   // Summaries for other tabs
@@ -173,7 +167,7 @@ export default function AccountingPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-medium text-muted-foreground">Loading daybook...</p>
+        <p className="text-sm font-medium text-muted-foreground">Loading accounting...</p>
       </div>
     );
   }
@@ -184,7 +178,7 @@ export default function AccountingPage() {
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2>
           <p className="text-muted-foreground text-sm">
-            Daily income and expenditure tracking for {selectedBranch === 'All' ? 'all branches' : selectedBranch}.
+            Daily intake and expenditure accounts for {selectedBranch === 'All' ? 'all branches' : selectedBranch}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -198,7 +192,7 @@ export default function AccountingPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-4">
-        <Card className="md:col-span-1 shadow-sm border-primary/10">
+        <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
               <Filter className="h-4 w-4" /> Filters
@@ -299,20 +293,51 @@ export default function AccountingPage() {
             </TabsList>
             
             <TabsContent value="daybook" className="mt-4">
-              <Card>
-                <CardHeader className="pb-3 border-b">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg">Daily Transaction Record</CardTitle>
-                      <CardDescription>All account movements between {dateRange.from} and {dateRange.to}.</CardDescription>
-                    </div>
-                    <Badge variant="outline" className="font-bold">{filteredTransactions.length} entries</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isLoading ? <LoadingSpinner /> : <TransactionTable transactions={filteredTransactions} />}
-                </CardContent>
-              </Card>
+              {isLoading ? <LoadingSpinner /> : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {/* Income Column */}
+                  <Card className="border-green-100 shadow-sm overflow-hidden">
+                    <CardHeader className="bg-green-50/50 py-3 border-b border-green-100">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-black text-green-700 uppercase tracking-widest flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" /> Income / Credit
+                        </CardTitle>
+                        <Badge variant="outline" className="bg-white text-green-700 border-green-200">{incomeTransactions.length} Items</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ItemizedTable transactions={incomeTransactions} colorClass="text-green-600" />
+                      {incomeTransactions.length > 0 && (
+                        <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase text-green-700">Total Credit</span>
+                          <span className="text-lg font-black text-green-700">₹{totalIncome.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Expenses Column */}
+                  <Card className="border-red-100 shadow-sm overflow-hidden">
+                    <CardHeader className="bg-red-50/50 py-3 border-b border-red-100">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-black text-red-700 uppercase tracking-widest flex items-center gap-2">
+                          <Receipt className="h-4 w-4" /> Expenses / Debit
+                        </CardTitle>
+                        <Badge variant="outline" className="bg-white text-red-700 border-red-200">{expenseTransactions.length} Items</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
+                      {expenseTransactions.length > 0 && (
+                        <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
+                          <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="monthly">
@@ -357,49 +382,44 @@ function LoadingSpinner() {
   );
 }
 
-function TransactionTable({ transactions }: { transactions: Transaction[] }) {
+function ItemizedTable({ transactions, colorClass }: { transactions: Transaction[], colorClass: string }) {
   return (
     <Table>
-      <TableHeader className="bg-muted/30">
+      <TableHeader className="bg-muted/20">
         <TableRow>
-          <TableHead className="pl-6">Date</TableHead>
-          <TableHead>Type & Detail</TableHead>
-          <TableHead>Branch</TableHead>
-          <TableHead className="text-right pr-6">Amount (₹)</TableHead>
+          <TableHead className="w-[100px] pl-4">Date</TableHead>
+          <TableHead>Details</TableHead>
+          <TableHead className="text-right pr-4">Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center py-20 text-muted-foreground italic">
-              <div className="flex flex-col items-center gap-2 opacity-50">
-                <Layers className="h-10 w-10" />
-                <p>No transactions found for the selected criteria.</p>
+            <TableCell colSpan={3} className="text-center py-16 text-muted-foreground italic">
+              <div className="flex flex-col items-center gap-2 opacity-40">
+                <Layers className="h-8 w-8" />
+                <p className="text-xs">No records for this side.</p>
               </div>
             </TableCell>
           </TableRow>
         ) : (
           transactions.map((t) => (
-            <TableRow key={t.id} className="hover:bg-muted/20">
-              <TableCell className="pl-6 text-xs font-medium text-muted-foreground">{format(t.date, 'MMM dd, yyyy')}</TableCell>
+            <TableRow key={t.id} className="hover:bg-muted/10 group">
+              <TableCell className="pl-4 text-[10px] font-medium text-muted-foreground">
+                {format(t.date, 'MMM dd')}
+              </TableCell>
               <TableCell>
                 <div className="grid gap-0.5">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={t.type === 'Income' ? 'default' : 'secondary'} className={`text-[9px] h-4 px-1.5 font-bold ${t.type === 'Income' ? 'bg-green-600' : 'bg-red-600 text-white'}`}>
-                      {t.type === 'Income' ? 'IN' : 'OUT'}
-                    </Badge>
-                    <span className="font-bold text-sm leading-none">{t.description}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-mono mt-1">
-                    {t.receiptNo && <span>REC: #{t.receiptNo}</span>}
-                    {t.category && <span>CAT: {t.category}</span>}
-                    {t.studentId && <span>ID: {t.studentId}</span>}
+                  <span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span>
+                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground uppercase font-mono">
+                    {t.receiptNo && <span>#REC:{t.receiptNo}</span>}
+                    {t.category && <span>CAT:{t.category}</span>}
+                    {t.studentId && <span>ID:{t.studentId}</span>}
                   </div>
                 </div>
               </TableCell>
-              <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{t.branch}</Badge></TableCell>
-              <TableCell className={`text-right font-black pr-6 ${t.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
-                {t.type === 'Income' ? '+' : '-'}₹{t.amount.toLocaleString()}
+              <TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>
+                ₹{t.amount.toLocaleString()}
               </TableCell>
             </TableRow>
           ))
