@@ -230,7 +230,7 @@ export default function TestSearchPage() {
                             </TableCell>
                             <TableCell className="text-right pr-6">
                               <Button variant="ghost" size="sm" asChild className="group-hover:text-primary group-hover:bg-primary/5">
-                                <Link href="/dashboard/students">
+                                <Link href={`/dashboard/students?studentId=${s.id}`}>
                                   Profile <ArrowRight className="ml-2 h-3.5 w-3.5" />
                                 </Link>
                               </Button>

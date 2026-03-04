@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,10 +57,11 @@ export interface Student {
   specialCourseFee?: number;
 }
 
-export default function StudentsPage() {
+function StudentsContent() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const editPhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +104,18 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cleanupId, setCleanupId] = useState("");
+
+  // Handle studentId query parameter for deep-linking
+  useEffect(() => {
+    const studentIdParam = searchParams.get('studentId');
+    if (studentIdParam && students && !isStudentsLoading) {
+      const student = students.find(s => s.id === studentIdParam);
+      if (student) {
+        setSelectedStudent(student);
+        setIsProfileSheetOpen(true);
+      }
+    }
+  }, [searchParams, students, isStudentsLoading]);
 
   useEffect(() => {
     if (isStudent && students && students.length > 0 && !selectedStudent) {
@@ -148,7 +162,7 @@ export default function StudentsPage() {
         return { ...prev, branch: defaultBranch };
       });
     }
-  }, [profileBranch, isAddDialogOpen, isAdmin]);
+  }, [profileBranch, isAddDialogOpen, isAdmin, formData.branch]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1012,5 +1026,17 @@ function ProfileItem({ icon, label, value, fullWidth = false }: any) {
         {value || 'N/A'}
       </div>
     </div>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center py-12">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <StudentsContent />
+    </Suspense>
   );
 }
