@@ -23,6 +23,8 @@ const SESSION_TYPES = [
   { value: 'Theory', label: 'Theory Class', icon: BookOpen },
 ] as const;
 
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
 export default function AttendancePage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -46,7 +48,7 @@ export default function AttendancePage() {
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
   const isAdmin = profile?.role === 'Admin';
 
-  // Sync branch for managers/instructors, but Admin stays at "All"
+  // Sync branch for managers/instructors, but Admin stays at whatever they select
   useEffect(() => {
     if (profile && !isAdmin && !isStudent) {
       setSelectedBranch(profile.branch || "Branch 1");
@@ -98,9 +100,9 @@ export default function AttendancePage() {
   const filteredSearch = useMemo(() => {
     if (!students) return [];
     
-    // For Managers/Instructors, filter students by their assigned branch
     let list = [...students];
-    if (selectedBranch !== "All" && !isAdmin) {
+    // Filter list by selected branch if not "All"
+    if (selectedBranch !== "All") {
       const targetBranch = selectedBranch.toLowerCase().trim();
       list = list.filter(s => (s.branch || "").toLowerCase().trim() === targetBranch);
     }
@@ -113,7 +115,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [students, studentSearch, selectedBranch, isAdmin]);
+  }, [students, studentSearch, selectedBranch]);
 
   const statsSummary = useMemo(() => {
     return filteredRecords.reduce((acc, curr) => {
@@ -209,13 +211,30 @@ export default function AttendancePage() {
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
+            {isAdmin && (
+              <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
+                <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
+                  <Filter className="h-3 w-3" /> Branch:
+                </Label>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
+                    <SelectValue placeholder="Select Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Branches</SelectItem>
+                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-              <Label className="text-[10px] font-black px-2 text-primary uppercase">Date Filter:</Label>
+              <Label className="text-[10px] font-black px-2 text-primary uppercase">Date:</Label>
               <Input 
                 type="date" 
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="h-9 w-[140px] bg-background border-primary/20 text-xs"
+                className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold"
               />
             </div>
             
@@ -282,7 +301,7 @@ export default function AttendancePage() {
             <div className="grid gap-6 px-6 py-4 pb-32">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Select Student {selectedBranch !== "All" && !isAdmin && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
+                  <Label>Select Student {selectedBranch !== "All" && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
