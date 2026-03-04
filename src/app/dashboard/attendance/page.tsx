@@ -62,55 +62,58 @@ export default function AttendancePage() {
   }, [db, user]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection
+  // Fetch Students for selection - Admin gets all or filtered, Managers get their branch
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isStudent) return query(collection(db, 'students'), where('userId', '==', user.uid));
-    if (isStaff) return collection(db, 'students');
-    return null;
-  }, [db, user, profile, isStaff, isStudent]);
+    const base = collection(db, 'students');
+    if (isStudent) return query(base, where('userId', '==', user.uid));
+    
+    // If specific branch is selected, filter at source
+    if (selectedBranch !== "All") {
+      return query(base, where('branch', '==', selectedBranch));
+    }
+    
+    return base;
+  }, [db, user, profile, isStudent, selectedBranch]);
 
   const { data: students } = useCollection(studentsQuery);
 
-  // Fetch Attendance records for the date
+  // Fetch Attendance records - Restricted to Date and Branch at Query Level
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    const base = collection(db, 'attendance');
+
     if (isStudent) {
-      return query(collection(db, 'attendance'), where('studentUid', '==', user.uid));
+      return query(base, where('studentUid', '==', user.uid));
     }
+
     if (isStaff) {
-      return query(collection(db, 'attendance'), where('date', '==', selectedDate));
+      const qConstraints = [where('date', '==', selectedDate)];
+      if (selectedBranch !== "All") {
+        qConstraints.push(where('branch', '==', selectedBranch));
+      }
+      return query(base, ...qConstraints);
     }
     return null;
-  }, [db, user, profile, isStaff, isStudent, selectedDate]);
+  }, [db, user, profile, isStaff, isStudent, selectedDate, selectedBranch]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  // Helper for consistent branch matching
-  const matchesBranch = (target: string, current: string) => {
-    if (current === "All") return true;
-    return (target || "").trim().toLowerCase() === current.trim().toLowerCase();
-  };
+  // Stats aggregation (rawAttendance is already filtered by date and branch via query)
+  const statsSummary = useMemo(() => {
+    if (!rawAttendance) return { practical: 0, theory: 0 };
+    return rawAttendance.reduce((acc, curr) => {
+      const hours = Number(curr.duration) || 0;
+      if (curr.type === 'Theory') acc.theory += hours;
+      else acc.practical += hours;
+      return acc;
+    }, { practical: 0, theory: 0 });
+  }, [rawAttendance]);
 
-  // Client-side branch filtering for the log table
-  const filteredRecords = useMemo(() => {
-    if (!rawAttendance) return [];
-    if (isStudent) return rawAttendance;
-    
-    return rawAttendance.filter(r => matchesBranch(r.branch, selectedBranch));
-  }, [rawAttendance, selectedBranch, isStudent]);
-
-  // Client-side filtering for the student selection list in the popup
+  // Client-side filtering for search in popup (further narrows the query result)
   const filteredSearch = useMemo(() => {
     if (!students) return [];
-    
-    let list = [...students];
-    // Filter list by selected branch if not "All"
-    if (selectedBranch !== "All") {
-      list = list.filter(s => matchesBranch(s.branch, selectedBranch));
-    }
-
-    const activeOnes = list.filter(s => s.status !== 'Completed');
+    const activeOnes = students.filter(s => s.status !== 'Completed');
     if (!studentSearch) return activeOnes;
     const term = studentSearch.toLowerCase();
     return activeOnes.filter(s => 
@@ -118,16 +121,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [students, studentSearch, selectedBranch]);
-
-  const statsSummary = useMemo(() => {
-    return filteredRecords.reduce((acc, curr) => {
-      const hours = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') acc.theory += hours;
-      else acc.practical += hours;
-      return acc;
-    }, { practical: 0, theory: 0 });
-  }, [filteredRecords]);
+  }, [students, studentSearch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -196,14 +190,14 @@ export default function AttendancePage() {
   };
 
   const sortedRecords = useMemo(() => {
-    return [...filteredRecords].sort((a, b) => {
+    if (!rawAttendance) return [];
+    return [...rawAttendance].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
       return (b.startTime || '').localeCompare(a.startTime || '');
     });
-  }, [filteredRecords]);
+  }, [rawAttendance]);
 
-  // Safe Date Header Formatting
   const headerDateDisplay = useMemo(() => {
     const d = new Date(selectedDate);
     return isValid(d) ? format(d, 'EEEE, MMMM do') : '...';
@@ -223,7 +217,7 @@ export default function AttendancePage() {
             {isAdmin && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
-                  <Filter className="h-3 w-3" /> Branch:
+                  <Filter className="h-3 w-3" /> Branch Filter:
                 </Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                   <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
@@ -456,7 +450,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${headerDateDisplay} across ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
+                {isStudent ? 'Historical training record' : `Records for ${headerDateDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
