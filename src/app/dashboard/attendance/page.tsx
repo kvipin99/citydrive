@@ -200,6 +200,12 @@ export default function AttendancePage() {
     });
   }, [filteredRecords]);
 
+  // Safe Date Header Formatting
+  const headerDateDisplay = useMemo(() => {
+    const d = new Date(selectedDate);
+    return isValid(d) ? format(d, 'EEEE, MMMM do') : '...';
+  }, [selectedDate]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -447,7 +453,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${format(new Date(selectedDate), 'EEEE, MMMM do')} across ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
+                {isStudent ? 'Historical training record' : `Records for ${headerDateDisplay} across ${selectedBranch === 'All' ? 'all branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6">
@@ -489,7 +495,7 @@ export default function AttendancePage() {
                     <TableRow key={record.id} className="hover:bg-muted/20">
                       {isStudent && (
                         <TableCell className="pl-6 font-medium text-xs">
-                          {record.date ? format(new Date(record.date), 'MMM dd, yyyy') : 'N/A'}
+                          {record.date && isValid(new Date(record.date)) ? format(new Date(record.date), 'MMM dd, yyyy') : 'N/A'}
                         </TableCell>
                       )}
                       {!isStudent && (
