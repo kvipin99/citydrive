@@ -86,14 +86,18 @@ export default function AttendancePage() {
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
+  // Helper for consistent branch matching
+  const matchesBranch = (target: string, current: string) => {
+    if (current === "All") return true;
+    return (target || "").trim().toLowerCase() === current.trim().toLowerCase();
+  };
+
   // Client-side branch filtering for the log table
   const filteredRecords = useMemo(() => {
     if (!rawAttendance) return [];
     if (isStudent) return rawAttendance;
-    if (selectedBranch === "All") return rawAttendance;
     
-    const targetBranch = selectedBranch.toLowerCase().trim();
-    return rawAttendance.filter(r => (r.branch || "").toLowerCase().trim() === targetBranch);
+    return rawAttendance.filter(r => matchesBranch(r.branch, selectedBranch));
   }, [rawAttendance, selectedBranch, isStudent]);
 
   // Client-side filtering for the student selection list in the popup
@@ -103,8 +107,7 @@ export default function AttendancePage() {
     let list = [...students];
     // Filter list by selected branch if not "All"
     if (selectedBranch !== "All") {
-      const targetBranch = selectedBranch.toLowerCase().trim();
-      list = list.filter(s => (s.branch || "").toLowerCase().trim() === targetBranch);
+      list = list.filter(s => matchesBranch(s.branch, selectedBranch));
     }
 
     const activeOnes = list.filter(s => s.status !== 'Completed');
