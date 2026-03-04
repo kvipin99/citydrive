@@ -49,27 +49,44 @@ export default function ReportsPage() {
   // Data Fetching
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'students');
-    return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+    // We fetch all for filtering flexibility on client side to avoid index errors
+    return collection(db, 'students');
+  }, [db, user, profile]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'payments');
-    return query(collection(db, 'payments'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+    return collection(db, 'payments');
+  }, [db, user, profile]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'expenses');
-    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+    return collection(db, 'expenses');
+  }, [db, user, profile]);
 
   const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isPaymentsLoading || isExpensesLoading;
+
+  // --- SMART BRANCH FILTERING UTILITY ---
+  const isFromBranch = (record: any, branchName: string) => {
+    if (branchName === "Full" || branchName === "All") return true;
+    
+    // 1. Direct match on branch field
+    if (record.branch === branchName) return true;
+    
+    // 2. Match by Student ID prefix (B1, B2, B3, etc.)
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum) {
+      const prefix = `B${branchNum}`;
+      // Check record ID (for students) or studentId (for payments/attendance)
+      if (record.id?.startsWith(prefix)) return true;
+      if (record.studentId?.startsWith(prefix)) return true;
+    }
+    
+    return false;
+  };
 
   // Helper to check if a date is within selected range
   const isWithinRange = (dateVal: any) => {
@@ -95,9 +112,11 @@ export default function ReportsPage() {
     let filteredPayments = (payments || []).filter(p => isWithinRange(p.date));
     let filteredExpenses = (expenses || []).filter(e => isWithinRange(e.date));
 
-    if (isAdmin && selectedBranch !== "Full") {
-      filteredPayments = filteredPayments.filter(p => p.branch === selectedBranch);
-      filteredExpenses = filteredExpenses.filter(e => e.branch === selectedBranch);
+    // Apply branch isolation
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    if (currentBranchContext !== "Full") {
+      filteredPayments = filteredPayments.filter(p => isFromBranch(p, currentBranchContext));
+      filteredExpenses = filteredExpenses.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     const months: Record<string, { income: number; expense: number }> = {};
@@ -126,15 +145,16 @@ export default function ReportsPage() {
         profit: vals.income - vals.expense
       }))
       .sort((a, b) => b.period.localeCompare(a.period));
-  }, [payments, expenses, selectedBranch, isAdmin, dateRange]);
+  }, [payments, expenses, selectedBranch, isAdmin, dateRange, profile]);
 
   // --- REPORT LOGIC: STUDENTS ---
   const filteredStudents = useMemo(() => {
     if (!students) return [];
     let result = students.filter(s => isWithinRange(s.registrationDate));
 
-    if (isAdmin && selectedBranch !== "Full") {
-      result = result.filter(s => s.branch === selectedBranch);
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    if (currentBranchContext !== "Full") {
+      result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
 
     if (studentStatus !== "All") {
@@ -142,13 +162,20 @@ export default function ReportsPage() {
     }
 
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
-  }, [students, selectedBranch, studentStatus, isAdmin, dateRange]);
+  }, [students, selectedBranch, studentStatus, isAdmin, dateRange, profile]);
 
   // --- REPORT LOGIC: PAYMENT DUES ---
   const paymentDuesData = useMemo(() => {
     if (!students) return [];
     
-    const dues = students.filter(s => isWithinRange(s.registrationDate)).map(s => {
+    let result = students.filter(s => isWithinRange(s.registrationDate));
+
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    if (currentBranchContext !== "Full") {
+      result = result.filter(s => isFromBranch(s, currentBranchContext));
+    }
+
+    const dues = result.map(s => {
       const totalAgreed = Number(s.amount) || 0;
       const totalPaid = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
       const balance = totalAgreed - totalPaid;
@@ -160,17 +187,12 @@ export default function ReportsPage() {
       return { ...s, totalAgreed, totalPaid, balance, paymentStatus: status };
     });
 
-    let result = dues;
-    if (isAdmin && selectedBranch !== "Full") {
-      result = result.filter(s => s.branch === selectedBranch);
-    }
-
     if (paymentStatus !== "All") {
-      result = result.filter(s => s.paymentStatus === paymentStatus);
+      return dues.filter(s => s.paymentStatus === paymentStatus).sort((a, b) => b.balance - a.balance);
     }
 
-    return result.sort((a, b) => b.balance - a.balance);
-  }, [students, selectedBranch, paymentStatus, isAdmin, dateRange]);
+    return dues.sort((a, b) => b.balance - a.balance);
+  }, [students, selectedBranch, paymentStatus, isAdmin, dateRange, profile]);
 
   // --- EXPORT TOOLS ---
   const handleExportCSV = (type: string) => {
