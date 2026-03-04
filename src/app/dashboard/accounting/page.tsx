@@ -1,17 +1,23 @@
 
 "use client"
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw } from "lucide-react";
-import { format, isValid } from "date-fns";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, ArrowRightCircle, RefreshCw, Filter, Layers, BookOpen } from "lucide-react";
+import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
+
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -21,6 +27,8 @@ interface Transaction {
   type: 'Income' | 'Expense';
   branch: string;
   category?: string;
+  receiptNo?: string;
+  studentId?: string;
 }
 
 export default function AccountingPage() {
@@ -33,19 +41,30 @@ export default function AccountingPage() {
   
   const isAdmin = profile?.role === 'Admin';
   
-  const [activeTab, setActiveTab] = useState<string>("transactions");
-  const [dateFilter, setDateFilter] = useState<{ month: string | null, year: string | null }>({ month: null, year: null });
+  const [activeTab, setActiveTab] = useState<string>("daybook");
+  const [selectedBranch, setSelectedBranch] = useState<string>("All");
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
 
-  // Data Fetching - Admins fetch everything, Managers fetch by branch
+  // Sync selected branch with user profile for non-admins
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranch(profile.branch || "Branch 1");
+    }
+  }, [profile, isAdmin]);
+
+  // Data Fetching - We fetch all and filter on client to ensure accuracy across ID prefixes
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'payments');
-  }, [db, user?.uid]);
+  }, [db, user?.uid, profile]);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'expenses');
-  }, [db, user?.uid]);
+  }, [db, user?.uid, profile]);
 
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
@@ -53,18 +72,43 @@ export default function AccountingPage() {
   const parseSafeDate = (d: any) => {
     if (!d) return new Date();
     if (d.seconds) return new Date(d.seconds * 1000);
-    const parsed = new Date(d);
+    const parsed = typeof d === 'string' ? parseISO(d) : new Date(d);
     return isValid(parsed) ? parsed : new Date();
+  };
+
+  // --- SMART BRANCH FILTERING UTILITY ---
+  const isFromBranch = (record: any, branchName: string) => {
+    if (branchName === "All") return true;
+    
+    // 1. Direct match on branch field
+    if (record.branch === branchName) return true;
+    
+    // 2. Match by Student ID prefix (B1, B2, B3, etc.)
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum) {
+      const prefix = `B${branchNum}`;
+      if (record.id?.startsWith(prefix)) return true;
+      if (record.studentId?.startsWith(prefix)) return true;
+    }
+    
+    return false;
+  };
+
+  const isWithinRange = (date: Date) => {
+    const dStr = format(date, 'yyyy-MM-dd');
+    return dStr >= dateRange.from && dStr <= dateRange.to;
   };
 
   const allTransactions = useMemo(() => {
     const income: Transaction[] = (payments || []).map(p => ({
       id: p.id,
       date: parseSafeDate(p.date),
-      description: `Fee: ${p.studentName || 'Student'} (#${p.receiptNo || 'N/A'})`,
+      description: p.category === "Course Fee" ? `Fee: ${p.studentName || 'Student'}` : `${p.category}: ${p.studentName || 'Misc'}`,
       amount: Number(p.amount) || 0,
       type: 'Income',
-      branch: p.branch || 'Unknown'
+      branch: p.branch || 'Unknown',
+      receiptNo: p.receiptNo,
+      studentId: p.studentId
     }));
 
     const outgo: Transaction[] = (expenses || []).map(e => ({
@@ -82,28 +126,24 @@ export default function AccountingPage() {
   }, [payments, expenses]);
 
   const filteredTransactions = useMemo(() => {
-    let result = [...allTransactions];
+    let result = allTransactions.filter(t => isWithinRange(t.date));
     
-    // For non-admins, filter by their branch
-    if (!isAdmin && profile?.branch) {
-      result = result.filter(t => t.branch === profile.branch);
+    // Filter by branch (respecting Smart ID detection)
+    if (selectedBranch !== "All") {
+      result = result.filter(t => isFromBranch(t, selectedBranch));
     }
 
-    if (dateFilter.month) {
-      result = result.filter(t => format(t.date, 'yyyy-MM') === dateFilter.month);
-    } else if (dateFilter.year) {
-      result = result.filter(t => format(t.date, 'yyyy') === dateFilter.year);
-    }
     return result;
-  }, [allTransactions, dateFilter, isAdmin, profile?.branch]);
+  }, [allTransactions, dateRange, selectedBranch]);
 
   const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
+  // Summaries for other tabs
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => t.branch === profile?.branch);
+    const sourceData = selectedBranch === "All" ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
     
     sourceData.forEach(t => {
       const monthKey = format(t.date, 'yyyy-MM');
@@ -112,11 +152,11 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, profile?.branch]);
+  }, [allTransactions, selectedBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => t.branch === profile?.branch);
+    const sourceData = selectedBranch === "All" ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
     
     sourceData.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
@@ -125,20 +165,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, profile?.branch]);
-
-  const handlePeriodClick = (period: string, type: 'Month' | 'Year') => {
-    if (type === 'Month') {
-      setDateFilter({ month: period, year: null });
-    } else {
-      setDateFilter({ month: null, year: period });
-    }
-    setActiveTab("transactions");
-  };
-
-  const clearDateFilter = () => {
-    setDateFilter({ month: null, year: null });
-  };
+  }, [allTransactions, selectedBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -146,136 +173,178 @@ export default function AccountingPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-medium text-muted-foreground">Loading financial records...</p>
+        <p className="text-sm font-medium text-muted-foreground">Loading daybook...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {!isAdmin && (
-            <Badge variant="outline" className="h-9 px-3 gap-2">
-              {profile?.branchName || profile?.branch}
-            </Badge>
-          )}
-          {(dateFilter.month || dateFilter.year) && (
-            <Badge variant="secondary" className="h-9 px-3 flex items-center gap-2 border border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-left-2">
-              <CalendarIcon className="h-3.5 w-3.5 text-primary" />
-              <span className="font-bold">
-                {dateFilter.month ? format(new Date(dateFilter.month + "-01"), 'MMMM yyyy') : dateFilter.year}
-              </span>
-              <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent text-primary hover:text-destructive" onClick={clearDateFilter}>
-                <CalendarIcon className="h-3 w-3" />
-              </Button>
-            </Badge>
-          )}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="grid gap-1">
+          <h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2>
+          <p className="text-muted-foreground text-sm">
+            Daily income and expenditure tracking for {selectedBranch === 'All' ? 'all branches' : selectedBranch}.
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" asChild variant="outline">
+            <Link href="/dashboard/expenses">New Expense</Link>
+          </Button>
           <Button size="sm" asChild>
-            <Link href="/dashboard/expenses">Add Expense</Link>
+            <Link href="/dashboard/payments">Collect Fee</Link>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-l-4 border-l-green-500 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
+      <div className="grid gap-6 md:grid-cols-4">
+        <Card className="md:col-span-1 shadow-sm border-primary/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Filter className="h-4 w-4" /> Filters
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{totalIncome.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} school collections
-            </p>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Period</Label>
+              <div className="space-y-2">
+                <div className="grid gap-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs" 
+                    value={dateRange.from} 
+                    onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase">To</span>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs" 
+                    value={dateRange.to} 
+                    onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-8 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5"
+                  onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
+                >
+                  <CalendarIcon className="h-3 w-3 mr-1.5" />
+                  Today
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Branch View</label>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">Full School (All)</SelectItem>
+                  {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Branch identity locked.</p>}
+            </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-red-500 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Total Expenses</CardTitle>
-            <Receipt className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{totalExpenses.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} school costs
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-primary shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Net Profit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{netProfit.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {dateFilter.month || dateFilter.year ? 'Period' : 'All-time'} earnings
-            </p>
-          </CardContent>
-        </Card>
+
+        <div className="md:col-span-3 space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="border-l-4 border-l-green-500 shadow-sm bg-green-50/10">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Income</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-black text-green-600">₹{totalIncome.toLocaleString()}</div>
+                <p className="text-[9px] text-muted-foreground font-medium">Selected period collections</p>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-red-500 shadow-sm bg-red-50/10">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Expenses</CardTitle>
+                <Receipt className="h-4 w-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-black text-red-600">₹{totalExpenses.toLocaleString()}</div>
+                <p className="text-[9px] text-muted-foreground font-medium">Selected period outgoings</p>
+              </CardContent>
+            </Card>
+            <Card className={`border-l-4 shadow-sm bg-primary/5 ${netProfit >= 0 ? 'border-l-primary' : 'border-l-orange-500'}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Net Day Balance</CardTitle>
+                <TrendingUp className={`h-4 w-4 ${netProfit >= 0 ? 'text-primary' : 'text-orange-500'}`} />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-primary' : 'text-orange-600'}`}>
+                  ₹{netProfit.toLocaleString()}
+                </div>
+                <p className="text-[9px] text-muted-foreground font-medium">Closing balance for period</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/50 border">
+              <TabsTrigger value="daybook">Daybook Log</TabsTrigger>
+              <TabsTrigger value="monthly">Monthly</TabsTrigger>
+              <TabsTrigger value="yearly">Yearly</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="daybook" className="mt-4">
+              <Card>
+                <CardHeader className="pb-3 border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Daily Transaction Record</CardTitle>
+                      <CardDescription>All account movements between {dateRange.from} and {dateRange.to}.</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="font-bold">{filteredTransactions.length} entries</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoading ? <LoadingSpinner /> : <TransactionTable transactions={filteredTransactions} />}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="monthly">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Monthly Summaries</CardTitle>
+                  <CardDescription>Aggregated performance by month for {selectedBranch === 'All' ? 'Full School' : selectedBranch}.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? <LoadingSpinner /> : (
+                    <SummaryTable data={monthlySummary} type="Month" />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="yearly">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Annual Overview</CardTitle>
+                  <CardDescription>Consolidated yearly financials.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? <LoadingSpinner /> : (
+                    <SummaryTable data={yearlySummary} type="Year" />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="transactions">Log</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly</TabsTrigger>
-          <TabsTrigger value="yearly">Yearly</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="transactions" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Global Transaction Log</CardTitle>
-              <CardDescription>
-                Detailed audit trail for the entire school
-                {dateFilter.month ? ` in ${format(new Date(dateFilter.month + "-01"), 'MMMM yyyy')}` : dateFilter.year ? ` in ${dateFilter.year}` : ''}.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <LoadingSpinner /> : <TransactionTable transactions={filteredTransactions} />}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="monthly">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Performance</CardTitle>
-              <CardDescription>Aggregated financial data. Click any row to see details.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <LoadingSpinner /> : (
-                <SummaryTable 
-                  data={monthlySummary} 
-                  type="Month" 
-                  onRowClick={(p) => handlePeriodClick(p, 'Month')} 
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="yearly">
-          <Card>
-            <CardHeader>
-              <CardTitle>Annual Performance Overview</CardTitle>
-              <CardDescription>Consolidated yearly stats. Click any row to see details.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <LoadingSpinner /> : (
-                <SummaryTable 
-                  data={yearlySummary} 
-                  type="Year" 
-                  onRowClick={(p) => handlePeriodClick(p, 'Year')} 
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
@@ -283,7 +352,7 @@ export default function AccountingPage() {
 function LoadingSpinner() {
   return (
     <div className="flex justify-center py-12">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <RefreshCw className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
 }
@@ -291,31 +360,45 @@ function LoadingSpinner() {
 function TransactionTable({ transactions }: { transactions: Transaction[] }) {
   return (
     <Table>
-      <TableHeader>
+      <TableHeader className="bg-muted/30">
         <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>Description</TableHead>
+          <TableHead className="pl-6">Date</TableHead>
+          <TableHead>Type & Detail</TableHead>
           <TableHead>Branch</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="text-right pr-6">Amount (₹)</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">No records found for this period.</TableCell>
+            <TableCell colSpan={4} className="text-center py-20 text-muted-foreground italic">
+              <div className="flex flex-col items-center gap-2 opacity-50">
+                <Layers className="h-10 w-10" />
+                <p>No transactions found for the selected criteria.</p>
+              </div>
+            </TableCell>
           </TableRow>
         ) : (
           transactions.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="text-xs text-muted-foreground">{format(t.date, 'MMM dd, yyyy')}</TableCell>
+            <TableRow key={t.id} className="hover:bg-muted/20">
+              <TableCell className="pl-6 text-xs font-medium text-muted-foreground">{format(t.date, 'MMM dd, yyyy')}</TableCell>
               <TableCell>
                 <div className="grid gap-0.5">
-                  <span className="font-medium text-sm">{t.description}</span>
-                  {t.category && <span className="text-[10px] uppercase text-muted-foreground">{t.category}</span>}
+                  <div className="flex items-center gap-2">
+                    <Badge variant={t.type === 'Income' ? 'default' : 'secondary'} className={`text-[9px] h-4 px-1.5 font-bold ${t.type === 'Income' ? 'bg-green-600' : 'bg-red-600 text-white'}`}>
+                      {t.type === 'Income' ? 'IN' : 'OUT'}
+                    </Badge>
+                    <span className="font-bold text-sm leading-none">{t.description}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-mono mt-1">
+                    {t.receiptNo && <span>REC: #{t.receiptNo}</span>}
+                    {t.category && <span>CAT: {t.category}</span>}
+                    {t.studentId && <span>ID: {t.studentId}</span>}
+                  </div>
                 </div>
               </TableCell>
-              <TableCell><Badge variant="outline" className="text-[10px]">{t.branch}</Badge></TableCell>
-              <TableCell className={`text-right font-bold ${t.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
+              <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{t.branch}</Badge></TableCell>
+              <TableCell className={`text-right font-black pr-6 ${t.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
                 {t.type === 'Income' ? '+' : '-'}₹{t.amount.toLocaleString()}
               </TableCell>
             </TableRow>
@@ -328,48 +411,38 @@ function TransactionTable({ transactions }: { transactions: Transaction[] }) {
 
 function SummaryTable({ 
   data, 
-  type, 
-  onRowClick 
+  type
 }: { 
   data: [string, { income: number, expense: number }][], 
-  type: string,
-  onRowClick: (period: string) => void
+  type: string
 }) {
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>{type}</TableHead>
-          <TableHead className="text-right">Revenue (₹)</TableHead>
-          <TableHead className="text-right">Expenses (₹)</TableHead>
-          <TableHead className="text-right">Profit (₹)</TableHead>
-          <TableHead className="w-[50px]"></TableHead>
+          <TableHead className="text-right">Revenue</TableHead>
+          <TableHead className="text-right">Expenses</TableHead>
+          <TableHead className="text-right">Balance</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {data.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No summary data available.</TableCell>
+            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">No data recorded.</TableCell>
           </TableRow>
         ) : (
           data.map(([period, values]) => {
             const profit = values.income - values.expense;
             return (
-              <TableRow 
-                key={period} 
-                className="cursor-pointer hover:bg-muted/50 transition-colors group"
-                onClick={() => onRowClick(period)}
-              >
-                <TableCell className="font-bold group-hover:text-primary transition-colors">
+              <TableRow key={period} className="hover:bg-muted/50">
+                <TableCell className="font-bold">
                   {type === 'Month' ? format(new Date(period + "-01"), 'MMMM yyyy') : period}
                 </TableCell>
-                <TableCell className="text-right text-green-600">₹{values.income.toLocaleString()}</TableCell>
-                <TableCell className="text-right text-red-600">₹{values.expense.toLocaleString()}</TableCell>
-                <TableCell className={`text-right font-black ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                <TableCell className="text-right text-green-600 font-medium">₹{values.income.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-red-600 font-medium">₹{values.expense.toLocaleString()}</TableCell>
+                <TableCell className={`text-right font-black ${profit >= 0 ? 'text-primary' : 'text-red-700'}`}>
                   ₹{profit.toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <ArrowRightCircle className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
                 </TableCell>
               </TableRow>
             );
