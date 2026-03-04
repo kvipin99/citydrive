@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Car, Calendar, ShieldCheck, FileText, Trash2, Edit2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Car, Calendar, ShieldCheck, FileText, Trash2, Edit2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 
 const VEHICLE_TYPES = ["2wlr", "3wlr", "4wlr", "Heavy", "Other"] as const;
 const VEHICLE_STATUSES = ["Available", "In Use", "Maintenance"] as const;
@@ -27,9 +28,9 @@ interface Vehicle {
   regValidity: string;
   insuranceValidity: string;
   status: typeof VEHICLE_STATUSES[number];
-  createdAt: any;
-  updatedAt: any;
-  createdBy: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
 }
 
 export default function VehiclesPage() {
@@ -40,32 +41,40 @@ export default function VehiclesPage() {
   const userProfileRef = useMemoFirebase(() => {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
-  }, [db, user]);
+  }, [db, user?.uid]);
+  
   const { data: profile } = useDoc(userProfileRef);
   const canWrite = profile?.role === 'Admin' || profile?.role === 'BranchManager';
 
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'vehicles');
-  }, [db, user]);
+  }, [db, user?.uid]);
 
-  const { data: vehicles, isLoading } = useCollection<Vehicle>(vehiclesQuery);
+  const { data: vehicles, isLoading: isVehiclesLoading } = useCollection<Vehicle>(vehiclesQuery);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [formData, setFormData] = useState<Partial<Vehicle>>({
+  const [formData, setFormData] = useState({
     regNumber: '',
-    type: '4wlr',
+    type: '4wlr' as typeof VEHICLE_TYPES[number],
     brandModel: '',
     regValidity: '',
     insuranceValidity: '',
-    status: 'Available'
+    status: 'Available' as typeof VEHICLE_STATUSES[number]
   });
 
   const handleOpenDialog = (vehicle: Vehicle | null = null) => {
     if (vehicle) {
       setSelectedVehicle(vehicle);
-      setFormData({ ...vehicle });
+      setFormData({
+        regNumber: vehicle.regNumber || '',
+        type: vehicle.type || '4wlr',
+        brandModel: vehicle.brandModel || '',
+        regValidity: vehicle.regValidity || '',
+        insuranceValidity: vehicle.insuranceValidity || '',
+        status: vehicle.status || 'Available'
+      });
     } else {
       setSelectedVehicle(null);
       setFormData({
@@ -98,13 +107,26 @@ export default function VehiclesPage() {
 
     setDocumentNonBlocking(vehicleRef, data, { merge: true });
     setIsDialogOpen(false);
-    toast({ title: selectedVehicle ? "Vehicle Updated" : "Vehicle Added", description: `${formData.regNumber} has been saved to the fleet.` });
+    toast({ 
+      title: selectedVehicle ? "Vehicle Updated" : "Vehicle Added", 
+      description: `${formData.regNumber} has been saved to the fleet.` 
+    });
   };
 
   const handleDeleteVehicle = (id: string) => {
     const vehicleRef = doc(db, 'vehicles', id);
     deleteDocumentNonBlocking(vehicleRef);
     toast({ variant: "destructive", title: "Vehicle Deleted", description: "The vehicle has been removed from the fleet." });
+  };
+
+  const formatSafeDate = (dateStr: any) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = typeof dateStr === 'string' ? parseISO(dateStr) : new Date(dateStr);
+      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'Invalid Date';
+    } catch (e) {
+      return 'Error Date';
+    }
   };
 
   return (
@@ -128,9 +150,9 @@ export default function VehiclesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isVehiclesLoading ? (
             <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <Table>
@@ -144,14 +166,14 @@ export default function VehiclesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vehicles?.length === 0 ? (
+                {!vehicles || vehicles.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       No vehicles found. Add your first vehicle to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  vehicles?.map((v) => (
+                  vehicles.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell>
                         <div className="grid gap-0.5">
@@ -163,10 +185,10 @@ export default function VehiclesPage() {
                       <TableCell>
                         <div className="grid gap-1 text-xs">
                           <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <FileText className="h-3 w-3" /> Reg: {v.regValidity ? format(new Date(v.regValidity), 'MMM dd, yyyy') : 'N/A'}
+                            <FileText className="h-3 w-3" /> Reg: {formatSafeDate(v.regValidity)}
                           </div>
                           <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <ShieldCheck className="h-3 w-3" /> Ins: {v.insuranceValidity ? format(new Date(v.insuranceValidity), 'MMM dd, yyyy') : 'N/A'}
+                            <ShieldCheck className="h-3 w-3" /> Ins: {formatSafeDate(v.insuranceValidity)}
                           </div>
                         </div>
                       </TableCell>
@@ -215,7 +237,7 @@ export default function VehiclesPage() {
                   id="regNumber" 
                   placeholder="e.g. MH-12-AB-1234" 
                   value={formData.regNumber} 
-                  onChange={(e) => setFormData({...formData, regNumber: e.target.value})} 
+                  onChange={(e) => setFormData({...formData, regNumber: e.target.value.toUpperCase()})} 
                 />
               </div>
               <div className="grid gap-2">
@@ -269,7 +291,9 @@ export default function VehiclesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleSaveVehicle} className="w-full">Save Vehicle</Button>
+            <Button onClick={handleSaveVehicle} className="w-full">
+              {selectedVehicle ? 'Update Vehicle' : 'Save Vehicle'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
