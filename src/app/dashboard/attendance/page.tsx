@@ -68,17 +68,16 @@ export default function AttendancePage() {
     const base = collection(db, 'students');
     if (isStudent) return query(base, where('userId', '==', user.uid));
     
-    // If specific branch is selected, filter at source
-    if (selectedBranch !== "All") {
-      return query(base, where('branch', '==', selectedBranch));
-    }
-    
+    // We fetch all students for the selected date context
+    // If specific branch is selected, we could filter at query level
+    // but for now we'll handle the selection search list more dynamically
     return base;
-  }, [db, user, profile, isStudent, selectedBranch]);
+  }, [db, user, profile, isStudent]);
 
-  const { data: students } = useCollection(studentsQuery);
+  const { data: allStudents } = useCollection(studentsQuery);
 
-  // Fetch Attendance records - Restricted to Date and Branch at Query Level
+  // Fetch Attendance records - Filtered by Date at Query Level
+  // We avoid filtering by branch in query to prevent composite index requirement errors
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'attendance');
@@ -88,40 +87,66 @@ export default function AttendancePage() {
     }
 
     if (isStaff) {
-      const qConstraints = [where('date', '==', selectedDate)];
-      if (selectedBranch !== "All") {
-        qConstraints.push(where('branch', '==', selectedBranch));
-      }
-      return query(base, ...qConstraints);
+      return query(base, where('date', '==', selectedDate));
     }
     return null;
-  }, [db, user, profile, isStaff, isStudent, selectedDate, selectedBranch]);
+  }, [db, user, profile, isStaff, isStudent, selectedDate]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  // Stats aggregation (rawAttendance is already filtered by date and branch via query)
+  // Helper to check if a record belongs to a branch (by field OR ID prefix)
+  const isFromBranch = (record: any, branchName: string) => {
+    if (branchName === "All") return true;
+    
+    // Check explicit field
+    if (record.branch === branchName) return true;
+    
+    // Fallback: Check ID prefix (Branch 1 -> B1, Branch 2 -> B2, etc.)
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && record.studentId?.startsWith(`B${branchNum}`)) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Filter attendance records by branch on client side
+  const filteredAttendance = useMemo(() => {
+    if (!rawAttendance) return [];
+    if (selectedBranch === "All") return rawAttendance;
+    return rawAttendance.filter(rec => isFromBranch(rec, selectedBranch));
+  }, [rawAttendance, selectedBranch]);
+
+  // Stats aggregation based on filtered list
   const statsSummary = useMemo(() => {
-    if (!rawAttendance) return { practical: 0, theory: 0 };
-    return rawAttendance.reduce((acc, curr) => {
+    return filteredAttendance.reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
       if (curr.type === 'Theory') acc.theory += hours;
       else acc.practical += hours;
       return acc;
     }, { practical: 0, theory: 0 });
-  }, [rawAttendance]);
+  }, [filteredAttendance]);
 
-  // Client-side filtering for search in popup (further narrows the query result)
+  // Filter students for search in popup - respecting the selected branch context
   const filteredSearch = useMemo(() => {
-    if (!students) return [];
-    const activeOnes = students.filter(s => s.status !== 'Completed');
-    if (!studentSearch) return activeOnes;
+    if (!allStudents) return [];
+    
+    // 1. First filter by active status and branch
+    let result = allStudents.filter(s => s.status !== 'Completed');
+    
+    if (selectedBranch !== "All") {
+      result = result.filter(s => isFromBranch(s, selectedBranch));
+    }
+
+    // 2. Then apply search term
+    if (!studentSearch) return result;
     const term = studentSearch.toLowerCase();
-    return activeOnes.filter(s => 
+    return result.filter(s => 
       s.name.toLowerCase().includes(term) || 
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [students, studentSearch]);
+  }, [allStudents, studentSearch, selectedBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -190,13 +215,12 @@ export default function AttendancePage() {
   };
 
   const sortedRecords = useMemo(() => {
-    if (!rawAttendance) return [];
-    return [...rawAttendance].sort((a, b) => {
+    return [...filteredAttendance].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
       if (dateCompare !== 0) return dateCompare;
       return (b.startTime || '').localeCompare(a.startTime || '');
     });
-  }, [rawAttendance]);
+  }, [filteredAttendance]);
 
   const headerDateDisplay = useMemo(() => {
     const d = new Date(selectedDate);
