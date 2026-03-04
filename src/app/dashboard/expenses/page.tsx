@@ -14,9 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw } from 'lucide-react';
+import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 const EXPENSE_CATEGORIES = ["Fuel", "Salaries", "Maintenance", "Rent", "Utility", "Others"] as const;
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -45,6 +45,11 @@ export default function ExpensesPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
+
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -126,11 +131,16 @@ export default function ExpensesPage() {
     toast({ variant: "destructive", title: "Expense Deleted", description: "The record has been permanently removed." });
   };
 
-  const sortedExpenses = useMemo(() => {
+  const isWithinRange = (dateStr: string) => {
+    if (!dateStr) return false;
+    return dateStr >= dateRange.from && dateStr <= dateRange.to;
+  };
+
+  const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
-    // Always copy the array before sorting to avoid state mutation loops
-    return [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses]);
+    return expenses.filter(e => isWithinRange(e.date))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [expenses, dateRange]);
 
   const isActuallyLoading = isProfileLoading || isExpensesLoading;
 
@@ -141,30 +151,63 @@ export default function ExpensesPage() {
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
           <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profile?.branch || 'your branch'}.`}</p>
         </div>
-        <Button size="lg" onClick={() => handleOpenDialog()}>
+        <Button size="lg" onClick={() => handleOpenDialog()} className="shadow-lg">
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Expense
         </Button>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-primary" />
-            Expenditure Log
-          </CardTitle>
-          <CardDescription>A list of recent expenses recorded for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
+        <CardHeader className="pb-3 border-b">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle className="text-lg">Expenditure Log</CardTitle>
+                <CardDescription>Records for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
+                <Input 
+                  type="date" 
+                  className="h-8 w-[130px] text-xs bg-background" 
+                  value={dateRange.from} 
+                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
+                <Input 
+                  type="date" 
+                  className="h-8 w-[130px] text-xs bg-background" 
+                  value={dateRange.to} 
+                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
+                />
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10"
+                onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
+              >
+                Today
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isActuallyLoading ? (
             <div className="flex justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="pl-6">Date</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Branch</TableHead>
@@ -173,34 +216,37 @@ export default function ExpensesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedExpenses.length === 0 ? (
+                {filteredExpenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      No expenses recorded yet for this branch.
+                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2 opacity-50">
+                        <CalendarIcon className="h-10 w-10" />
+                        <p className="italic text-sm font-medium">No expenses found for the selected period.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedExpenses.map((exp) => (
-                    <TableRow key={exp.id}>
-                      <TableCell className="text-sm">
+                  filteredExpenses.map((exp) => (
+                    <TableRow key={exp.id} className="hover:bg-muted/20">
+                      <TableCell className="pl-6 text-muted-foreground text-xs">
                         {exp.date ? format(new Date(exp.date), 'MMM dd, yyyy') : 'N/A'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="font-medium">{exp.category}</Badge>
+                        <Badge variant="secondary" className="font-medium text-[10px] uppercase tracking-wider">{exp.category}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                      <TableCell className="max-w-[200px] truncate text-sm">
                         {exp.description || '--'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">{exp.branch}</Badge>
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase">{exp.branch}</Badge>
                       </TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
+                      <TableCell className="text-right font-black text-red-600 pr-6">
                         ₹{exp.amount?.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -208,8 +254,8 @@ export default function ExpensesPage() {
                             <DropdownMenuItem onClick={() => handleOpenDialog(exp)}>
                               <Edit2 className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteExpense(exp.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteExpense(exp.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete Record
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -223,7 +269,7 @@ export default function ExpensesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) setSelectedExpense(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</DialogTitle>
