@@ -497,7 +497,7 @@ function StudentsContent() {
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-                      <DialogHeader className="p-6 border-b bg-muted/5">
+                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
                       </DialogHeader>
@@ -536,7 +536,7 @@ function StudentsContent() {
                         </div>
                       </div>
 
-                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
                         <div className="flex w-full justify-end gap-3">
                           <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
                           <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
@@ -658,7 +658,7 @@ function StudentsContent() {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b">
+          <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
           </DialogHeader>
@@ -691,7 +691,7 @@ function StudentsContent() {
               </div>
             </div>
           </div>
-          <DialogFooter className="p-6 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
             <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
           </DialogFooter>
         </DialogContent>
@@ -699,7 +699,7 @@ function StudentsContent() {
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b bg-muted/5">
+          <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -717,7 +717,7 @@ function StudentsContent() {
               />
             </div>
           </div>
-          <DialogFooter className="p-6 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
             <div className="flex w-full justify-end gap-3">
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleUpdateStudent}>Save Changes</Button>
@@ -764,7 +764,7 @@ function StudentForm({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="grid gap-2">
-            <Label className="text-primary font-bold">Registration Branch {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
+            <Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && <Lock className="h-3 w-3" />}</Label>
             <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
               <SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger>
               <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>

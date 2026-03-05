@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, Timestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock, Calendar as CalendarIcon } from 'lucide-react';
@@ -302,14 +301,14 @@ export default function OtherReceiptsPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 pb-2 border-b shrink-0">
             <DialogTitle>Issue Other Receipt</DialogTitle>
             <DialogDescription>Record non-student fee income for the branch.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-32">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid gap-6 pb-32">
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label>Income Category</Label>
@@ -367,9 +366,9 @@ export default function OtherReceiptsPage() {
                 </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10 shrink-0">
             <Button onClick={handleCreateReceipt} className="w-full">
               Generate Other Receipt
             </Button>

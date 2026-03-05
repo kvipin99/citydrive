@@ -63,11 +63,13 @@ export default function StudentReceiptsPage() {
     return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
   }, [db, user?.uid, profile?.branch, isAdmin]);
 
+  // Updated studentsQuery to allow all staff to find any student
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'students');
-    return query(collection(db, 'students'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
+    const baseCol = collection(db, 'students');
+    if (profile.role === 'Student') return query(baseCol, where('userId', '==', user.uid));
+    return baseCol;
+  }, [db, user?.uid, profile?.role]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
@@ -134,6 +136,7 @@ export default function StudentReceiptsPage() {
 
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
+    const studentRef = doc(db, 'students', selectedStudent.id);
     const transactionDate = new Date(formData.date);
     
     const record: ReceiptRecord = {
@@ -154,7 +157,6 @@ export default function StudentReceiptsPage() {
 
     setDocumentNonBlocking(receiptRef, record, { merge: true });
 
-    const studentRef = doc(db, 'students', selectedStudent.id);
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
@@ -382,8 +384,8 @@ export default function StudentReceiptsPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle>Collect Student Fee</DialogTitle>
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
@@ -476,7 +478,7 @@ export default function StudentReceiptsPage() {
             </div>
           </div>
 
-          <DialogFooter className="p-6 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
             <Button disabled={!selectedStudent} onClick={handleCreateReceipt} className="w-full">
               Generate Student Receipt
             </Button>

@@ -61,7 +61,7 @@ export default function AttendancePage() {
   }, [db, user]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection - Admin gets all or filtered, Managers get their branch
+  // Fetch Students for selection - Staff can see ALL branches for recording attendance
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
@@ -116,10 +116,9 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
+    // Allow searching all active students regardless of branch filter for recorder
     let result = allStudents.filter(s => s.status !== 'Completed');
-    if (selectedBranch !== "All") {
-      result = result.filter(s => isFromBranch(s, selectedBranch));
-    }
+    
     if (!studentSearch) return result;
     const term = studentSearch.toLowerCase();
     return result.filter(s => 
@@ -127,7 +126,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch, selectedBranch]);
+  }, [allStudents, studentSearch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -297,11 +296,11 @@ export default function AttendancePage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {selectedBranch !== "All" ? `Recording session for ${selectedBranch}` : 'Select student and class details.'}
+              Select student and class details for recording training.
             </DialogDescription>
           </DialogHeader>
           
@@ -309,7 +308,7 @@ export default function AttendancePage() {
             <div className="grid gap-6 pb-20">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Select Student {selectedBranch !== "All" && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
+                  <Label>Search Student (Global Search)</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -322,7 +321,7 @@ export default function AttendancePage() {
                   <div className="border rounded-lg mt-1 divide-y bg-background shadow-sm max-h-[300px] overflow-auto">
                     {filteredSearch.length === 0 ? (
                       <div className="p-8 text-center text-muted-foreground italic text-sm">
-                        No active students found {selectedBranch !== "All" ? `in ${selectedBranch}` : ''}.
+                        No active students found.
                       </div>
                     ) : (
                       filteredSearch.map(s => (
@@ -436,7 +435,7 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <DialogFooter className="p-6 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
             <Button 
               onClick={handleMarkAttendance} 
               className="w-full" 
