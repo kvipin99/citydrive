@@ -227,14 +227,27 @@ export default function InstructorsPage() {
     const secondaryAuth = getAuth(secondaryApp);
 
     try {
-      const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      let cred;
+      try {
+        cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      } catch (authError: any) {
+        if (authError.code === 'auth/invalid-credential' || authError.code === 'auth/invalid-login-credentials' || authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password') {
+          throw new Error("Login record not found or password has been changed from default 'City123'. Manual cleanup in Firebase console required.");
+        }
+        throw authError;
+      }
+
       await deleteUser(cred.user);
       await deleteApp(secondaryApp);
       toast({ title: "Cleanup Successful", description: `Login account for ${staffId} has been removed. You can now reuse this ID.` });
       setCleanupId("");
     } catch (error: any) {
       console.error("Cleanup error:", error);
-      toast({ variant: "destructive", title: "Cleanup Failed", description: "Could not find or delete that login account. It may already be gone or uses a non-default password." });
+      toast({ 
+        variant: "destructive", 
+        title: "Cleanup Failed", 
+        description: error.message || "Could not find or delete that login account." 
+      });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
@@ -292,7 +305,7 @@ export default function InstructorsPage() {
                           id="staffId" 
                           value={formData.id || ''} 
                           readOnly
-                          className="bg-muted font-bold text-primary border-primary/20"
+                          className="bg-muted font-bold text-primary border-primary/20 cursor-not-allowed"
                         />
                       </div>
                       <div className="grid gap-2">
