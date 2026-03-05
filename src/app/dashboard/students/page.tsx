@@ -689,7 +689,7 @@ function StudentsContent() {
             </div>
           </ScrollArea>
           <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
-            <Button onClick={handleReceiveReceivePayment} className="w-full">Confirm & Generate</Button>
+            <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
