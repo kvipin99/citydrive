@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
@@ -17,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, User } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Trash2, Edit2, Phone, UserSquare, RefreshCw, Eraser, AlertCircle, Eye, Mail, Calendar, User, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -285,12 +284,15 @@ export default function InstructorsPage() {
                   <ScrollArea className="flex-1 min-h-0">
                     <div className="grid gap-4 px-6 py-4 pb-32">
                       <div className="grid gap-2">
-                        <Label htmlFor="staffId">Staff ID (Editable)</Label>
+                        <Label htmlFor="staffId" className="flex items-center gap-2">
+                          Staff ID (Auto-generated)
+                          <Lock className="h-3 w-3 text-muted-foreground" />
+                        </Label>
                         <Input 
                           id="staffId" 
-                          placeholder="e.g. SID01" 
                           value={formData.id || ''} 
-                          onChange={(e) => setFormData({...formData, id: e.target.value.toUpperCase()})} 
+                          readOnly
+                          className="bg-muted font-bold text-primary border-primary/20"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -478,8 +480,7 @@ export default function InstructorsPage() {
                 <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Deactive">Deactive</SelectItem>
+                    {['Active', 'Deactive'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
