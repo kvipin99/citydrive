@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -26,7 +25,7 @@ const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as
 
 export default function AttendancePage() {
   const db = useFirestore();
-  const { user } = user ? useUser() : { user: null };
+  const { user } = useUser();
   const { toast } = useToast();
   
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -49,7 +48,7 @@ export default function AttendancePage() {
   const isBranchManager = profile?.role === 'BranchManager';
   const isStaff = isAdmin || isBranchManager || isInstructor;
 
-  // Sync branch for managers, but Admin/Instructor stays at whatever they select
+  // Sync branch for managers
   useEffect(() => {
     if (profile && isBranchManager) {
       setSelectedBranch(profile.branch || "Branch 1");
@@ -63,7 +62,7 @@ export default function AttendancePage() {
   }, [db, user?.uid]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection 
+  // Fetch Students for selection - ROLE BASED VISIBILITY
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
@@ -80,13 +79,12 @@ export default function AttendancePage() {
       return query(base, where('branch', '==', profile.branch));
     }
     
-    // Default fallback for other staff roles
     return base;
   }, [db, user?.uid, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
-  // Fetch Attendance records - Filtered by Date at Query Level
+  // Fetch Attendance records
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'attendance');
@@ -131,7 +129,6 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    // Only show active or on-hold students for recording attendance
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
     
     if (!studentSearch) return result;
