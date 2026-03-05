@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
-import { format, isValid } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -135,6 +135,19 @@ function StudentsContent() {
     description: ''
   });
 
+  // Safe date conversion helper
+  const toInputDate = useCallback((val: any) => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (val.seconds) return format(new Date(val.seconds * 1000), 'yyyy-MM-dd');
+    try {
+      const d = new Date(val);
+      return isValid(d) ? format(d, 'yyyy-MM-dd') : '';
+    } catch {
+      return '';
+    }
+  }, []);
+
   useEffect(() => {
     const studentIdParam = searchParams.get('studentId');
     if (studentIdParam && students && !isStudentsLoading) {
@@ -223,7 +236,7 @@ function StudentsContent() {
   const createStudentAuth = async (studentId: string, name: string) => {
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
-    const secondaryAppName = `secondary-${studentId}-${Date.now()}`;
+    const secondaryAppName = `secondary-s-${studentId}-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
     const secondaryAuth = getAuth(secondaryApp);
     
@@ -398,7 +411,7 @@ function StudentsContent() {
     const studentId = cleanupId.trim().toUpperCase();
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
-    const secondaryAppName = `cleanup-s-${studentId}-${Date.now()}`;
+    const secondaryAppName = `cleanup-s-s-${studentId}-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
     const secondaryAuth = getAuth(secondaryApp);
 
@@ -610,20 +623,30 @@ function StudentsContent() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
-                                  // Strip non-serializable and heavy data before setting state
+                                  // Strip non-serializable and convert heavy fields
                                   const { payments, ...formDataRest } = student;
                                   setSelectedStudent(student); 
-                                  setFormData({ ...formDataRest }); 
-                                  // Timeout prevents focus conflict between dropdown and dialog
-                                  setTimeout(() => setIsEditDialogOpen(true), 100);
+                                  setFormData({ 
+                                    ...formDataRest,
+                                    registrationDate: toInputDate(student.registrationDate),
+                                    learnersDate: toInputDate(student.learnersDate),
+                                    testDate: toInputDate(student.testDate)
+                                  }); 
+                                  setTimeout(() => setIsEditDialogOpen(true), 150);
                                 }}>
                                   <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
                                   setSelectedStudent(student); 
-                                  setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
-                                  setTimeout(() => setIsReceiptDialogOpen(true), 100); 
+                                  setReceiptFormData({ 
+                                    amount: 0, 
+                                    receiptNo: '', 
+                                    method: 'Cash', 
+                                    date: format(new Date(), 'yyyy-MM-dd'), 
+                                    description: '' 
+                                  });
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 150); 
                                 }}>
                                   <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
                                 </DropdownMenuItem>
@@ -634,7 +657,7 @@ function StudentsContent() {
                                     onSelect={(e) => { 
                                       e.preventDefault();
                                       setSelectedStudent(student); 
-                                      setTimeout(() => setIsDeleteAlertOpen(true), 100); 
+                                      setTimeout(() => setIsDeleteAlertOpen(true), 150); 
                                     }}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
@@ -939,14 +962,14 @@ function StudentForm({
           <Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {masterCourses?.map((course: any) => (
-              <div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer" onClick={() => handleCourseToggle(course.name)}>
-                <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
+              <div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer" onClick={(e) => { e.preventDefault(); handleCourseToggle(course.name); }}>
+                <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => {}} />
                 <Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label>
                 <Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge>
               </div>
             ))}
-            <div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer" onClick={() => handleCourseToggle('Others')}>
-              <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} />
+            <div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer" onClick={(e) => { e.preventDefault(); handleCourseToggle('Others'); }}>
+              <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => {}} />
               <Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label>
             </div>
           </div>
@@ -1031,8 +1054,12 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   const formatSafeDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
-    return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+    } catch {
+      return 'N/A';
+    }
   };
 
   return (
