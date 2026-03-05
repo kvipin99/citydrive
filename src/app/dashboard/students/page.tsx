@@ -610,12 +610,12 @@ function StudentsContent() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
-                                  // Clean non-serializable data before setting state
+                                  // Strip non-serializable and heavy data before setting state
                                   const { payments, ...formDataRest } = student;
                                   setSelectedStudent(student); 
                                   setFormData({ ...formDataRest }); 
-                                  // Timeout prevents focus conflict between menu and dialog
-                                  setTimeout(() => setIsEditDialogOpen(true), 50);
+                                  // Timeout prevents focus conflict between dropdown and dialog
+                                  setTimeout(() => setIsEditDialogOpen(true), 100);
                                 }}>
                                   <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                                 </DropdownMenuItem>
@@ -623,7 +623,7 @@ function StudentsContent() {
                                   e.preventDefault();
                                   setSelectedStudent(student); 
                                   setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
-                                  setTimeout(() => setIsReceiptDialogOpen(true), 50); 
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 100); 
                                 }}>
                                   <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
                                 </DropdownMenuItem>
@@ -634,7 +634,7 @@ function StudentsContent() {
                                     onSelect={(e) => { 
                                       e.preventDefault();
                                       setSelectedStudent(student); 
-                                      setTimeout(() => setIsDeleteAlertOpen(true), 50); 
+                                      setTimeout(() => setIsDeleteAlertOpen(true), 100); 
                                     }}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
