@@ -163,7 +163,7 @@ export default function StudentReceiptsPage() {
         const updatedPayments = [
           ...currentPayments,
           {
-            id: payId,
+            id: receiptId,
             amount: formData.amount,
             date: transactionDate.toISOString(),
             receiptNo: formData.receiptNo,
@@ -444,7 +444,7 @@ export default function StudentReceiptsPage() {
                         {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
                         <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
                       </div>
-                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date for branch users.</p>}
+                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">

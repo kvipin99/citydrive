@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { PlusCircle, Edit2, Trash2, Tags } from "lucide-react";
@@ -134,34 +135,36 @@ export default function CoursesPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle>{selectedCourse ? 'Edit Course' : 'New Course'}</DialogTitle>
             <DialogDescription>Define the name and pricing for the course.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="courseName">Course Name</Label>
-              <Input
-                id="courseName"
-                placeholder="e.g. Basic Car (4-Wheeler)"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-4 px-6 py-4 pb-32">
+              <div className="grid gap-2">
+                <Label htmlFor="courseName">Course Name</Label>
+                <Input
+                  id="courseName"
+                  placeholder="e.g. Basic Car (4-Wheeler)"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="courseAmount">Standard Fee (₹)</Label>
+                <Input
+                  id="courseAmount"
+                  type="number"
+                  placeholder="0"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })}
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="courseAmount">Standard Fee (₹)</Label>
-              <Input
-                id="courseAmount"
-                type="number"
-                placeholder="0"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSaveCourse}>Save Course</Button>
+          </ScrollArea>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+            <Button onClick={handleSaveCourse} className="w-full">Save Course</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

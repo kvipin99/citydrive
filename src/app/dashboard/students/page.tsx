@@ -105,7 +105,6 @@ function StudentsContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cleanupId, setCleanupId] = useState("");
 
-  // Handle studentId query parameter for deep-linking
   useEffect(() => {
     const studentIdParam = searchParams.get('studentId');
     if (studentIdParam && students && !isStudentsLoading) {

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { MoreHorizontal, PlusCircle, Car, Calendar, ShieldCheck, FileText, Trash2, Edit2, RefreshCw } from "lucide-react";
@@ -64,12 +65,10 @@ export default function VehiclesPage() {
     status: 'Available' as typeof VEHICLE_STATUSES[number]
   });
 
-  // Defensive Date Normalization for Input Fields
   const toInputDate = useCallback((val: any) => {
     if (!val) return '';
     try {
       let d: Date;
-      // Handle Firestore Timestamp specifically
       if (val && typeof val.toDate === 'function') {
         d = val.toDate();
       } else if (val && typeof val.seconds === 'number') {
@@ -119,7 +118,6 @@ export default function VehiclesPage() {
     const vehicleId = selectedVehicleId ? selectedVehicleId : `V-${Date.now()}`;
     const vehicleRef = doc(db, 'vehicles', vehicleId);
 
-    // Prepare clean data for Firestore (shallow copy of strings/numbers)
     const updateData = {
       regNumber: formData.regNumber.trim().toUpperCase(),
       type: formData.type,
@@ -133,15 +131,9 @@ export default function VehiclesPage() {
     };
 
     setDocumentNonBlocking(vehicleRef, updateData, { merge: true });
-    
-    // Close dialog and reset state to avoid transition conflicts
     setIsDialogOpen(false);
     setSelectedVehicleId(null);
-    
-    toast({ 
-      title: selectedVehicleId ? "Vehicle Updated" : "Vehicle Added", 
-      description: `${formData.regNumber} has been saved successfully.` 
-    });
+    toast({ title: selectedVehicleId ? "Vehicle Updated" : "Vehicle Added", description: `${formData.regNumber} has been saved successfully.` });
   };
 
   const handleDeleteVehicle = (id: string) => {
@@ -264,73 +256,75 @@ export default function VehiclesPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) setSelectedVehicleId(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
             <DialogDescription>Enter registration and validity details for the fleet vehicle.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-4 px-6 py-4 pb-32">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="regNumber">Reg Number</Label>
+                  <Input 
+                    id="regNumber" 
+                    placeholder="e.g. MH-12-AB-1234" 
+                    value={formData.regNumber} 
+                    onChange={(e) => setFormData({...formData, regNumber: e.target.value.toUpperCase()})} 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Vehicle Type</Label>
+                  <Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v as any})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
               <div className="grid gap-2">
-                <Label htmlFor="regNumber">Reg Number</Label>
+                <Label htmlFor="brandModel">Brand & Model</Label>
                 <Input 
-                  id="regNumber" 
-                  placeholder="e.g. MH-12-AB-1234" 
-                  value={formData.regNumber} 
-                  onChange={(e) => setFormData({...formData, regNumber: e.target.value.toUpperCase()})} 
+                  id="brandModel" 
+                  placeholder="e.g. Maruti Suzuki Swift" 
+                  value={formData.brandModel} 
+                  onChange={(e) => setFormData({...formData, brandModel: e.target.value})} 
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Reg Validity</Label>
+                  <Input 
+                    type="date" 
+                    value={formData.regValidity} 
+                    onChange={(e) => setFormData({...formData, regValidity: e.target.value})} 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Insurance Validity</Label>
+                  <Input 
+                    type="date" 
+                    value={formData.insuranceValidity} 
+                    onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} 
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
-                <Label>Vehicle Type</Label>
-                <Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v as any})}>
+                <Label>Current Status</Label>
+                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="brandModel">Brand & Model</Label>
-              <Input 
-                id="brandModel" 
-                placeholder="e.g. Maruti Suzuki Swift" 
-                value={formData.brandModel} 
-                onChange={(e) => setFormData({...formData, brandModel: e.target.value})} 
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Reg Validity</Label>
-                <Input 
-                  type="date" 
-                  value={formData.regValidity} 
-                  onChange={(e) => setFormData({...formData, regValidity: e.target.value})} 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Insurance Validity</Label>
-                <Input 
-                  type="date" 
-                  value={formData.insuranceValidity} 
-                  onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} 
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Current Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
             <Button onClick={handleSaveVehicle} className="w-full">
               {selectedVehicleId ? 'Update Vehicle' : 'Save Vehicle'}
             </Button>
