@@ -26,7 +26,7 @@ const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as
 
 export default function AttendancePage() {
   const db = useFirestore();
-  const { user } = useUser();
+  const { user } = user ? useUser() : { user: null };
   const { toast } = useToast();
   
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -40,7 +40,7 @@ export default function AttendancePage() {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
 
-  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile } = useDoc(userProfileRef);
   
   const isStudent = profile?.role === 'Student';
@@ -60,12 +60,10 @@ export default function AttendancePage() {
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'vehicles');
-  }, [db, user]);
+  }, [db, user?.uid]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
   // Fetch Students for selection 
-  // ADMIN/INSTRUCTOR: See ALL branches (Full visibility)
-  // BRANCH MANAGER: See only assigned branch
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
@@ -77,15 +75,16 @@ export default function AttendancePage() {
       return base; 
     }
     
-    // Branch Managers see only their branch
+    // Branch Managers see only their assigned branch
     if (isBranchManager && profile.branch) {
       return query(base, where('branch', '==', profile.branch));
     }
     
+    // Default fallback for other staff roles
     return base;
-  }, [db, user, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
+  }, [db, user?.uid, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
 
-  const { data: allStudents } = useCollection(studentsQuery);
+  const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
   // Fetch Attendance records - Filtered by Date at Query Level
   const attendanceQuery = useMemoFirebase(() => {
@@ -100,7 +99,7 @@ export default function AttendancePage() {
       return query(base, where('date', '==', selectedDate));
     }
     return null;
-  }, [db, user, profile, isStaff, isStudent, selectedDate]);
+  }, [db, user?.uid, profile, isStaff, isStudent, selectedDate]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -334,8 +333,13 @@ export default function AttendancePage() {
                       onChange={(e) => setStudentSearch(e.target.value)} 
                     />
                   </div>
-                  <div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto">
-                    {filteredSearch.length === 0 ? (
+                  <div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto min-h-[100px]">
+                    {isStudentsLoading ? (
+                      <div className="p-12 flex flex-col items-center gap-3 text-muted-foreground">
+                        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+                        <p className="text-xs font-medium">Loading students...</p>
+                      </div>
+                    ) : filteredSearch.length === 0 ? (
                       <div className="p-12 text-center text-muted-foreground italic text-sm">
                         No matching students found.
                       </div>
