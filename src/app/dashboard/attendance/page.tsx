@@ -44,16 +44,17 @@ export default function AttendancePage() {
   const { data: profile } = useDoc(userProfileRef);
   
   const isStudent = profile?.role === 'Student';
-  const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
   const isAdmin = profile?.role === 'Admin';
   const isInstructor = profile?.role === 'Instructor';
+  const isBranchManager = profile?.role === 'BranchManager';
+  const isStaff = isAdmin || isBranchManager || isInstructor;
 
   // Sync branch for managers, but Admin/Instructor stays at whatever they select
   useEffect(() => {
-    if (profile && profile.role === 'BranchManager') {
+    if (profile && isBranchManager) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile]);
+  }, [profile, isBranchManager]);
 
   // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
@@ -63,7 +64,7 @@ export default function AttendancePage() {
   const { data: vehicles } = useCollection(vehiclesQuery);
 
   // Fetch Students for selection 
-  // ADMIN/INSTRUCTOR: See ALL branches
+  // ADMIN/INSTRUCTOR: See ALL branches (Full visibility)
   // BRANCH MANAGER: See only assigned branch
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -71,17 +72,18 @@ export default function AttendancePage() {
     
     if (isStudent) return query(base, where('userId', '==', user.uid));
     
+    // Admin and Instructor roles see ALL students across ALL branches
     if (isAdmin || isInstructor) {
-      return base; // Full access for recorder
+      return base; 
     }
     
-    // Branch specific filtering
-    if (profile.branch) {
+    // Branch Managers see only their branch
+    if (isBranchManager && profile.branch) {
       return query(base, where('branch', '==', profile.branch));
     }
     
     return base;
-  }, [db, user, profile, isStudent, isAdmin, isInstructor]);
+  }, [db, user, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
 
   const { data: allStudents } = useCollection(studentsQuery);
 
@@ -130,7 +132,8 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    let result = allStudents.filter(s => s.status !== 'Completed');
+    // Only show active or on-hold students for recording attendance
+    let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
     
     if (!studentSearch) return result;
     const term = studentSearch.toLowerCase();
@@ -310,72 +313,78 @@ export default function AttendancePage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b shrink-0">
+          <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {isAdmin || isInstructor ? "Search all students to record training." : "Select student and class details for your branch."}
+              {isAdmin || isInstructor ? "Full student list available for recording training." : "Select student and class details for your branch."}
             </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid gap-6 pb-20">
+            <div className="grid gap-6 pb-24">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Search Student {isAdmin || isInstructor ? "(Global Search)" : "(My Branch)"}</Label>
+                  <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Search Student {isAdmin || isInstructor ? "(All Branches)" : "(My Branch)"}</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="Search Name, ID or Phone..." 
+                      placeholder="Start typing Name, ID or Phone..." 
                       className="pl-8" 
                       value={studentSearch} 
                       onChange={(e) => setStudentSearch(e.target.value)} 
                     />
                   </div>
-                  <div className="border rounded-lg mt-1 divide-y bg-background shadow-sm max-h-[300px] overflow-auto">
+                  <div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto">
                     {filteredSearch.length === 0 ? (
-                      <div className="p-8 text-center text-muted-foreground italic text-sm">
-                        No active students found.
+                      <div className="p-12 text-center text-muted-foreground italic text-sm">
+                        No matching students found.
                       </div>
                     ) : (
                       filteredSearch.map(s => (
                         <div 
                           key={s.id} 
-                          className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors"
+                          className="p-4 hover:bg-primary/5 cursor-pointer flex justify-between items-center transition-colors group"
                           onClick={() => setSelectedStudent(s)}
                         >
                           <div className="flex items-center gap-3">
-                            <UserCircle className="h-8 w-8 text-primary/40" />
+                            <UserCircle className="h-10 w-10 text-primary/30 group-hover:text-primary/60" />
                             <div className="grid">
-                              <p className="font-bold text-sm">{s.name}</p>
-                              <p className="text-[10px] text-muted-foreground uppercase">{s.id} • {s.branch}</p>
+                              <p className="font-black text-sm">{s.name}</p>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">{s.id}</Badge>
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold">{s.branch}</span>
+                              </div>
                             </div>
                           </div>
-                          <Badge variant="outline">Select</Badge>
+                          <Button size="sm" variant="ghost" className="text-primary font-bold text-[10px] uppercase">Select</Button>
                         </div>
                       ))
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
+                <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                      <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-white font-black text-lg shadow-sm">
                         {selectedStudent.name.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-black text-primary">{selectedStudent.name}</p>
-                        <p className="text-xs font-mono uppercase tracking-tight">{selectedStudent.id}</p>
+                        <p className="font-black text-primary leading-none mb-1">{selectedStudent.name}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono uppercase tracking-tight">{selectedStudent.id}</span>
+                          <Badge variant="secondary" className="text-[9px] uppercase px-1 py-0">{selectedStudent.branch}</Badge>
+                        </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full">
+                    <Button variant="outline" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full border-primary/20">
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label>Session Type</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-3">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Session Type</Label>
+                    <div className="grid grid-cols-2 gap-3">
                       {SESSION_TYPES.map(type => {
                         const Icon = type.icon;
                         const active = sessionType === type.value;
@@ -383,11 +392,11 @@ export default function AttendancePage() {
                           <Button 
                             key={type.value}
                             variant={active ? 'default' : 'outline'}
-                            className="h-12 flex items-center gap-2 justify-center"
+                            className={`h-14 flex flex-col items-center gap-1 justify-center rounded-xl border-2 ${active ? 'border-primary shadow-md' : 'border-muted'}`}
                             onClick={() => setSessionType(type.value as any)}
                           >
                             <Icon className="h-4 w-4" />
-                            {type.label}
+                            <span className="text-[10px] font-bold uppercase">{type.label}</span>
                           </Button>
                         );
                       })}
@@ -395,13 +404,13 @@ export default function AttendancePage() {
                   </div>
 
                   {sessionType === 'Practical' && (
-                    <div className="grid gap-2 animate-in slide-in-from-top-2">
-                      <Label className="flex items-center gap-2">
+                    <div className="grid gap-3 animate-in slide-in-from-top-2">
+                      <Label className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground">
                         <Car className="h-4 w-4 text-primary" />
                         Assigned Vehicle
                       </Label>
                       <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
-                        <SelectTrigger className="bg-background">
+                        <SelectTrigger className="h-11 bg-background border-2">
                           <SelectValue placeholder="Select Vehicle" />
                         </SelectTrigger>
                         <SelectContent>
@@ -418,28 +427,28 @@ export default function AttendancePage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>From Time</Label>
+                      <Label className="text-xs font-bold uppercase text-muted-foreground">From Time</Label>
                       <Input 
                         type="time" 
                         value={startTime} 
                         onChange={(e) => setStartTime(e.target.value)}
-                        className="bg-background"
+                        className="h-11 bg-background border-2"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>To Time</Label>
+                      <Label className="text-xs font-bold uppercase text-muted-foreground">To Time</Label>
                       <Input 
                         type="time" 
                         value={endTime} 
                         onChange={(e) => setEndTime(e.target.value)}
-                        className="bg-background"
+                        className="h-11 bg-background border-2"
                       />
                     </div>
                   </div>
 
-                  <div className="p-3 bg-muted/50 rounded-lg flex justify-between items-center border">
-                    <span className="text-sm font-medium">Session Duration:</span>
-                    <Badge variant="secondary" className="font-bold text-sm">
+                  <div className="p-4 bg-muted/50 rounded-2xl flex justify-between items-center border-2 border-dashed">
+                    <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Duration:</span>
+                    <Badge variant="secondary" className="font-black text-sm px-3 py-1 bg-primary/10 text-primary border-primary/20">
                       {calculateDuration(startTime, endTime)} Hours
                     </Badge>
                   </div>
@@ -448,21 +457,21 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
             <Button 
               onClick={handleMarkAttendance} 
-              className="w-full" 
+              className="w-full h-12 text-base font-bold shadow-lg" 
               disabled={!selectedStudent}
             >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Confirm & Save Log
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              Confirm & Save Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader className="pb-3 border-b">
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3 border-b bg-muted/5">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
@@ -470,7 +479,7 @@ export default function AttendancePage() {
                 {isStudent ? 'Historical training record' : `Records for ${headerDateDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
               </CardDescription>
             </div>
-            <Badge variant="outline" className="h-6">
+            <Badge variant="outline" className="h-6 font-bold">
               {sortedRecords.length} Sessions Found
             </Badge>
           </div>
