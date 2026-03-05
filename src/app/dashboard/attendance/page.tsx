@@ -67,24 +67,22 @@ export default function AttendancePage() {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
     
+    // Students only see themselves
     if (isStudent) return query(base, where('userId', '==', user.uid));
     
-    // Admin and Instructor roles see ALL students across ALL branches
-    if (isAdmin || isInstructor) {
-      return base; 
+    // Branch Managers see ONLY their assigned branch students
+    // UNLESS they are also an Admin or Instructor (rare but supported)
+    if (isBranchManager && !isAdmin && !isInstructor) {
+      return query(base, where('branch', '==', profile.branch || "Branch 1"));
     }
     
-    // Branch Managers see only their assigned branch
-    if (isBranchManager && profile.branch) {
-      return query(base, where('branch', '==', profile.branch));
-    }
-    
+    // Admins and Instructors see ALL students across ALL branches for attendance recording
     return base;
   }, [db, user?.uid, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
-  // Fetch Attendance records
+  // Fetch Attendance records for the log table
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'attendance');
@@ -320,7 +318,9 @@ export default function AttendancePage() {
             <div className="grid gap-6 pb-24">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Search Student {isAdmin || isInstructor ? "(All Branches)" : "(My Branch)"}</Label>
+                  <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                    Search Student {isBranchManager && !isAdmin && !isInstructor ? "(My Branch)" : "(All Branches)"}
+                  </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
