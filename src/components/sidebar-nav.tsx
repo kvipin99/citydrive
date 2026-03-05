@@ -37,7 +37,7 @@ const navItems = [
   { href: '/dashboard/instructors', icon: UserSquare, label: 'Instructors', adminOnly: true },
   { href: '/dashboard/vehicles', icon: Car, label: 'Vehicles', adminOnly: true },
   { href: '/dashboard/courses', icon: Tags, label: 'Course Catalog', adminOnly: true },
-  { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', adminOnly: true },
+  { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', staffOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports', staffOnly: true },
   { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes' },
   { href: '/dashboard/resources', icon: FileVideo, label: 'Resources' },
