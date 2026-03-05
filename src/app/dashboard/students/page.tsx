@@ -86,7 +86,7 @@ function StudentsContent() {
       return query(base, where('userId', '==', user.uid));
     }
     
-    // Instructors and Admins see everyone
+    // Instructors and Admins see everyone across all branches
     if (hasGlobalVisibility) {
       return base;
     }
