@@ -503,7 +503,7 @@ function SettingsContent() {
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                   <div className="space-y-0.5">
                     <Label className="text-base">Enable Auto-Backup</Label>
-                    <p className="text-sm text-muted-foreground">Automatically send database reports every Sunday at 12:00 AM.</p>
+                    <p className="text-sm text-muted-foreground">Automatically send database reports every day at 12:00 AM.</p>
                   </div>
                   <Switch 
                     checked={autoSettings?.enabled ?? true} 
@@ -551,7 +551,7 @@ function SettingsContent() {
 
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-                  Backup schedule is active. Data is aggregated every Sunday.
+                  Backup schedule is active. Data is aggregated every day.
                 </div>
               </CardContent>
             </Card>
