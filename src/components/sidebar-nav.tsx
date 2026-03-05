@@ -59,15 +59,26 @@ export default function SidebarNav() {
   const isAdmin = profile?.role === 'Admin';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
-  const isStaff = isAdmin || isBranchManager || profile?.role === 'Instructor';
+  const isInstructor = profile?.role === 'Instructor';
+  const isStaff = isAdmin || isBranchManager || isInstructor;
 
   return (
     <div className="flex h-full flex-col justify-between p-2">
       <SidebarMenu>
         {navItems.map((item) => {
+          // 1. Check basic role flags
           if (item.adminOnly && !isAdmin) return null;
           if (item.staffOnly && !isStaff) return null;
           if (item.studentOnly && !isStudent) return null;
+          
+          // 2. Special restriction for Instructor (Staff User)
+          // Instructors should ONLY see Dashboard, Attendance, and Settings
+          if (isInstructor) {
+            const allowedForInstructor = ['/dashboard', '/dashboard/attendance', '/dashboard/settings'];
+            if (!allowedForInstructor.includes(item.href)) {
+              return null;
+            }
+          }
           
           return (
             <SidebarMenuItem key={item.href}>
