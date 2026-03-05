@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Eraser, AlertCircle, Camera, Lock } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -496,7 +496,7 @@ function StudentsContent() {
                         Register Student
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[95dvh] gap-0">
+                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
                       <DialogHeader className="p-6 border-b bg-muted/5">
                         <DialogTitle>New Student Registration</DialogTitle>
                         <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
@@ -657,7 +657,7 @@ function StudentsContent() {
       </AlertDialog>
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b">
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
@@ -698,7 +698,7 @@ function StudentsContent() {
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[95dvh] gap-0">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b bg-muted/5">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
