@@ -19,8 +19,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet } from "lucide-react";
+import { collection, doc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, Calendar, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -97,7 +97,6 @@ function StudentsContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -121,13 +120,6 @@ function StudentsContent() {
       setIsProfileSheetOpen(true);
     }
   }, [isStudent, students, selectedStudent]);
-
-  const [paymentData, setPaymentData] = useState({
-    amount: 0,
-    receiptNo: '',
-    method: 'Cash' as const,
-    date: new Date().toISOString().split('T')[0]
-  });
 
   const [formData, setFormData] = useState<Partial<Student>>({
     branch: "",
@@ -408,61 +400,6 @@ function StudentsContent() {
     return Math.max(0, (student.amount || 0) - paid);
   }, []);
 
-  const handleReceivePayment = async () => {
-    if (!selectedStudent || paymentData.amount <= 0 || !paymentData.receiptNo) {
-      toast({ variant: "destructive", title: "Error", description: "Complete all fields." });
-      return;
-    }
-
-    const payId = `PAY-${Date.now()}`;
-    const paymentRef = doc(db, 'payments', payId);
-    const studentRef = doc(db, 'students', selectedStudent.id);
-    const transactionDate = new Date(paymentData.date);
-
-    const paymentRecord = {
-      id: payId,
-      category: "Course Fee",
-      studentId: selectedStudent.id,
-      studentName: selectedStudent.name,
-      studentPhone: selectedStudent.phone,
-      amount: paymentData.amount,
-      date: Timestamp.fromDate(transactionDate),
-      receiptNo: paymentData.receiptNo,
-      method: paymentData.method,
-      branch: selectedStudent.branch,
-      receivedBy: user?.uid,
-    };
-
-    setDocumentNonBlocking(paymentRef, paymentRecord, { merge: true });
-    
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = [
-          ...currentPayments,
-          {
-            id: payId,
-            amount: paymentData.amount,
-            date: transactionDate.toISOString(),
-            receiptNo: paymentData.receiptNo,
-            method: paymentData.method,
-            category: "Course Fee"
-          }
-        ];
-        updateDocumentNonBlocking(studentRef, {
-          payments: updatedPayments,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } catch (e) {
-      console.error("Failed to update student payments array:", e);
-    }
-
-    setIsPaymentDialogOpen(false);
-    toast({ title: "Receipt Generated" });
-  };
-
   const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
 
   return (
@@ -602,7 +539,6 @@ function StudentsContent() {
                                 <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setPaymentData({ amount: 0, receiptNo: '', method: 'Cash', date: new Date().toISOString().split('T')[0] }); setIsPaymentDialogOpen(true); }}><ArrowDownCircle className="mr-2 h-4 w-4 text-green-600" /> Issue Receipt</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (
@@ -655,47 +591,6 @@ function StudentsContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b shrink-0">
-            <DialogTitle>Issue Receipt</DialogTitle>
-            <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid gap-6 pb-20">
-              <div className="grid gap-2">
-                <Label>Receipt Date</Label>
-                <div className="relative">
-                  {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                  <Input type="date" value={paymentData.date} disabled={!isAdmin} onChange={(e) => setPaymentData({...paymentData, date: e.target.value})} />
-                </div>
-                {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label>Amount Received (₹)</Label>
-                <Input type="number" placeholder="0.00" value={paymentData.amount || ''} onChange={(e) => setPaymentData({...paymentData, amount: Number(e.target.value)})} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Receipt No.</Label>
-                  <Input placeholder="e.g. 1001" value={paymentData.receiptNo} onChange={(e) => setPaymentData({...paymentData, receiptNo: e.target.value})} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Method</Label>
-                  <Select value={paymentData.method} onValueChange={(v) => setPaymentData({...paymentData, method: v as any})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
-            <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
