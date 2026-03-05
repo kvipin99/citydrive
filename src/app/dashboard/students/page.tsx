@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle, Camera } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle, Camera, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -689,7 +689,7 @@ function StudentsContent() {
             </div>
           </ScrollArea>
           <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
-            <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
+            <Button onClick={handleReceiveReceivePayment} className="w-full">Confirm & Generate</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -794,7 +794,7 @@ function StudentForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2"><Label>Aadhar No.</Label><Input value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div>
-        <div className="grid gap-2"><Label>Online App No.</Label><Input value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div>
+        <div className="grid gap-2"><Label>Online App ID</Label><Input value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-primary/5">
