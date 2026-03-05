@@ -135,7 +135,15 @@ function StudentsContent() {
     description: ''
   });
 
-  // Safe date conversion helper
+  // CRITICAL: Helper to ensure no overlay conflict occurs
+  const closeAllModals = useCallback(() => {
+    setIsEditDialogOpen(false);
+    setIsAddDialogOpen(false);
+    setIsReceiptDialogOpen(false);
+    setIsDeleteAlertOpen(false);
+    setIsProfileSheetOpen(false);
+  }, []);
+
   const toInputDate = useCallback((val: any) => {
     if (!val) return '';
     if (typeof val === 'string') return val;
@@ -310,14 +318,20 @@ function StudentsContent() {
 
   const handleUpdateStudent = () => {
     if (!selectedStudent) return;
+    setIsSubmitting(true);
     const studentRef = doc(db, 'students', selectedStudent.id);
     const updatedData = { 
       ...formData, 
       updatedAt: serverTimestamp()
     };
     updateDocumentNonBlocking(studentRef, updatedData);
-    setIsEditDialogOpen(false);
-    toast({ title: "Student Updated" });
+    
+    // Defer UI cleanup to ensure smooth transition
+    setTimeout(() => {
+      setIsEditDialogOpen(false);
+      setIsSubmitting(false);
+      toast({ title: "Student Updated" });
+    }, 100);
   };
 
   const handleSaveReceipt = async () => {
@@ -375,9 +389,12 @@ function StudentsContent() {
       console.error(e);
     }
 
-    setIsReceiptDialogOpen(false);
-    setIsSubmitting(false);
-    toast({ title: "Receipt Generated", description: `Receipt #${receiptFormData.receiptNo} saved.` });
+    // Clear submission and close dialog
+    setTimeout(() => {
+      setIsReceiptDialogOpen(false);
+      setIsSubmitting(false);
+      toast({ title: "Receipt Generated", description: `Receipt #${receiptFormData.receiptNo} saved.` });
+    }, 100);
   };
 
   const handlePermanentDelete = async () => {
@@ -623,7 +640,7 @@ function StudentsContent() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
-                                  // Strip non-serializable and convert heavy fields
+                                  closeAllModals();
                                   const { payments, ...formDataRest } = student;
                                   setSelectedStudent(student); 
                                   setFormData({ 
@@ -632,12 +649,13 @@ function StudentsContent() {
                                     learnersDate: toInputDate(student.learnersDate),
                                     testDate: toInputDate(student.testDate)
                                   }); 
-                                  setTimeout(() => setIsEditDialogOpen(true), 150);
+                                  setTimeout(() => setIsEditDialogOpen(true), 200);
                                 }}>
                                   <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
+                                  closeAllModals();
                                   setSelectedStudent(student); 
                                   setReceiptFormData({ 
                                     amount: 0, 
@@ -646,7 +664,7 @@ function StudentsContent() {
                                     date: format(new Date(), 'yyyy-MM-dd'), 
                                     description: '' 
                                   });
-                                  setTimeout(() => setIsReceiptDialogOpen(true), 150); 
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 200); 
                                 }}>
                                   <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
                                 </DropdownMenuItem>
@@ -656,8 +674,9 @@ function StudentsContent() {
                                     className="text-destructive font-bold" 
                                     onSelect={(e) => { 
                                       e.preventDefault();
+                                      closeAllModals();
                                       setSelectedStudent(student); 
-                                      setTimeout(() => setIsDeleteAlertOpen(true), 150); 
+                                      setTimeout(() => setIsDeleteAlertOpen(true), 200); 
                                     }}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
@@ -713,6 +732,7 @@ function StudentsContent() {
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
             <DialogTitle>Edit Student Profile</DialogTitle>
+            <DialogDescription>Update the registration details for {selectedStudent?.name}.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-8 pb-32">
@@ -731,8 +751,11 @@ function StudentsContent() {
           </div>
           <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
             <div className="flex w-full justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleUpdateStudent}>Save Changes</Button>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+              <Button onClick={handleUpdateStudent} disabled={isSubmitting}>
+                {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -962,14 +985,22 @@ function StudentForm({
           <Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {masterCourses?.map((course: any) => (
-              <div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer" onClick={(e) => { e.preventDefault(); handleCourseToggle(course.name); }}>
-                <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => {}} />
+              <div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer">
+                <Checkbox 
+                  id={`course-${course.id}`} 
+                  checked={formData.courses?.includes(course.name)} 
+                  onCheckedChange={() => handleCourseToggle(course.name)} 
+                />
                 <Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label>
                 <Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge>
               </div>
             ))}
-            <div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer" onClick={(e) => { e.preventDefault(); handleCourseToggle('Others'); }}>
-              <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => {}} />
+            <div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer">
+              <Checkbox 
+                id="course-others" 
+                checked={formData.courses?.includes('Others')} 
+                onCheckedChange={() => handleCourseToggle('Others')} 
+              />
               <Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label>
             </div>
           </div>
