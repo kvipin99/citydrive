@@ -608,17 +608,35 @@ function StudentsContent() {
                                 <Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { 
+                                <DropdownMenuItem onSelect={(e) => { 
+                                  e.preventDefault();
+                                  // Clean non-serializable data before setting state
+                                  const { payments, ...formDataRest } = student;
+                                  setSelectedStudent(student); 
+                                  setFormData({ ...formDataRest }); 
+                                  // Timeout prevents focus conflict between menu and dialog
+                                  setTimeout(() => setIsEditDialogOpen(true), 50);
+                                }}>
+                                  <Edit2 className="mr-2 h-4 w-4" /> Edit Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => { 
+                                  e.preventDefault();
                                   setSelectedStudent(student); 
                                   setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
-                                  setIsReceiptDialogOpen(true); 
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 50); 
                                 }}>
                                   <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (
-                                  <DropdownMenuItem className="text-destructive font-bold" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
+                                  <DropdownMenuItem 
+                                    className="text-destructive font-bold" 
+                                    onSelect={(e) => { 
+                                      e.preventDefault();
+                                      setSelectedStudent(student); 
+                                      setTimeout(() => setIsDeleteAlertOpen(true), 50); 
+                                    }}
+                                  >
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
                                   </DropdownMenuItem>
                                 )}
