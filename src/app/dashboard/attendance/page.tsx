@@ -48,12 +48,15 @@ export default function AttendancePage() {
   const isBranchManager = profile?.role === 'BranchManager';
   const isStaff = isAdmin || isBranchManager || isInstructor;
 
-  // Sync branch for managers
+  // Global Visibility Roles: Admin and Instructor see everything
+  const hasGlobalVisibility = isAdmin || isInstructor;
+
+  // Sync branch for local managers only
   useEffect(() => {
-    if (profile && isBranchManager) {
+    if (profile && isBranchManager && !hasGlobalVisibility) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile, isBranchManager]);
+  }, [profile, isBranchManager, hasGlobalVisibility]);
 
   // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
@@ -62,23 +65,23 @@ export default function AttendancePage() {
   }, [db, user?.uid]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection - ROLE BASED VISIBILITY
+  // Fetch Students for selection
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
     
-    // Students only see themselves
     if (isStudent) return query(base, where('userId', '==', user.uid));
     
+    // Admins and Instructors see ALL students across ALL branches
+    if (hasGlobalVisibility) return base;
+    
     // Branch Managers see ONLY their assigned branch students
-    // UNLESS they are also an Admin or Instructor (rare but supported)
-    if (isBranchManager && !isAdmin && !isInstructor) {
+    if (isBranchManager) {
       return query(base, where('branch', '==', profile.branch || "Branch 1"));
     }
     
-    // Admins and Instructors see ALL students across ALL branches for attendance recording
     return base;
-  }, [db, user?.uid, profile, isStudent, isAdmin, isInstructor, isBranchManager]);
+  }, [db, user?.uid, profile, isStudent, hasGlobalVisibility, isBranchManager]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
@@ -99,7 +102,6 @@ export default function AttendancePage() {
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  // Helper to check if a record belongs to a branch
   const isFromBranch = (record: any, branchName: string) => {
     if (branchName === "All") return true;
     if (record.branch === branchName) return true;
@@ -223,12 +225,12 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isAdmin ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
+            {isStudent ? 'My training sessions history.' : hasGlobalVisibility ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
           </p>
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
-            {(isAdmin || isInstructor) && (
+            {hasGlobalVisibility && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Branch Filter:
@@ -310,7 +312,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {isAdmin || isInstructor ? "Full student list available for recording training." : "Select student and class details for your branch."}
+              {hasGlobalVisibility ? "Full student list available for recording training." : "Select student and class details for your branch."}
             </DialogDescription>
           </DialogHeader>
           
@@ -319,7 +321,7 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {isBranchManager && !isAdmin && !isInstructor ? "(My Branch)" : "(All Branches)"}
+                    Search Student {hasGlobalVisibility ? "(All Branches)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -71,20 +70,31 @@ function StudentsContent() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
+  const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
+  const isBranchManager = profile?.role === 'BranchManager';
   const profileBranch = profile?.branch;
+
+  // Elevate Instructor to Admin-level global student visibility
+  const hasGlobalVisibility = isAdmin || isInstructor;
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
+    const base = collection(db, 'students');
+    
     if (isStudent) {
-      return query(collection(db, 'students'), where('userId', '==', user.uid));
+      return query(base, where('userId', '==', user.uid));
     }
-    if (isAdmin) {
-      return collection(db, 'students');
+    
+    // Instructors and Admins see everyone
+    if (hasGlobalVisibility) {
+      return base;
     }
+    
+    // Branch Managers only see their branch
     const branchId = profileBranch || "Branch 1";
-    return query(collection(db, 'students'), where('branch', '==', branchId));
-  }, [db, user?.uid, profileBranch, isAdmin, isStudent]);
+    return query(base, where('branch', '==', branchId));
+  }, [db, user?.uid, profileBranch, hasGlobalVisibility, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -135,7 +145,6 @@ function StudentsContent() {
     description: ''
   });
 
-  // CRITICAL: Helper to ensure no overlay conflict occurs
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
     setIsAddDialogOpen(false);
@@ -326,7 +335,6 @@ function StudentsContent() {
     };
     updateDocumentNonBlocking(studentRef, updatedData);
     
-    // Defer UI cleanup to ensure smooth transition
     setTimeout(() => {
       setIsEditDialogOpen(false);
       setIsSubmitting(false);
@@ -389,7 +397,6 @@ function StudentsContent() {
       console.error(e);
     }
 
-    // Clear submission and close dialog
     setTimeout(() => {
       setIsReceiptDialogOpen(false);
       setIsSubmitting(false);
@@ -509,7 +516,7 @@ function StudentsContent() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : isAdmin ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profileBranch || 'your branch'}.`}
+                {isStudent ? 'My training and profile record.' : hasGlobalVisibility ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profileBranch || 'your branch'}.`}
               </CardDescription>
             </div>
             {!isStudent && (
@@ -524,66 +531,64 @@ function StudentsContent() {
                   />
                 </div>
                 
-                {!isStudent && (
-                  <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
-                    <DialogTrigger asChild>
-                      <Button onClick={resetForm}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Register Student
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
-                        <DialogTitle>New Student Registration</DialogTitle>
-                        <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="flex-1 overflow-y-auto px-6 py-4">
-                        <div className="space-y-8 pb-32">
-                          <StudentForm 
-                            formData={formData} 
-                            setFormData={setFormData} 
-                            isAdmin={isAdmin} 
-                            masterCourses={masterCourses} 
-                            calculateFees={calculateFees} 
-                            handlePhotoUpload={handlePhotoUpload} 
-                            photoInputRef={photoInputRef}
-                            handleCourseToggle={handleCourseToggle}
-                            generateBranchStudentId={generateBranchStudentId}
-                          />
-                          
-                          <div className="pt-6 border-t">
-                            <div className="flex items-center gap-2 text-orange-600 mb-2">
-                              <AlertCircle className="h-4 w-4" />
-                              <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
-                            </div>
-                            <div className="flex gap-2 max-w-sm">
-                              <Input 
-                                placeholder="Conflict ID (e.g. B10001)" 
-                                className="h-9 text-xs" 
-                                value={cleanupId} 
-                                onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
-                              />
-                              <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                                <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Login
-                              </Button>
-                            </div>
+                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                  <DialogTrigger asChild>
+                    <Button onClick={resetForm}>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Register Student
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+                    <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
+                      <DialogTitle>New Student Registration</DialogTitle>
+                      <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 overflow-y-auto px-6 py-4">
+                      <div className="space-y-8 pb-32">
+                        <StudentForm 
+                          formData={formData} 
+                          setFormData={setFormData} 
+                          isAdmin={isAdmin} 
+                          masterCourses={masterCourses} 
+                          calculateFees={calculateFees} 
+                          handlePhotoUpload={handlePhotoUpload} 
+                          photoInputRef={photoInputRef}
+                          handleCourseToggle={handleCourseToggle}
+                          generateBranchStudentId={generateBranchStudentId}
+                        />
+                        
+                        <div className="pt-6 border-t">
+                          <div className="flex items-center gap-2 text-orange-600 mb-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
+                          </div>
+                          <div className="flex gap-2 max-w-sm">
+                            <Input 
+                              placeholder="Conflict ID (e.g. B10001)" 
+                              className="h-9 text-xs" 
+                              value={cleanupId} 
+                              onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
+                            />
+                            <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                              <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Login
+                            </Button>
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
-                        <div className="flex w-full justify-end gap-3">
-                          <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                          <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
-                            {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                            Confirm Registration
-                          </Button>
-                        </div>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
+                    <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
+                      <div className="flex w-full justify-end gap-3">
+                        <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
+                          {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                          Confirm Registration
+                        </Button>
+                      </div>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </div>
