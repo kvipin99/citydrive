@@ -19,8 +19,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
-import { collection, doc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, Calendar, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText } from "lucide-react";
+import { collection, doc, serverTimestamp, getDocs, query, where, getDoc, Timestamp } from "firebase/firestore";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, Calendar, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -97,29 +97,12 @@ function StudentsContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cleanupId, setCleanupId] = useState("");
-
-  useEffect(() => {
-    const studentIdParam = searchParams.get('studentId');
-    if (studentIdParam && students && !isStudentsLoading) {
-      const student = students.find(s => s.id === studentIdParam);
-      if (student) {
-        setSelectedStudent(student);
-        setIsProfileSheetOpen(true);
-      }
-    }
-  }, [searchParams, students, isStudentsLoading]);
-
-  useEffect(() => {
-    if (isStudent && students && students.length > 0 && !selectedStudent) {
-      setSelectedStudent(students[0]);
-      setIsProfileSheetOpen(true);
-    }
-  }, [isStudent, students, selectedStudent]);
 
   const [formData, setFormData] = useState<Partial<Student>>({
     branch: "",
@@ -143,6 +126,32 @@ function StudentsContent() {
     specialCourseName: "",
     specialCourseFee: 0
   });
+
+  const [receiptFormData, setReceiptFormData] = useState({
+    amount: 0,
+    receiptNo: '',
+    method: 'Cash' as 'Cash' | 'Online' | 'Cheque',
+    date: format(new Date(), 'yyyy-MM-dd'),
+    description: ''
+  });
+
+  useEffect(() => {
+    const studentIdParam = searchParams.get('studentId');
+    if (studentIdParam && students && !isStudentsLoading) {
+      const student = students.find(s => s.id === studentIdParam);
+      if (student) {
+        setSelectedStudent(student);
+        setIsProfileSheetOpen(true);
+      }
+    }
+  }, [searchParams, students, isStudentsLoading]);
+
+  useEffect(() => {
+    if (isStudent && students && students.length > 0 && !selectedStudent) {
+      setSelectedStudent(students[0]);
+      setIsProfileSheetOpen(true);
+    }
+  }, [isStudent, students, selectedStudent]);
 
   useEffect(() => {
     if (profile && isAddDialogOpen) {
@@ -296,6 +305,66 @@ function StudentsContent() {
     updateDocumentNonBlocking(studentRef, updatedData);
     setIsEditDialogOpen(false);
     toast({ title: "Student Updated" });
+  };
+
+  const handleSaveReceipt = async () => {
+    if (!selectedStudent) return;
+    if (!receiptFormData.receiptNo || receiptFormData.amount <= 0) {
+      toast({ variant: "destructive", title: "Invalid Data", description: "Receipt No and Amount are required." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    const receiptId = `REC-${Date.now()}`;
+    const receiptRef = doc(db, 'payments', receiptId);
+    const studentRef = doc(db, 'students', selectedStudent.id);
+    
+    const transactionDate = new Date(receiptFormData.date);
+
+    const record = {
+      id: receiptId,
+      category: "Course Fee",
+      studentId: selectedStudent.id,
+      studentUid: selectedStudent.userId,
+      studentName: selectedStudent.name,
+      amount: receiptFormData.amount,
+      date: Timestamp.fromDate(transactionDate),
+      receiptNo: receiptFormData.receiptNo,
+      method: receiptFormData.method,
+      branch: selectedStudent.branch,
+      receivedBy: user?.uid,
+      description: receiptFormData.description
+    };
+
+    setDocumentNonBlocking(receiptRef, record, { merge: true });
+
+    try {
+      const studentSnap = await getDoc(studentRef);
+      if (studentSnap.exists()) {
+        const currentPayments = studentSnap.data().payments || [];
+        const updatedPayments = [
+          ...currentPayments,
+          {
+            id: receiptId,
+            amount: receiptFormData.amount,
+            date: transactionDate.toISOString(),
+            receiptNo: receiptFormData.receiptNo,
+            method: receiptFormData.method,
+            category: "Course Fee"
+          }
+        ];
+        updateDocumentNonBlocking(studentRef, {
+          payments: updatedPayments,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    setIsReceiptDialogOpen(false);
+    setIsSubmitting(false);
+    toast({ title: "Receipt Generated", description: `Receipt #${receiptFormData.receiptNo} saved.` });
   };
 
   const handlePermanentDelete = async () => {
@@ -540,6 +609,13 @@ function StudentsContent() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => { setSelectedStudent(student); setFormData({ ...student }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { 
+                                  setSelectedStudent(student); 
+                                  setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' });
+                                  setIsReceiptDialogOpen(true); 
+                                }}>
+                                  <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (
                                   <DropdownMenuItem className="text-destructive font-bold" onClick={() => { setSelectedStudent(student); setIsDeleteAlertOpen(true); }}>
@@ -620,6 +696,73 @@ function StudentsContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if(!open) setSelectedStudent(null); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 border-b shrink-0">
+            <DialogTitle>Issue Student Receipt</DialogTitle>
+            <DialogDescription>Record a course fee collection for <b>{selectedStudent?.name}</b>.</DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid gap-6 pb-20">
+              {selectedStudent && (
+                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="p-2 border rounded bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Agreed Fee</p>
+                      <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
+                    </div>
+                    <div className="p-2 border rounded bg-destructive/5">
+                      <p className="text-xs text-muted-foreground">Current Balance</p>
+                      <p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 pt-4 border-t">
+                    <div className="grid gap-2">
+                      <Label>Receipt Date</Label>
+                      <Input type="date" value={receiptFormData.date} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Amount (₹)</Label>
+                        <Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Method</Label>
+                        <Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Cash">Cash</SelectItem>
+                            <SelectItem value="Online">Online</SelectItem>
+                            <SelectItem value="Cheque">Cheque</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Receipt No.</Label>
+                      <Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Description (Optional)</Label>
+                      <Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
+            <Button onClick={handleSaveReceipt} disabled={isSubmitting} className="w-full">
+              {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Confirm & Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -633,6 +776,7 @@ function StudentForm({
   handlePhotoUpload, 
   photoInputRef,
   handleCourseToggle,
+  generateBranchStudentId,
   isEdit = false
 }: any) {
   return (
