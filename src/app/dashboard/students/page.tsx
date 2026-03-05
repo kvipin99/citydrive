@@ -490,7 +490,7 @@ function StudentsContent() {
                   />
                 </div>
                 
-                {!isAdmin && (
+                {!isStudent && (
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
                     <DialogTrigger asChild>
                       <Button onClick={resetForm}>
@@ -753,7 +753,7 @@ function StudentForm({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="grid gap-2">
-          <Label className="text-primary font-bold">Branch {!isAdmin && <Lock className="h-3 w-3" />}</Label>
+          <Label className="text-primary font-bold">Branch {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
           <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
             <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
             <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
@@ -834,7 +834,7 @@ function StudentForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label className={!isAdmin ? "text-muted-foreground" : ""}>Discount (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label>
+          <Label className={!isAdmin ? "text-muted-foreground" : ""}>Discount (₹) {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
           <Input type="number" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} />
         </div>
         <div className="grid gap-2">

@@ -67,17 +67,12 @@ export default function AttendancePage() {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
     if (isStudent) return query(base, where('userId', '==', user.uid));
-    
-    // We fetch all students for the selected date context
-    // If specific branch is selected, we could filter at query level
-    // but for now we'll handle the selection search list more dynamically
     return base;
   }, [db, user, profile, isStudent]);
 
   const { data: allStudents } = useCollection(studentsQuery);
 
   // Fetch Attendance records - Filtered by Date at Query Level
-  // We avoid filtering by branch in query to prevent composite index requirement errors
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'attendance');
@@ -94,30 +89,23 @@ export default function AttendancePage() {
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  // Helper to check if a record belongs to a branch (by field OR ID prefix)
+  // Helper to check if a record belongs to a branch
   const isFromBranch = (record: any, branchName: string) => {
     if (branchName === "All") return true;
-    
-    // Check explicit field
     if (record.branch === branchName) return true;
-    
-    // Fallback: Check ID prefix (Branch 1 -> B1, Branch 2 -> B2, etc.)
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum && record.studentId?.startsWith(`B${branchNum}`)) {
       return true;
     }
-    
     return false;
   };
 
-  // Filter attendance records by branch on client side
   const filteredAttendance = useMemo(() => {
     if (!rawAttendance) return [];
     if (selectedBranch === "All") return rawAttendance;
     return rawAttendance.filter(rec => isFromBranch(rec, selectedBranch));
   }, [rawAttendance, selectedBranch]);
 
-  // Stats aggregation based on filtered list
   const statsSummary = useMemo(() => {
     return filteredAttendance.reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
@@ -127,18 +115,12 @@ export default function AttendancePage() {
     }, { practical: 0, theory: 0 });
   }, [filteredAttendance]);
 
-  // Filter students for search in popup - respecting the selected branch context
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    
-    // 1. First filter by active status and branch
     let result = allStudents.filter(s => s.status !== 'Completed');
-    
     if (selectedBranch !== "All") {
       result = result.filter(s => isFromBranch(s, selectedBranch));
     }
-
-    // 2. Then apply search term
     if (!studentSearch) return result;
     const term = studentSearch.toLowerCase();
     return result.filter(s => 
@@ -317,12 +299,12 @@ export default function AttendancePage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <CardHeader className="p-6 pb-2">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
               {selectedBranch !== "All" ? `Recording session for ${selectedBranch}` : 'Select student and class details.'}
             </DialogDescription>
-          </CardHeader>
+          </DialogHeader>
           
           <ScrollArea className="flex-1 min-h-0">
             <div className="grid gap-6 px-6 py-4 pb-32">

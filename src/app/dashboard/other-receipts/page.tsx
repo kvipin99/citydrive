@@ -130,22 +130,14 @@ export default function OtherReceiptsPage() {
 
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
-    
-    // Logic fix: Exclude any record that is explicitly Course Fee OR has a studentId
-    let result = allReceipts.filter(r => 
-      r.category !== "Course Fee" && !r.studentId
-    );
+    let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
-    // Date Range Filtering
     if (dateRange.from || dateRange.to) {
       result = result.filter(r => {
         const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
         if (!isValid(rDate)) return true;
-        
         const rDateStr = format(rDate, 'yyyy-MM-dd');
-        const isAfterFrom = !dateRange.from || rDateStr >= dateRange.from;
-        const isBeforeTo = !dateRange.to || rDateStr <= dateRange.to;
-        return isAfterFrom && isBeforeTo;
+        return rDateStr >= dateRange.from && rDateStr <= dateRange.to;
       });
     }
     
@@ -159,13 +151,13 @@ export default function OtherReceiptsPage() {
     }
     
     return result.sort((a, b) => {
-      const parseDateToUnix = (d: any) => {
+      const getTime = (d: any) => {
         if (!d) return 0;
         if (d.seconds) return d.seconds;
         const p = typeof d === 'string' ? parseISO(d) : new Date(d);
         return isValid(p) ? p.getTime() / 1000 : 0;
       };
-      return parseDateToUnix(b.date) - parseDateToUnix(a.date);
+      return getTime(b.date) - getTime(a.date);
     });
   }, [allReceipts, listSearchTerm, dateRange]);
 

@@ -277,76 +277,78 @@ export default function InstructorsPage() {
                     New Staff
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
+                <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+                  <DialogHeader className="p-6 pb-2">
                     <DialogTitle>Add New Staff Member</DialogTitle>
                     <DialogDescription>Assign a unique ID. Accounts are automatically provisioned with password: <b>City123</b>.</DialogDescription>
                   </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="staffId">Staff ID (Editable)</Label>
-                      <Input 
-                        id="staffId" 
-                        placeholder="e.g. SID01" 
-                        value={formData.id || ''} 
-                        onChange={(e) => setFormData({...formData, id: e.target.value.toUpperCase()})} 
-                      />
+                  <ScrollArea className="flex-1 min-h-0">
+                    <div className="grid gap-4 px-6 py-4 pb-32">
+                      <div className="grid gap-2">
+                        <Label htmlFor="staffId">Staff ID (Editable)</Label>
+                        <Input 
+                          id="staffId" 
+                          placeholder="e.g. SID01" 
+                          value={formData.id || ''} 
+                          onChange={(e) => setFormData({...formData, id: e.target.value.toUpperCase()})} 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="name">Full Name</Label>
+                        <Input 
+                          id="name" 
+                          placeholder="Enter full name" 
+                          value={formData.name || ''} 
+                          onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="phone">Mobile Number</Label>
+                        <Input 
+                          id="phone" 
+                          placeholder="e.g. 9876543210" 
+                          value={formData.phone || ''} 
+                          onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Status</Label>
+                        <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Active">Active</SelectItem>
+                            <SelectItem value="Deactive">Deactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="w-full pt-4 border-t mt-2">
+                        <div className="flex items-center gap-1.5 mb-2 text-orange-600">
+                          <AlertCircle className="h-3 w-3" />
+                          <p className="text-[10px] font-bold uppercase tracking-tight">Fix SID Conflict Error</p>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
+                          If an ID was used previously, its login might still exist in the security database. Enter the ID below to force-clear it.
+                        </p>
+                        <div className="flex gap-2">
+                          <Input 
+                            placeholder="Orphaned ID (e.g. SID01)" 
+                            className="text-xs h-9" 
+                            value={cleanupId} 
+                            onChange={(e) => setCleanupId(e.target.value)} 
+                          />
+                          <Button size="sm" variant="outline" className="h-9 text-[10px] px-3 font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                            <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Auth
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input 
-                        id="name" 
-                        placeholder="Enter full name" 
-                        value={formData.name || ''} 
-                        onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="phone">Mobile Number</Label>
-                      <Input 
-                        id="phone" 
-                        placeholder="e.g. 9876543210" 
-                        value={formData.phone || ''} 
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Status</Label>
-                      <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Deactive">Deactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter className="flex-col gap-4">
+                  </ScrollArea>
+                  <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
                     <Button onClick={handleAddInstructor} className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
                       Confirm & Register
                     </Button>
-                    
-                    <div className="w-full pt-4 border-t mt-2">
-                      <div className="flex items-center gap-1.5 mb-2 text-orange-600">
-                        <AlertCircle className="h-3 w-3" />
-                        <p className="text-[10px] font-bold uppercase tracking-tight">Fix SID Conflict Error</p>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
-                        If an ID was used previously, its login might still exist in the security database. Enter the ID below to force-clear it.
-                      </p>
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="Orphaned ID (e.g. SID01)" 
-                          className="text-xs h-9" 
-                          value={cleanupId} 
-                          onChange={(e) => setCleanupId(e.target.value)} 
-                        />
-                        <Button size="sm" variant="outline" className="h-9 text-[10px] px-3 font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                          <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Auth
-                        </Button>
-                      </div>
-                    </div>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -448,40 +450,42 @@ export default function InstructorsPage() {
           setFormData({ id: '', status: 'Active', name: '', phone: '' });
         }
       }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle>Edit Instructor Profile</DialogTitle>
             <DialogDescription>Update the information for {selectedInstructor?.id}.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Full Name</Label>
-              <Input 
-                id="edit-name" 
-                value={formData.name || ''} 
-                onChange={(e) => setFormData({...formData, name: e.target.value})} 
-              />
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="grid gap-4 px-6 py-4 pb-32">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input 
+                  id="edit-name" 
+                  value={formData.name || ''} 
+                  onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-phone">Mobile Number</Label>
+                <Input 
+                  id="edit-phone" 
+                  value={formData.phone || ''} 
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Deactive">Deactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-phone">Mobile Number</Label>
-              <Input 
-                id="edit-phone" 
-                value={formData.phone || ''} 
-                onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Deactive">Deactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
             <Button onClick={handleUpdateInstructor} className="w-full">
               Save Changes
             </Button>

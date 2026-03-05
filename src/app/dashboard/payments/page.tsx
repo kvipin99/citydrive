@@ -16,7 +16,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBl
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
 import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Filter, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, isValid, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface Student {
   id: string;
@@ -163,7 +163,7 @@ export default function StudentReceiptsPage() {
         const updatedPayments = [
           ...currentPayments,
           {
-            id: receiptId,
+            id: payId,
             amount: formData.amount,
             date: transactionDate.toISOString(),
             receiptNo: formData.receiptNo,
@@ -212,22 +212,14 @@ export default function StudentReceiptsPage() {
 
   const filteredReceipts = useMemo(() => {
     if (!allReceipts) return [];
-    
-    // Partition: Include anything tagged Course Fee OR linked to a studentId
-    let result = allReceipts.filter(r => 
-      r.category === "Course Fee" || (!!r.studentId)
-    );
+    let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
 
-    // Date Range Filtering
     if (dateRange.from || dateRange.to) {
       result = result.filter(r => {
         const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
         if (!isValid(rDate)) return true;
-        
         const rDateStr = format(rDate, 'yyyy-MM-dd');
-        const isAfterFrom = !dateRange.from || rDateStr >= dateRange.from;
-        const isBeforeTo = !dateRange.to || rDateStr <= dateRange.to;
-        return isAfterFrom && isBeforeTo;
+        return rDateStr >= dateRange.from && rDateStr <= dateRange.to;
       });
     }
     
@@ -240,13 +232,13 @@ export default function StudentReceiptsPage() {
     }
     
     return result.sort((a, b) => {
-      const parseDateToUnix = (d: any) => {
+      const getTime = (d: any) => {
         if (!d) return 0;
         if (d.seconds) return d.seconds;
         const p = typeof d === 'string' ? parseISO(d) : new Date(d);
         return isValid(p) ? p.getTime() / 1000 : 0;
       };
-      return parseDateToUnix(b.date) - parseDateToUnix(a.date);
+      return getTime(b.date) - getTime(a.date);
     });
   }, [allReceipts, listSearchTerm, dateRange]);
 
