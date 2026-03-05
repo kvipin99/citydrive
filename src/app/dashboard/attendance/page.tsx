@@ -46,13 +46,14 @@ export default function AttendancePage() {
   const isStudent = profile?.role === 'Student';
   const isStaff = profile?.role === 'Admin' || profile?.role === 'BranchManager' || profile?.role === 'Instructor';
   const isAdmin = profile?.role === 'Admin';
+  const isInstructor = profile?.role === 'Instructor';
 
-  // Sync branch for managers/instructors, but Admin stays at whatever they select
+  // Sync branch for managers, but Admin/Instructor stays at whatever they select
   useEffect(() => {
-    if (profile && !isAdmin && !isStudent) {
+    if (profile && profile.role === 'BranchManager') {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile, isAdmin, isStudent]);
+  }, [profile]);
 
   // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
@@ -61,13 +62,26 @@ export default function AttendancePage() {
   }, [db, user]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection - Staff can see ALL branches for recording attendance
+  // Fetch Students for selection 
+  // ADMIN/INSTRUCTOR: See ALL branches
+  // BRANCH MANAGER: See only assigned branch
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
+    
     if (isStudent) return query(base, where('userId', '==', user.uid));
+    
+    if (isAdmin || isInstructor) {
+      return base; // Full access for recorder
+    }
+    
+    // Branch specific filtering
+    if (profile.branch) {
+      return query(base, where('branch', '==', profile.branch));
+    }
+    
     return base;
-  }, [db, user, profile, isStudent]);
+  }, [db, user, profile, isStudent, isAdmin, isInstructor]);
 
   const { data: allStudents } = useCollection(studentsQuery);
 
@@ -116,7 +130,6 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    // Allow searching all active students regardless of branch filter for recorder
     let result = allStudents.filter(s => s.status !== 'Completed');
     
     if (!studentSearch) return result;
@@ -218,7 +231,7 @@ export default function AttendancePage() {
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
-            {isAdmin && (
+            {(isAdmin || isInstructor) && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Branch Filter:
@@ -300,7 +313,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              Select student and class details for recording training.
+              {isAdmin || isInstructor ? "Search all students to record training." : "Select student and class details for your branch."}
             </DialogDescription>
           </DialogHeader>
           
@@ -308,7 +321,7 @@ export default function AttendancePage() {
             <div className="grid gap-6 pb-20">
               {!selectedStudent ? (
                 <div className="grid gap-2">
-                  <Label>Search Student (Global Search)</Label>
+                  <Label>Search Student {isAdmin || isInstructor ? "(Global Search)" : "(My Branch)"}</Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
