@@ -17,11 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDoc, getDocs, Timestamp, query, where } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Tags, Wallet, BookOpen, Car, Eraser, AlertCircle, Camera, Lock } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, ArrowDownCircle, RefreshCw, Eye, CreditCard, Calendar, User, Phone, MapPin, FileText, Fingerprint, Clock, CheckCircle2, Eraser, AlertCircle, Camera, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -497,13 +496,14 @@ function StudentsContent() {
                         Register Student
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-                      <DialogHeader className="p-6 pb-2">
+                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[95dvh] gap-0">
+                      <DialogHeader className="p-6 border-b bg-muted/5">
                         <DialogTitle>New Student Registration</DialogTitle>
-                        <DialogDescription>Fill in all details. IDs are auto-generated.</DialogDescription>
+                        <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
                       </DialogHeader>
-                      <ScrollArea className="flex-1 min-h-0">
-                        <div className="px-6 py-4 pb-32">
+                      
+                      <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <div className="space-y-8 pb-32">
                           <StudentForm 
                             formData={formData} 
                             setFormData={setFormData} 
@@ -516,10 +516,10 @@ function StudentsContent() {
                             generateBranchStudentId={generateBranchStudentId}
                           />
                           
-                          <div className="mt-8 pt-6 border-t">
+                          <div className="pt-6 border-t">
                             <div className="flex items-center gap-2 text-orange-600 mb-2">
                               <AlertCircle className="h-4 w-4" />
-                              <h4 className="text-xs font-bold uppercase tracking-tight">Fix Conflicts</h4>
+                              <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
                             </div>
                             <div className="flex gap-2 max-w-sm">
                               <Input 
@@ -529,17 +529,21 @@ function StudentsContent() {
                                 onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
                               />
                               <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                                <Eraser className="h-3 w-3 mr-1.5" /> Force Delete Auth
+                                <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Login
                               </Button>
                             </div>
                           </div>
                         </div>
-                      </ScrollArea>
-                      <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
-                        <Button onClick={handleAddStudent} disabled={isSubmitting} className="w-full sm:w-auto">
-                          {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          Confirm Registration
-                        </Button>
+                      </div>
+
+                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+                        <div className="flex w-full justify-end gap-3">
+                          <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                          <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
+                            {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                            Confirm Registration
+                          </Button>
+                        </div>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -654,12 +658,12 @@ function StudentsContent() {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => { setIsPaymentDialogOpen(open); if(!open) { setSelectedStudent(null); } }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
+          <DialogHeader className="p-6 border-b">
             <DialogTitle>Issue Receipt</DialogTitle>
             <DialogDescription>Record payment for {selectedStudent?.name}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-4 px-6 py-4 pb-32">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid gap-6 pb-20">
               <div className="grid gap-2">
                 <Label>Receipt Date</Label>
                 <div className="relative">
@@ -686,20 +690,20 @@ function StudentsContent() {
                 </div>
               </div>
             </div>
-          </ScrollArea>
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+          </div>
+          <DialogFooter className="p-6 border-t bg-muted/10">
             <Button onClick={handleReceivePayment} className="w-full">Confirm & Generate</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[95dvh] gap-0">
+          <DialogHeader className="p-6 border-b bg-muted/5">
             <DialogTitle>Edit Student Profile</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="px-6 py-4 pb-32">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-8 pb-32">
               <StudentForm 
                 formData={formData} 
                 setFormData={setFormData} 
@@ -712,9 +716,12 @@ function StudentsContent() {
                 isEdit={true}
               />
             </div>
-          </ScrollArea>
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
-            <Button onClick={handleUpdateStudent} className="w-full sm:w-auto">Save Changes</Button>
+          </div>
+          <DialogFooter className="p-6 border-t bg-muted/10">
+            <div className="flex w-full justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleUpdateStudent}>Save Changes</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -731,114 +738,200 @@ function StudentForm({
   handlePhotoUpload, 
   photoInputRef,
   handleCourseToggle,
-  isEdit = false,
-  generateBranchStudentId
+  isEdit = false
 }: any) {
   return (
-    <div className="grid gap-6 py-4">
-      <div className="flex flex-col items-center gap-4 py-4 border rounded-lg bg-muted/30">
-        <Label className="font-bold">Student Photo</Label>
-        <div className="relative">
-          <Avatar className="h-32 w-32 border-4 border-primary/20">
-            <AvatarImage src={formData.photoUrl || undefined} alt="Preview" />
-            <AvatarFallback><Camera className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+    <div className="grid gap-8 py-4">
+      <div className="flex flex-col items-center gap-4 py-6 border-2 border-dashed rounded-2xl bg-muted/20">
+        <Label className="font-bold text-primary">STUDENT PHOTOGRAPH (REQUIRED)</Label>
+        <div className="relative group">
+          <Avatar className="h-40 w-40 border-4 border-white shadow-2xl transition-transform group-hover:scale-105">
+            <AvatarImage src={formData.photoUrl || undefined} alt="Preview" className="object-cover" />
+            <AvatarFallback className="bg-primary/5"><Camera className="h-16 w-16 text-primary/20" /></AvatarFallback>
           </Avatar>
-          <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => photoInputRef.current?.click()}>
-            <PlusCircle className="h-5 w-5" />
+          <Button size="icon" variant="default" className="absolute bottom-2 right-2 rounded-full shadow-lg h-10 w-10" onClick={() => photoInputRef.current?.click()}>
+            <Camera className="h-5 w-5" />
           </Button>
           <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
         </div>
+        <p className="text-[10px] text-muted-foreground italic">Standard JPEG format only. Max 200KB.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="grid gap-2">
-          <Label className="text-primary font-bold">Branch {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
-          <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
-            <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
-            <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-          </Select>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2">
+          <User className="h-4 w-4" />
+          <h3 className="text-sm uppercase tracking-wider">Basic Identity</h3>
         </div>
-        <div className="grid gap-2">
-          <Label>Full Name</Label>
-          <Input placeholder=" Liam Johnson" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} />
-        </div>
-        <div className="grid gap-2">
-          <Label>Mobile No.</Label>
-          <Input placeholder="555-0101" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="grid gap-2">
-          <Label>Status</Label>
-          <Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Active">Active</SelectItem>
-              <SelectItem value="Inactive">Inactive</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="On Hold">On Hold</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label>Admission Date</Label>
-          <Input type="date" value={formData.registrationDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registrationDate: e.target.value}))} />
-        </div>
-        <div className="grid gap-2">
-          <Label>Parent/Guardian</Label>
-          <Input value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid gap-2">
+            <Label className="text-primary font-bold">Registration Branch {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
+            <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
+              <SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+              <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Full Student Name</Label>
+            <Input className="h-11" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Mobile Contact No.</Label>
+            <Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="grid gap-2"><Label>Aadhar No.</Label><Input value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div>
-        <div className="grid gap-2"><Label>Online App ID</Label><Input value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2">
+          <MapPin className="h-4 w-4" />
+          <h3 className="text-sm uppercase tracking-wider">Address & Family</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid gap-2">
+            <Label>Parent / Guardian Name</Label>
+            <Input className="h-11" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Full Residential Address</Label>
+            <Textarea className="min-h-[44px]" placeholder="Village, Landmark, District..." value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-primary/5">
-        <div className="grid gap-2"><Label className="text-primary font-bold">Learners License No.</Label><Input value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div>
-        <div className="grid gap-2"><Label>Learners Date</Label><Input type="date" value={formData.learnersDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersDate: e.target.value}))} /></div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2">
+          <Fingerprint className="h-4 w-4" />
+          <h3 className="text-sm uppercase tracking-wider">Government Identifiers</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid gap-2">
+            <Label>Aadhar Card Number</Label>
+            <Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>RTO Online Application No.</Label>
+            <Input className="h-11 font-mono" placeholder="e.g. 234000123" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50/30">
-        <div className="grid gap-2"><Label className="text-green-700 font-bold">Driving License No.</Label><Input value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div>
-        <div className="grid gap-2"><Label>Test Date</Label><Input type="date" value={formData.testDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, testDate: e.target.value}))} /></div>
-      </div>
-
-      <div className="grid gap-2"><Label>Address</Label><Textarea value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div>
-
-      <div className="grid gap-4 p-4 border rounded-lg bg-muted/50">
-        <Label className="font-bold">Courses Selection</Label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {masterCourses?.map((course: any) => (
-            <div key={course.id} className="flex items-center space-x-2">
-              <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
-              <Label htmlFor={`course-${course.id}`} className="text-sm cursor-pointer">{course.name} (₹{course.amount})</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="p-6 border-2 border-primary/10 rounded-2xl bg-primary/5 space-y-4">
+          <div className="flex items-center gap-2 text-primary font-black uppercase text-xs">
+            <BookOpen className="h-4 w-4" /> Learners License Status
+          </div>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Learners License No.</Label>
+              <Input className="bg-background font-mono" placeholder="MH12 2023000..." value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} />
             </div>
-          ))}
-          <div className="flex items-center space-x-2">
-            <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} />
-            <Label htmlFor="course-others" className="text-sm cursor-pointer font-bold text-primary">Others / Custom</Label>
+            <div className="grid gap-2">
+              <Label>Issue Date</Label>
+              <Input type="date" className="bg-background" value={formData.learnersDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersDate: e.target.value}))} />
+            </div>
           </div>
         </div>
 
-        {formData.courses?.includes('Others') && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
-            <div className="grid gap-2"><Label className="text-xs">Custom Course Name</Label><Input value={formData.specialCourseName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div>
-            <div className="grid gap-2"><Label className="text-xs">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div>
+        <div className="p-6 border-2 border-green-100 rounded-2xl bg-green-50/30 space-y-4">
+          <div className="flex items-center gap-2 text-green-700 font-black uppercase text-xs">
+            <Car className="h-4 w-4" /> Permanent License Status
           </div>
-        )}
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Driving License No.</Label>
+              <Input className="bg-background font-mono" placeholder="MH12..." value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} />
+            </div>
+            <div className="grid gap-2">
+              <Label>RTO Test Date</Label>
+              <Input type="date" className="bg-background" value={formData.testDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, testDate: e.target.value}))} />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label className={!isAdmin ? "text-muted-foreground" : ""}>Discount (₹) {!isAdmin && <Lock className="h-3 w-3 inline ml-1" />}</Label>
-          <Input type="number" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} />
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2">
+          <CheckCircle2 className="h-4 w-4" />
+          <h3 className="text-sm uppercase tracking-wider">Course Enrollment & Billing</h3>
         </div>
-        <div className="grid gap-2">
-          <Label className="text-primary font-bold">Total Payable Amount</Label>
-          <div className="h-10 px-3 py-2 border rounded-md bg-primary/10 text-primary font-bold">₹{formData.amount?.toLocaleString() || '0'}</div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid gap-2">
+            <Label>Admission Date</Label>
+            <Input type="date" className="h-11" value={formData.registrationDate || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registrationDate: e.target.value}))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Admission Status</Label>
+            <Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}>
+              <SelectTrigger className="h-11 font-bold"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+                <SelectItem value="On Hold">On Hold</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Internal Remarks</Label>
+            <Input className="h-11" placeholder="e.g. Late evening preferred" value={formData.remarks || ''} onChange={(e) => setFormData((prev:any) => ({...prev, remarks: e.target.value}))} />
+          </div>
+        </div>
+
+        <div className="p-6 border rounded-2xl bg-muted/30 space-y-6">
+          <Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {masterCourses?.map((course: any) => (
+              <div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer" onClick={() => handleCourseToggle(course.name)}>
+                <Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} />
+                <Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label>
+                <Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge>
+              </div>
+            ))}
+            <div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer" onClick={() => handleCourseToggle('Others')}>
+              <Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} />
+              <Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label>
+            </div>
+          </div>
+
+          {formData.courses?.includes('Others') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2">
+              <div className="grid gap-2">
+                <Label className="text-xs font-bold text-primary">Custom Course Title</Label>
+                <Input value={formData.specialCourseName || ''} placeholder="e.g. VIP VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label>
+                <Input type="number" value={formData.specialCourseFee || ''} placeholder="0" onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+          <div className="p-6 border-2 border-orange-100 rounded-2xl bg-orange-50/20">
+            <div className="grid gap-3">
+              <Label className={`flex items-center gap-2 font-bold ${!isAdmin ? "text-muted-foreground" : "text-orange-700"}`}>
+                <Tags className="h-4 w-4" /> Discount Applied (₹) {!isAdmin && <Lock className="h-3 w-3" />}
+              </Label>
+              <Input 
+                type="number" 
+                className="h-12 text-lg font-bold bg-background" 
+                value={formData.discount} 
+                disabled={!isAdmin} 
+                onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} 
+              />
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Discount authorization is restricted to Head Office.</p>}
+            </div>
+          </div>
+          
+          <div className="p-6 border-4 border-primary rounded-2xl bg-primary text-primary-foreground shadow-2xl">
+            <div className="grid gap-1">
+              <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Final Agreed Net Fee</span>
+              <div className="text-4xl font-black">₹{formData.amount?.toLocaleString() || '0'}</div>
+              <span className="text-[10px] font-medium opacity-70">Payable amount calculated automatically</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

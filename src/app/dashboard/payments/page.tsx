@@ -11,10 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Filter, Calendar as CalendarIcon } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -384,13 +383,13 @@ export default function StudentReceiptsPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
+          <DialogHeader className="p-6 border-b">
             <DialogTitle>Collect Student Fee</DialogTitle>
             <DialogDescription>Record course fee payment and update student balance.</DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-32">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid gap-6 pb-20">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Search Student (ID/Name/Mobile)</Label>
@@ -475,9 +474,9 @@ export default function StudentReceiptsPage() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10">
             <Button disabled={!selectedStudent} onClick={handleCreateReceipt} className="w-full">
               Generate Student Receipt
             </Button>

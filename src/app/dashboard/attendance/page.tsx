@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
@@ -299,15 +298,15 @@ export default function AttendancePage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
+          <DialogHeader className="p-6 border-b">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
               {selectedBranch !== "All" ? `Recording session for ${selectedBranch}` : 'Select student and class details.'}
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="grid gap-6 px-6 py-4 pb-32">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid gap-6 pb-20">
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label>Select Student {selectedBranch !== "All" && <Badge variant="outline" className="ml-2 text-[10px] uppercase">{selectedBranch} only</Badge>}</Label>
@@ -435,9 +434,9 @@ export default function AttendancePage() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
+          <DialogFooter className="p-6 border-t bg-muted/10">
             <Button 
               onClick={handleMarkAttendance} 
               className="w-full" 
