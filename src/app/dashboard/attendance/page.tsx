@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -119,12 +119,28 @@ export default function AttendancePage() {
   }, [rawAttendance, selectedBranch]);
 
   const statsSummary = useMemo(() => {
-    return filteredAttendance.reduce((acc, curr) => {
+    const uniquePractical = new Set();
+    const uniqueTheory = new Set();
+    
+    const totals = filteredAttendance.reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') acc.theory += hours;
-      else acc.practical += hours;
+      if (curr.type === 'Theory') {
+        acc.theoryHours += hours;
+        uniqueTheory.add(curr.studentId);
+      } else {
+        acc.practicalHours += hours;
+        uniquePractical.add(curr.studentId);
+      }
       return acc;
-    }, { practical: 0, theory: 0 });
+    }, { practicalHours: 0, theoryHours: 0 });
+
+    return {
+      practicalHours: totals.practicalHours,
+      theoryHours: totals.theoryHours,
+      practicalCount: uniquePractical.size,
+      theoryCount: uniqueTheory.size,
+      totalUniqueStudents: new Set(filteredAttendance.map(a => a.studentId)).size
+    };
   }, [filteredAttendance]);
 
   const filteredSearch = useMemo(() => {
@@ -269,40 +285,40 @@ export default function AttendancePage() {
         <Card className="bg-blue-50/50 border-blue-100 shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
-              <Car className="h-3.5 w-3.5" /> Practical Hours
+              <Car className="h-3.5 w-3.5" /> Practical Session Stats
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-black text-blue-700">{statsSummary.practical.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
-              {selectedBranch === 'All' ? 'School Total' : `At ${selectedBranch}`}
-            </p>
+            <div className="text-2xl font-black text-blue-700">{statsSummary.practicalHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <div className="flex items-center gap-1.5 text-blue-600/80 text-[10px] font-black uppercase mt-1">
+              <Users className="h-3 w-3" /> {statsSummary.practicalCount} Students Attended
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-orange-600 flex items-center gap-2">
-              <BookOpen className="h-3.5 w-3.5" /> Theory Hours
+              <BookOpen className="h-3.5 w-3.5" /> Theory Session Stats
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-black text-orange-700">{statsSummary.theory.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
-              {selectedBranch === 'All' ? 'School Total' : `At ${selectedBranch}`}
-            </p>
+            <div className="text-2xl font-black text-orange-700">{statsSummary.theoryHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <div className="flex items-center gap-1.5 text-orange-600/80 text-[10px] font-black uppercase mt-1">
+              <Users className="h-3 w-3" /> {statsSummary.theoryCount} Students Attended
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
-              <Calculator className="h-3.5 w-3.5" /> Total Hours
+              <Calculator className="h-3.5 w-3.5" /> Daily Overall Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-black text-primary">{(statsSummary.practical + statsSummary.theory).toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold">
-              {selectedBranch === 'All' ? 'All Locations' : `At ${selectedBranch}`}
-            </p>
+            <div className="text-2xl font-black text-primary">{(statsSummary.practicalHours + statsSummary.theoryHours).toFixed(1)} <span className="text-xs font-normal">Total Hours</span></div>
+            <div className="flex items-center gap-1.5 text-primary/80 text-[10px] font-black uppercase mt-1">
+              <Users className="h-3 w-3" /> {statsSummary.totalUniqueStudents} Unique Students Total
+            </div>
           </CardContent>
         </Card>
       </div>
