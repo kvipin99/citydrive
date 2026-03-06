@@ -22,18 +22,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const STAFF_IDS = ['admin', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
+const STAFF_IDS = ['admin', 'master', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
+const MASTER_USER_PASSWORD = '9744001735';
 const MASTER_SECRET = 'Citydrive123';
 
 export default function LoginPage() {
-  // Clear default values - user now enters their own ID/Password
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   
-  // Reset States
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetUserId, setResetUserId] = useState('');
   const [inputSecret, setInputSecret] = useState('');
@@ -56,7 +55,10 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch (error: any) {
       // Auto-provisioning logic for default staff accounts
-      if (STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD) {
+      const isStandardStaff = STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD;
+      const isMasterAccount = userId === 'master' && password === MASTER_USER_PASSWORD;
+
+      if (isStandardStaff || isMasterAccount) {
         try {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           const uid = userCredential.user.uid;
@@ -68,7 +70,7 @@ export default function LoginPage() {
             id: uid,
             email: email,
             name: userId.charAt(0).toUpperCase() + userId.slice(1),
-            role: userId === 'admin' ? 'Admin' : 'BranchManager',
+            role: (userId === 'admin' || userId === 'master') ? 'Admin' : 'BranchManager',
             branch: formattedBranch,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -104,13 +106,13 @@ export default function LoginPage() {
     }
 
     if (inputSecret === MASTER_SECRET) {
-      // In this prototype, we verify identity and restore default password access
       toast({
         title: 'Identity Verified',
-        description: `Identity confirmed for ${resetUserId}. Your password has been set to the default "City123".`,
+        description: `Identity confirmed for ${resetUserId}. Your password has been set to the default.`,
       });
+      const targetPassword = resetUserId === 'master' ? MASTER_USER_PASSWORD : DEFAULT_PASSWORD;
       setUserId(resetUserId);
-      setPassword(DEFAULT_PASSWORD);
+      setPassword(targetPassword);
       setIsResetOpen(false);
       setResetUserId('');
       setInputSecret('');
@@ -199,7 +201,6 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      {/* Forgot Password Dialog */}
       <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
