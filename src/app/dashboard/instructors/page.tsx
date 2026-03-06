@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -427,20 +427,28 @@ export default function InstructorsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Staff Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => { setSelectedInstructor(instructor); setIsViewSheetOpen(true); }}>
+                            <DropdownMenuItem onSelect={(e) => { 
+                              e.preventDefault();
+                              setSelectedInstructor(instructor); 
+                              setTimeout(() => setIsViewSheetOpen(true), 150); 
+                            }}>
                               <Eye className="mr-2 h-4 w-4" /> View Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { 
+                            <DropdownMenuItem onSelect={(e) => { 
+                              e.preventDefault();
                               setSelectedInstructor(instructor); 
                               setFormData({ name: instructor.name, phone: instructor.phone, status: instructor.status });
-                              setIsEditDialogOpen(true); 
+                              setTimeout(() => setIsEditDialogOpen(true), 150); 
                             }}>
                               <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               className="text-destructive font-bold" 
-                              onClick={() => handleDeleteInstructor(instructor)}
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                handleDeleteInstructor(instructor);
+                              }}
                               disabled={isSubmitting}
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Delete Staff & Login
@@ -512,6 +520,7 @@ export default function InstructorsPage() {
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Instructor Profile</SheetTitle>
+            <SheetDescription>Detailed system record for staff identification.</SheetDescription>
           </SheetHeader>
           {selectedInstructor && (
             <ScrollArea className="h-full mt-6 pr-4">
@@ -572,9 +581,10 @@ export default function InstructorsPage() {
 
                 <div className="pt-4">
                   <Button variant="outline" className="w-full" onClick={() => {
+                    const inst = selectedInstructor;
                     setIsViewSheetOpen(false);
-                    setFormData({ name: selectedInstructor.name, phone: selectedInstructor.phone, status: selectedInstructor.status });
-                    setIsEditDialogOpen(true);
+                    setFormData({ name: inst.name, phone: inst.phone, status: inst.status });
+                    setTimeout(() => setIsEditDialogOpen(true), 200);
                   }}>
                     <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                   </Button>
