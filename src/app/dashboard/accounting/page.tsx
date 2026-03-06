@@ -13,9 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Filter, Layers } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Filter, Layers, FileDown, Printer } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -34,6 +35,7 @@ interface Transaction {
 export default function AccountingPage() {
   const db = useFirestore();
   const { user } = useUser();
+  const { toast } = useToast();
   
   // Role & Profile Logic
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
@@ -134,6 +136,46 @@ export default function AccountingPage() {
   const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
+  // Export CSV Logic
+  const handleExportCSV = () => {
+    if (filteredTransactions.length === 0) {
+      toast({ variant: "destructive", title: "No Data", description: "There are no records to export for the selected period." });
+      return;
+    }
+
+    const headers = ["Date", "Type", "Description", "Details", "Branch", "Amount (INR)"];
+    const rows = filteredTransactions.map(t => {
+      const details = t.receiptNo ? `REC:${t.receiptNo}` : (t.studentId ? `ID:${t.studentId}` : (t.category ? `CAT:${t.category}` : ''));
+      return [
+        format(t.date, 'yyyy-MM-dd'),
+        t.type,
+        t.description,
+        details,
+        t.branch,
+        t.amount
+      ];
+    });
+
+    const csvContent = [headers, ...rows].map(row => 
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `citydrive_accounting_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "CSV Exported", description: "The accounting report has been downloaded." });
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   // Summaries for other tabs
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
@@ -174,14 +216,33 @@ export default function AccountingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <style jsx global>{`
+        @media print {
+          .print-hidden { display: none !important; }
+          .print-area { width: 100% !important; padding: 0 !important; margin: 0 !important; }
+          body { background: white !important; }
+          header, aside, .sidebar-provider, .fixed-header { display: none !important; }
+          main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+          .card { border: none !important; box-shadow: none !important; }
+          .tabs-list { display: none !important; }
+        }
+      `}</style>
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print-hidden">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2>
           <p className="text-muted-foreground text-sm">
             Daily intake and expenditure accounts for {selectedBranch === 'All' ? 'all branches' : selectedBranch}.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handlePrint} className="gap-2">
+            <Printer className="h-4 w-4" /> Print / PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-2">
+            <FileDown className="h-4 w-4" /> CSV
+          </Button>
+          <Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" />
           <Button size="sm" asChild variant="outline">
             <Link href="/dashboard/expenses">New Expense</Link>
           </Button>
@@ -191,8 +252,8 @@ export default function AccountingPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit">
+      <div className="grid gap-6 md:grid-cols-4 print-area">
+        <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
               <Filter className="h-4 w-4" /> Filters
@@ -249,12 +310,12 @@ export default function AccountingPage() {
           </CardContent>
         </Card>
 
-        <div className="md:col-span-3 space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
+        <div className="md:col-span-3 space-y-6 print:col-span-4">
+          <div className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
             <Card className="border-l-4 border-l-green-500 shadow-sm bg-green-50/10">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Income</CardTitle>
-                <DollarSign className="h-4 w-4 text-green-500" />
+                <DollarSign className="h-4 w-4 text-green-500 print-hidden" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-black text-green-600">₹{totalIncome.toLocaleString()}</div>
@@ -264,7 +325,7 @@ export default function AccountingPage() {
             <Card className="border-l-4 border-l-red-500 shadow-sm bg-red-50/10">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Expenses</CardTitle>
-                <Receipt className="h-4 w-4 text-red-500" />
+                <Receipt className="h-4 w-4 text-red-500 print-hidden" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-black text-red-600">₹{totalExpenses.toLocaleString()}</div>
@@ -274,7 +335,7 @@ export default function AccountingPage() {
             <Card className={`border-l-4 shadow-sm bg-primary/5 ${netProfit >= 0 ? 'border-l-primary' : 'border-l-orange-500'}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Net Day Balance</CardTitle>
-                <TrendingUp className={`h-4 w-4 ${netProfit >= 0 ? 'text-primary' : 'text-orange-500'}`} />
+                <TrendingUp className={`h-4 w-4 print-hidden ${netProfit >= 0 ? 'text-primary' : 'text-orange-500'}`} />
               </CardHeader>
               <CardContent>
                 <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-primary' : 'text-orange-600'}`}>
@@ -286,7 +347,7 @@ export default function AccountingPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/50 border">
+            <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/50 border print-hidden">
               <TabsTrigger value="daybook">Daybook Log</TabsTrigger>
               <TabsTrigger value="monthly">Monthly</TabsTrigger>
               <TabsTrigger value="yearly">Yearly</TabsTrigger>
@@ -294,7 +355,7 @@ export default function AccountingPage() {
             
             <TabsContent value="daybook" className="mt-4">
               {isLoading ? <LoadingSpinner /> : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print:grid-cols-2">
                   {/* Income Column */}
                   <Card className="border-green-100 shadow-sm overflow-hidden">
                     <CardHeader className="bg-green-50/50 py-3 border-b border-green-100">
@@ -302,7 +363,7 @@ export default function AccountingPage() {
                         <CardTitle className="text-sm font-black text-green-700 uppercase tracking-widest flex items-center gap-2">
                           <DollarSign className="h-4 w-4" /> Income / Credit
                         </CardTitle>
-                        <Badge variant="outline" className="bg-white text-green-700 border-green-200">{incomeTransactions.length} Items</Badge>
+                        <Badge variant="outline" className="bg-white text-green-700 border-green-200 print-hidden">{incomeTransactions.length} Items</Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -323,7 +384,7 @@ export default function AccountingPage() {
                         <CardTitle className="text-sm font-black text-red-700 uppercase tracking-widest flex items-center gap-2">
                           <Receipt className="h-4 w-4" /> Expenses / Debit
                         </CardTitle>
-                        <Badge variant="outline" className="bg-white text-red-700 border-red-200">{expenseTransactions.length} Items</Badge>
+                        <Badge variant="outline" className="bg-white text-red-700 border-red-200 print-hidden">{expenseTransactions.length} Items</Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
