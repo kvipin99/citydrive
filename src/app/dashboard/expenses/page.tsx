@@ -45,6 +45,8 @@ export default function ExpensesPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const isBranchManager = profile?.role === 'BranchManager';
+  const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
 
   const [dateRange, setDateRange] = useState({
@@ -54,7 +56,6 @@ export default function ExpensesPage() {
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
 
-  // Sync branch filter for non-admins
   useEffect(() => {
     if (profile && !isAdmin) {
       setSelectedBranchFilter(profileBranch || "Branch 1");
@@ -63,7 +64,7 @@ export default function ExpensesPage() {
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    return collection(db, 'expenses'); // Fetch all for staff, filter client-side for stability
+    return collection(db, 'expenses'); 
   }, [db, user, profile]);
 
   const { data: expenses, isLoading: isExpensesLoading } = useCollection<ExpenseRecord>(expensesQuery);
@@ -87,7 +88,10 @@ export default function ExpensesPage() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    if (normalize(record.branch) === normalize(branchName)) return true;
+
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum && record.id?.startsWith(`EXP-B${branchNum}`)) return true;
     return false;
@@ -102,13 +106,13 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -172,7 +176,7 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profileBranch || 'your branch'}.`}</p>
+          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'All branches overheads and operational costs.' : `Expenses for ${selectedBranchFilter}`) : `Expenses for ${profile?.branch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()} className="shadow-lg">
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -187,15 +191,15 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profile?.branchName || profileBranch)}.</CardDescription>
+                <CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isAdmin && (
+              {isManagement && (
                 <div className="flex items-center gap-2 border-r pr-3 mr-1">
                   <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
                     <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
                       <SelectValue placeholder="All Branches" />
                     </SelectTrigger>

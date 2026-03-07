@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,11 +37,12 @@ export default function AccountingPage() {
   const { user } = useUser();
   const { toast } = useToast();
   
-  // Role & Profile Logic
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
   const isAdmin = profile?.role === 'Admin';
+  const isBranchManager = profile?.role === 'BranchManager';
+  const isManagement = isAdmin || isBranchManager;
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
@@ -50,14 +51,12 @@ export default function AccountingPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // Sync selected branch with user profile for non-admins
   useEffect(() => {
     if (profile && !isAdmin) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
   }, [profile, isAdmin]);
 
-  // Data Fetching
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     return collection(db, 'payments');
@@ -71,23 +70,29 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  const parseSafeDate = (d: any) => {
-    if (!d) return new Date();
-    if (d.seconds) return new Date(d.seconds * 1000);
-    const parsed = typeof d === 'string' ? parseISO(d) : new Date(d);
-    return isValid(parsed) ? parsed : new Date();
-  };
-
-  const isFromBranch = (record: any, branchName: string) => {
+  const isFromBranch = useCallback((record: any, branchName: string) => {
     if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    if (normalize(record.branch) === normalize(branchName)) return true;
+
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
       if (record.id?.startsWith(prefix)) return true;
       if (record.studentId?.startsWith(prefix)) return true;
+      if (record.id?.startsWith(`REC-B${branchNum}`)) return true;
+      if (record.id?.startsWith(`EXP-B${branchNum}`)) return true;
+      if (record.id?.startsWith(`MISC-B${branchNum}`)) return true;
     }
     return false;
+  }, []);
+
+  const parseSafeDate = (d: any) => {
+    if (!d) return new Date();
+    if (d.seconds) return new Date(d.seconds * 1000);
+    const parsed = typeof d === 'string' ? parseISO(d) : new Date(d);
+    return isValid(parsed) ? parsed : new Date();
   };
 
   const isWithinRange = (date: Date) => {
@@ -127,7 +132,7 @@ export default function AccountingPage() {
       result = result.filter(t => isFromBranch(t, selectedBranch));
     }
     return result;
-  }, [allTransactions, dateRange, selectedBranch]);
+  }, [allTransactions, dateRange, selectedBranch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -136,7 +141,6 @@ export default function AccountingPage() {
   const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
-  // Export CSV Logic
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) {
       toast({ variant: "destructive", title: "No Data", description: "There are no records to export for the selected period." });
@@ -176,7 +180,6 @@ export default function AccountingPage() {
     window.print();
   };
 
-  // Summaries for other tabs
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
     const sourceData = selectedBranch === "All" ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
@@ -188,7 +191,7 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch]);
+  }, [allTransactions, selectedBranch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
@@ -201,7 +204,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch]);
+  }, [allTransactions, selectedBranch, isFromBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -356,7 +359,6 @@ export default function AccountingPage() {
             <TabsContent value="daybook" className="mt-4">
               {isLoading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print:grid-cols-2">
-                  {/* Income Column */}
                   <Card className="border-green-100 shadow-sm overflow-hidden">
                     <CardHeader className="bg-green-50/50 py-3 border-b border-green-100">
                       <div className="flex items-center justify-between">
@@ -377,7 +379,6 @@ export default function AccountingPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Expenses Column */}
                   <Card className="border-red-100 shadow-sm overflow-hidden">
                     <CardHeader className="bg-red-50/50 py-3 border-b border-red-100">
                       <div className="flex items-center justify-between">

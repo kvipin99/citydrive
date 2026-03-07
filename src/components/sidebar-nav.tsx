@@ -71,10 +71,9 @@ export default function SidebarNav() {
           if (item.staffOnly && !isStaff) return null;
           if (item.studentOnly && !isStudent) return null;
           
-          // 2. Special restriction for Instructor (Staff User)
-          // Instructors should ONLY see Dashboard, Attendance, and Settings
+          // 2. Special restriction for Instructor role
           if (isInstructor) {
-            const allowedForInstructor = ['/dashboard', '/dashboard/attendance', '/dashboard/settings'];
+            const allowedForInstructor = ['/dashboard', '/dashboard/attendance', '/dashboard/quizzes', '/dashboard/resources', '/dashboard/settings'];
             if (!allowedForInstructor.includes(item.href)) {
               return null;
             }

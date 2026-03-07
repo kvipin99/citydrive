@@ -50,20 +50,19 @@ export default function AttendancePage() {
   
   const isStudent = profile?.role === 'Student';
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
-  const isInstructor = profile?.role === 'Instructor';
   const isBranchManager = profile?.role === 'BranchManager';
+  const isInstructor = profile?.role === 'Instructor';
   const isStaff = isAdmin || isBranchManager || isInstructor;
-
-  const hasGlobalVisibility = isAdmin || isInstructor;
+  const isManagement = isAdmin || isBranchManager;
 
   useEffect(() => {
-    if (profile && !hasGlobalVisibility) {
+    if (profile && !isAdmin) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
     if (profile && !selectedInstructorId) {
       setSelectedInstructorId(user?.uid || "");
     }
-  }, [profile, hasGlobalVisibility, user?.uid, selectedInstructorId]);
+  }, [profile, isAdmin, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -98,10 +97,16 @@ export default function AttendancePage() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    if (normalize(record.branch) === normalize(branchName)) return true;
+
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && (record.studentId?.startsWith(`B${branchNum}`) || record.id?.startsWith(`B${branchNum}`))) {
-      return true;
+    if (branchNum) {
+      const prefix = `B${branchNum}`;
+      if (record.studentId?.startsWith(prefix) || record.id?.startsWith(prefix) || record.id?.startsWith(`REC-B${branchNum}`)) {
+        return true;
+      }
     }
     return false;
   }, []);
@@ -110,13 +115,11 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     let result = rawAttendance;
 
-    // Branch Filter
-    const currentBranchContext = hasGlobalVisibility ? selectedBranch : (profile?.branch || "Branch 1");
+    const currentBranchContext = isManagement ? selectedBranch : (profile?.branch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(rec => isFromBranch(rec, currentBranchContext));
     }
 
-    // Instructor Filter
     if (instructorFilter !== "All") {
       if (instructorFilter === "Others") {
         const registeredIds = new Set(instructors?.map(i => i.userId) || []);
@@ -127,7 +130,7 @@ export default function AttendancePage() {
     }
 
     return result;
-  }, [rawAttendance, selectedBranch, instructorFilter, profile, hasGlobalVisibility, isFromBranch, instructors]);
+  }, [rawAttendance, selectedBranch, instructorFilter, profile, isManagement, isFromBranch, instructors]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -156,7 +159,7 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    const currentBranchContext = hasGlobalVisibility ? "All" : (profile?.branch || "Branch 1");
+    const currentBranchContext = isManagement ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
     if (currentBranchContext !== "All") {
@@ -170,7 +173,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch, profile, hasGlobalVisibility, isFromBranch]);
+  }, [allStudents, studentSearch, profile, isManagement, isFromBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -267,7 +270,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : hasGlobalVisibility ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
+            {isStudent ? 'My training sessions history.' : isManagement ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
           </p>
         </div>
         {!isStudent && (
@@ -288,12 +291,12 @@ export default function AttendancePage() {
               </Select>
             </div>
 
-            {hasGlobalVisibility && (
+            {isManagement && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Branch:
                 </Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
                   <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
                     <SelectValue placeholder="Select Branch" />
                   </SelectTrigger>
@@ -370,7 +373,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {hasGlobalVisibility ? "Search all students to record training." : "Search branch students to record training."}
+              {isManagement ? "Search all students to record training." : "Search branch students to record training."}
             </DialogDescription>
           </DialogHeader>
           
@@ -379,7 +382,7 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {hasGlobalVisibility ? "(Global)" : "(My Branch)"}
+                    Search Student {isManagement ? "(Global)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

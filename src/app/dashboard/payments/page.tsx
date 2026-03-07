@@ -57,6 +57,8 @@ export default function StudentReceiptsPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const isBranchManager = profile?.role === 'BranchManager';
+  const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
@@ -91,9 +93,7 @@ export default function StudentReceiptsPage() {
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    const baseCol = collection(db, 'students');
-    if (profile.role === 'Student') return query(baseCol, where('userId', '==', user.uid));
-    return baseCol; // Staff fetch all for robust local selection
+    return collection(db, 'students');
   }, [db, user?.uid, profile]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
@@ -101,13 +101,17 @@ export default function StudentReceiptsPage() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    if (normalize(record.branch) === normalize(branchName)) return true;
+
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const studentPrefix = `B${branchNum}`;
       const receiptPrefix = `REC-B${branchNum}`;
-      if (record.studentId?.startsWith(studentPrefix)) return true;
-      if (record.id?.startsWith(receiptPrefix)) return true;
+      if (record.studentId?.startsWith(studentPrefix) || record.id?.startsWith(studentPrefix) || record.id?.startsWith(receiptPrefix)) {
+        return true;
+      }
     }
     return false;
   }, []);
@@ -126,7 +130,7 @@ export default function StudentReceiptsPage() {
 
   const filteredSearchStudents = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
-    const currentBranchContext = isAdmin ? "All" : (profileBranch || "Branch 1");
+    const currentBranchContext = isManagement ? "All" : (profileBranch || "Branch 1");
     
     let result = students || [];
     if (currentBranchContext !== "All") {
@@ -138,7 +142,7 @@ export default function StudentReceiptsPage() {
       s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.phone?.includes(searchTerm)
     ).slice(0, 5);
-  }, [students, searchTerm, isAdmin, profileBranch, isFromBranch]);
+  }, [students, searchTerm, isManagement, profileBranch, isFromBranch]);
 
   const calculateBalance = (student: Student) => {
     const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -149,7 +153,7 @@ export default function StudentReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
 
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
@@ -180,7 +184,7 @@ export default function StudentReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [allReceipts, listSearchTerm, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleCreateReceipt = async () => {
     if (!selectedStudent) {
@@ -272,7 +276,7 @@ export default function StudentReceiptsPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Student Receipts</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Global course fee collections.' : `Fee collections for ${profile?.branchName || profileBranch || 'your branch'}`}</p>
+          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'Global course fee collections.' : `Fee collections for ${selectedBranchFilter}`) : `Fee collections for ${profile?.branch || 'your branch'}`}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <div className="relative">
@@ -303,10 +307,10 @@ export default function StudentReceiptsPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isAdmin && (
+              {isManagement && (
                 <div className="flex items-center gap-2 border-r pr-3 mr-1">
                   <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
                     <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
                       <SelectValue placeholder="All Branches" />
                     </SelectTrigger>
