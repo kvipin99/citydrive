@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ export default function ExpensesPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const profileBranch = profile?.branch;
 
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
@@ -52,11 +54,17 @@ export default function ExpensesPage() {
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
 
+  // Sync branch filter for non-admins
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
+
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    if (isAdmin) return collection(db, 'expenses');
-    return query(collection(db, 'expenses'), where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user, profile, isAdmin]);
+    return collection(db, 'expenses'); // Fetch all for staff, filter client-side for stability
+  }, [db, user, profile]);
 
   const { data: expenses, isLoading: isExpensesLoading } = useCollection<ExpenseRecord>(expensesQuery);
 
@@ -72,10 +80,35 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     if (profile && !selectedExpense && isDialogOpen) {
-      const defaultBranch = profile.role === 'Admin' ? "Branch 1" : (profile.branch || "Branch 1");
+      const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
-  }, [profile, selectedExpense, isDialogOpen]);
+  }, [profile, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
+
+  const isFromBranch = useCallback((record: any, branchName: string) => {
+    if (branchName === "All") return true;
+    if (record.branch === branchName) return true;
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && record.id?.startsWith(`EXP-B${branchNum}`)) return true;
+    return false;
+  }, []);
+
+  const isWithinRange = (dateStr: string) => {
+    if (!dateStr) return false;
+    return dateStr >= dateRange.from && dateStr <= dateRange.to;
+  };
+
+  const filteredExpenses = useMemo(() => {
+    if (!expenses) return [];
+    let result = expenses.filter(e => isWithinRange(e.date));
+
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All") {
+      result = result.filter(e => isFromBranch(e, currentBranchContext));
+    }
+
+    return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -94,7 +127,7 @@ export default function ExpensesPage() {
         category: 'Fuel',
         amount: 0,
         description: '',
-        branch: profile?.branch || 'Branch 1',
+        branch: profileBranch || 'Branch 1',
       });
     }
     setIsDialogOpen(true);
@@ -132,22 +165,6 @@ export default function ExpensesPage() {
     toast({ variant: "destructive", title: "Expense Deleted", description: "The record has been permanently removed." });
   };
 
-  const isWithinRange = (dateStr: string) => {
-    if (!dateStr) return false;
-    return dateStr >= dateRange.from && dateStr <= dateRange.to;
-  };
-
-  const filteredExpenses = useMemo(() => {
-    if (!expenses) return [];
-    let result = expenses.filter(e => isWithinRange(e.date));
-
-    if (isAdmin && selectedBranchFilter !== "All") {
-      result = result.filter(e => e.branch === selectedBranchFilter);
-    }
-
-    return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, selectedBranchFilter]);
-
   const isActuallyLoading = isProfileLoading || isExpensesLoading;
 
   return (
@@ -155,7 +172,7 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profile?.branch || 'your branch'}.`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Track overheads, fuel, and operational costs across all branches.' : `Expenses for ${profile?.branchName || profileBranch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()} className="shadow-lg">
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -170,7 +187,7 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profile?.branchName || profile?.branch)}.</CardDescription>
+                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profile?.branchName || profileBranch)}.</CardDescription>
               </div>
             </div>
 

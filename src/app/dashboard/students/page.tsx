@@ -72,25 +72,20 @@ function StudentsContent() {
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
+  const isStaff = isAdmin || profile?.role === 'BranchManager' || isInstructor;
   const profileBranch = profile?.branch;
 
   const hasGlobalVisibility = isAdmin || isInstructor;
 
+  // We fetch all students for staff to ensure robust filtering and handle cross-branch data entered by Admins
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
-    
     if (isStudent) {
       return query(base, where('userId', '==', user.uid));
     }
-    
-    if (hasGlobalVisibility) {
-      return base;
-    }
-    
-    const branchId = profileBranch || "Branch 1";
-    return query(base, where('branch', '==', branchId));
-  }, [db, user?.uid, profileBranch, hasGlobalVisibility, isStudent]);
+    return base; // Staff fetch all, filter client-side for stability
+  }, [db, user?.uid, profile, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -193,6 +188,12 @@ function StudentsContent() {
   }, [isAdmin, profileBranch, generateBranchStudentId]);
 
   useEffect(() => {
+    if (profile && !isAdmin && !isInstructor) {
+      setSelectedBranchFilter(profile.branch || "Branch 1");
+    }
+  }, [profile, isAdmin, isInstructor]);
+
+  useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
       const nextId = generateBranchStudentId(formData.branch);
       if (formData.id !== nextId) {
@@ -227,12 +228,22 @@ function StudentsContent() {
     return map;
   }, [masterCourses]);
 
+  const isFromBranch = useCallback((record: Student, branchName: string) => {
+    if (branchName === "All") return true;
+    if (record.branch === branchName) return true;
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
+    return false;
+  }, []);
+
   const filteredStudents = useMemo(() => {
     if (!students) return [];
     let result = students;
 
-    if (hasGlobalVisibility && selectedBranchFilter !== "All") {
-      result = result.filter(s => s.branch === selectedBranchFilter);
+    // Apply branch isolation for managers, or filter for admins
+    const currentBranchContext = isAdmin || isInstructor ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All") {
+      result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
 
     if (searchQuery) {
@@ -245,7 +256,7 @@ function StudentsContent() {
     }
 
     return result;
-  }, [students, searchQuery, selectedBranchFilter, hasGlobalVisibility]);
+  }, [students, searchQuery, selectedBranchFilter, isAdmin, isInstructor, profileBranch, isFromBranch]);
 
   const calculateFees = useCallback((courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);

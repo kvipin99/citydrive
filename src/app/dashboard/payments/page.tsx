@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,7 @@ export default function StudentReceiptsPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const profileBranch = profile?.branch;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -69,19 +70,24 @@ export default function StudentReceiptsPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
+  // Sync branch filter for non-admins
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
+
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    const baseCol = collection(db, 'payments');
-    if (isAdmin) return baseCol;
-    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
+    return collection(db, 'payments'); // Fetch all for staff, filter client-side for robustness
+  }, [db, user?.uid, profile]);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const baseCol = collection(db, 'students');
     if (profile.role === 'Student') return query(baseCol, where('userId', '==', user.uid));
     return baseCol;
-  }, [db, user?.uid, profile?.role]);
+  }, [db, user?.uid, profile]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
@@ -106,7 +112,7 @@ export default function StudentReceiptsPage() {
     });
   };
 
-  const filteredStudents = useMemo(() => {
+  const filteredSearchStudents = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
     return students?.filter(s => 
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -119,6 +125,51 @@ export default function StudentReceiptsPage() {
     const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
     return Math.max(0, (student.amount || 0) - paid);
   };
+
+  const isFromBranch = useCallback((record: any, branchName: string) => {
+    if (branchName === "All") return true;
+    if (record.branch === branchName) return true;
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && (record.studentId?.startsWith(`B${branchNum}`) || record.id?.startsWith(`REC-B${branchNum}`))) return true;
+    return false;
+  }, []);
+
+  const filteredReceipts = useMemo(() => {
+    if (!allReceipts) return [];
+    let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
+
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All") {
+      result = result.filter(r => isFromBranch(r, currentBranchContext));
+    }
+
+    if (dateRange.from || dateRange.to) {
+      result = result.filter(r => {
+        const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
+        if (!isValid(rDate)) return true;
+        const rDateStr = format(rDate, 'yyyy-MM-dd');
+        return rDateStr >= dateRange.from && rDateStr <= dateRange.to;
+      });
+    }
+    
+    if (listSearchTerm) {
+      const term = listSearchTerm.toLowerCase();
+      result = result.filter(r => 
+        r.studentName?.toLowerCase().includes(term) ||
+        r.receiptNo?.toLowerCase().includes(term)
+      );
+    }
+    
+    return result.sort((a, b) => {
+      const getTime = (d: any) => {
+        if (!d) return 0;
+        if (d.seconds) return d.seconds;
+        const p = typeof d === 'string' ? parseISO(d) : new Date(d);
+        return isValid(p) ? p.getTime() / 1000 : 0;
+      };
+      return getTime(b.date) - getTime(a.date);
+    });
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleCreateReceipt = async () => {
     if (!selectedStudent) {
@@ -180,10 +231,10 @@ export default function StudentReceiptsPage() {
         });
       }
     } catch (e) {
-      console.error("Failed to update student payments array:", e);
+      console.error(e);
     }
 
-    setIsDialogOpen(false);
+    setIsReceiptDialogOpen(false);
     resetForm();
     toast({ title: "Receipt Generated", description: `Receipt #${record.receiptNo} for ${record.studentName} saved.` });
   };
@@ -207,47 +258,11 @@ export default function StudentReceiptsPage() {
           });
         }
       } catch (e) {
-        console.error("Failed to delete payment from student record:", e);
+        console.error(e);
       }
     }
     toast({ variant: "destructive", title: "Receipt Deleted" });
   };
-
-  const filteredReceipts = useMemo(() => {
-    if (!allReceipts) return [];
-    let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
-
-    if (isAdmin && selectedBranchFilter !== "All") {
-      result = result.filter(r => r.branch === selectedBranchFilter);
-    }
-
-    if (dateRange.from || dateRange.to) {
-      result = result.filter(r => {
-        const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
-        if (!isValid(rDate)) return true;
-        const rDateStr = format(rDate, 'yyyy-MM-dd');
-        return rDateStr >= dateRange.from && rDateStr <= dateRange.to;
-      });
-    }
-    
-    if (listSearchTerm) {
-      const term = listSearchTerm.toLowerCase();
-      result = result.filter(r => 
-        r.studentName?.toLowerCase().includes(term) ||
-        r.receiptNo?.toLowerCase().includes(term)
-      );
-    }
-    
-    return result.sort((a, b) => {
-      const getTime = (d: any) => {
-        if (!d) return 0;
-        if (d.seconds) return d.seconds;
-        const p = typeof d === 'string' ? parseISO(d) : new Date(d);
-        return isValid(p) ? p.getTime() / 1000 : 0;
-      };
-      return getTime(b.date) - getTime(a.date);
-    });
-  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
 
@@ -256,7 +271,7 @@ export default function StudentReceiptsPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Student Receipts</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Global course fee collections.' : `Fee collections for ${profile?.branchName || profile?.branch || 'your branch'}`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Global course fee collections.' : `Fee collections for ${profile?.branchName || profileBranch || 'your branch'}`}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <div className="relative">
@@ -268,7 +283,7 @@ export default function StudentReceiptsPage() {
               onChange={(e) => setListSearchTerm(e.target.value)} 
             />
           </div>
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="shadow-lg">
+          <Button onClick={() => { resetForm(); setIsReceiptDialogOpen(true); }} className="shadow-lg">
             <PlusCircle className="mr-2 h-4 w-4" />
             Collect Fee
           </Button>
@@ -403,7 +418,7 @@ export default function StudentReceiptsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+      <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b shrink-0">
             <DialogTitle>Collect Student Fee</DialogTitle>
@@ -424,9 +439,9 @@ export default function StudentReceiptsPage() {
                       onChange={(e) => setSearchTerm(e.target.value)} 
                     />
                   </div>
-                  {filteredStudents.length > 0 && (
+                  {filteredSearchStudents.length > 0 && (
                     <div className="border rounded-md mt-1 divide-y bg-background shadow-sm overflow-hidden">
-                      {filteredStudents.map(s => (
+                      {filteredSearchStudents.map(s => (
                         <div key={s.id} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center transition-colors" onClick={() => setSelectedStudent(s)}>
                           <div>
                             <p className="font-medium text-sm">{s.name}</p>
