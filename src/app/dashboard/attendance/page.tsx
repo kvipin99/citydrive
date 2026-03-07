@@ -51,15 +51,16 @@ export default function AttendancePage() {
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile } = useDoc(userProfileRef);
 
-  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
-  const { data: controls } = useDoc(controlsRef);
-  
   const isStudent = profile?.role === 'Student';
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isInstructor = profile?.role === 'Instructor';
   const isManagement = isAdmin || isBranchManager;
   const isStaff = isManagement || isInstructor;
+
+  // Only fetch controls if staff to avoid permission error for students
+  const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
+  const { data: controls } = useDoc(controlsRef);
 
   const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
@@ -73,28 +74,34 @@ export default function AttendancePage() {
   }, [profile, isAdmin, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
-    if (!db || !user || !isStaff) return null; // Students don't need this list
+    if (!db || !user || !isStaff) return null;
     return collection(db, 'vehicles');
   }, [db, user?.uid, isStaff]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
   const instructorsQuery = useMemoFirebase(() => {
-    if (!db || !user || !isStaff) return null; // Students don't need this list
+    if (!db || !user || !isStaff) return null;
     return collection(db, 'instructors');
   }, [db, user?.uid, isStaff]);
   const { data: instructors } = useCollection(instructorsQuery);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile?.role || isStudent) return null; // Students don't fetch other students
+    if (!db || !user || !isStaff) return null;
     return collection(db, 'students');
-  }, [db, user?.uid, profile?.role, isStudent]);
+  }, [db, user?.uid, isStaff]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'attendance');
-    if (profile.role === 'Student') return query(base, where('studentUid', '==', user.uid));
+    
+    // Students query by studentUid for security rules compliance
+    if (profile.role === 'Student') {
+      return query(base, where('studentUid', '==', user.uid));
+    }
+    
+    // Staff query by date range
     if (isStaff) {
       return query(
         base, 
@@ -183,6 +190,7 @@ export default function AttendancePage() {
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
     
+    // Instructors see all, Managers see branch only
     const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
@@ -428,7 +436,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {(isAdmin || isInstructor) ? "Search all students to record training." : "Search branch students to record training."}
+              {isInstructor ? "Search all students to record training." : "Search branch students to record training."}
             </DialogDescription>
           </DialogHeader>
           
@@ -437,7 +445,7 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {(isAdmin || isInstructor) ? "(Global)" : "(My Branch)"}
+                    Search Student {isInstructor ? "(Global)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

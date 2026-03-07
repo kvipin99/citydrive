@@ -68,15 +68,17 @@ function StudentsContent() {
   
   const { data: profile } = useDoc(userProfileRef);
 
-  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
-  const { data: controls } = useDoc(controlsRef);
-  
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
   const isManagement = isAdmin || isBranchManager;
+  const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
 
+  // Only fetch controls if staff to avoid permission error for students
+  const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
+  const { data: controls } = useDoc(controlsRef);
+  
   const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   const studentsQuery = useMemoFirebase(() => {
@@ -1114,7 +1116,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
   const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student?.userId) return null;
-    // CRITICAL: Students must satisfy the studentUid == auth.uid rule
+    // Students must satisfy the studentUid == auth.uid rule
     return query(collection(db, 'attendance'), where('studentUid', '==', student.userId));
   }, [db, student?.userId]);
 

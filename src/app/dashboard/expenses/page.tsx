@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -45,13 +44,15 @@ export default function ExpensesPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
 
-  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
-  const { data: controls } = useDoc(controlsRef);
-
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
+  const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
+
+  // Only fetch controls if staff to avoid permission error for students
+  const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
+  const { data: controls } = useDoc(controlsRef);
 
   const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
