@@ -16,10 +16,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, getDoc, Timestamp } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, Calendar, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -143,12 +142,14 @@ function StudentsContent() {
     description: ''
   });
 
+  // EVALUATE LAST STUDENT ID AND GENERATE NEXT
   const generateBranchStudentId = useCallback((branchName: string) => {
     if (!branchName) return "";
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
+    // We filter from the full list of students we already have
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -159,8 +160,9 @@ function StudentsContent() {
       return max;
     }, 0);
     
-    const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
-    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+    // Starting with 10001 series or continuing
+    const nextSeq = maxSequence > 0 ? maxSequence + 1 : 10001;
+    return `${prefix}${nextSeq}`;
   }, [students]);
 
   const resetForm = useCallback(() => {
@@ -191,6 +193,7 @@ function StudentsContent() {
     setCleanupId("");
   }, [isAdmin, profileBranch]);
 
+  // Sync ID when branch changes
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
       const nextId = generateBranchStudentId(formData.branch);
@@ -198,7 +201,7 @@ function StudentsContent() {
         setFormData(prev => ({ ...prev, id: nextId }));
       }
     }
-  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
+  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId]);
 
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
@@ -219,24 +222,6 @@ function StudentsContent() {
       return '';
     }
   }, []);
-
-  useEffect(() => {
-    const studentIdParam = searchParams.get('studentId');
-    if (studentIdParam && students && !isStudentsLoading) {
-      const student = students.find(s => s.id === studentIdParam);
-      if (student) {
-        setSelectedStudent(student);
-        setIsProfileSheetOpen(true);
-      }
-    }
-  }, [searchParams, students, isStudentsLoading]);
-
-  useEffect(() => {
-    if (isStudent && students && students.length > 0 && !selectedStudent) {
-      setSelectedStudent(students[0]);
-      setIsProfileSheetOpen(true);
-    }
-  }, [isStudent, students, selectedStudent]);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -340,9 +325,12 @@ function StudentsContent() {
       resetForm();
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
+      console.error("Registration Error:", error);
       let errorMsg = "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID Conflict: Login for "${studentId}" already exists. Use the cleanup tool.`;
+        errorMsg = `ID Conflict: Auth record for "${studentId}" already exists. Use the "Fix Auth Conflicts" tool below.`;
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = "Generated Student ID is invalid for email creation.";
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -378,7 +366,6 @@ function StudentsContent() {
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
-    
     const transactionDate = new Date(receiptFormData.date);
 
     const record = {
@@ -465,13 +452,21 @@ function StudentsContent() {
     const secondaryAuth = getAuth(secondaryApp);
 
     try {
+      // Must authenticate to delete user in client SDK
       const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
       await deleteUser(cred.user);
       await deleteApp(secondaryApp);
-      toast({ title: "Cleanup Successful" });
+      toast({ title: "Cleanup Successful", description: `Auth record for ${studentId} removed.` });
       setCleanupId("");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Cleanup Failed", description: "Identity not found or password changed." });
+      console.error("Cleanup error:", error);
+      let msg = "Could not find or delete that identity.";
+      if (error.code === 'auth/invalid-credential') {
+        msg = "Cleanup Failed: Password has likely been changed from default 'City123'. Manual deletion in console required.";
+      } else if (error.code === 'auth/user-not-found') {
+        msg = "Cleanup Failed: No such auth record found.";
+      }
+      toast({ variant: "destructive", title: "Cleanup Failed", description: msg });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
@@ -539,7 +534,7 @@ function StudentsContent() {
                   <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
                     <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
                       <DialogTitle>New Student Registration</DialogTitle>
-                      <DialogDescription>Fill in all details. IDs are auto-generated based on branch.</DialogDescription>
+                      <DialogDescription>IDs are auto-generated based on the last record in the branch.</DialogDescription>
                     </DialogHeader>
                     
                     <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -560,15 +555,18 @@ function StudentsContent() {
                             <AlertCircle className="h-4 w-4" />
                             <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
                           </div>
+                          <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
+                            If registration fails because the ID already exists in the system but not in the list, use this tool to clear the hidden identity.
+                          </p>
                           <div className="flex gap-2 max-w-sm">
                             <Input 
-                              placeholder="Conflict ID (e.g. B10001)" 
+                              placeholder="Conflict ID (e.g. B110001)" 
                               className="h-9 text-xs" 
                               value={cleanupId} 
                               onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
                             />
                             <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                              <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Login
+                              <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity
                             </Button>
                           </div>
                         </div>
@@ -718,7 +716,7 @@ function StudentsContent() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>. This cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>. This will wipe all fee and attendance records associated with this ID. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
@@ -876,11 +874,11 @@ function StudentForm({
           </div>
           <div className="grid gap-2">
             <Label className="text-primary font-bold flex items-center gap-1.5">
-              Student ID (Auto-generated)
+              Student ID (Read-only)
               <Lock className="h-3 w-3 text-muted-foreground" />
             </Label>
             <Input 
-              className="h-11 bg-muted font-bold text-primary border-primary/20 cursor-not-allowed" 
+              className="h-11 bg-muted font-black text-primary border-primary/20 cursor-not-allowed" 
               value={formData.id || ''} 
               readOnly 
             />
@@ -1135,7 +1133,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
           <div className="grid gap-4 text-sm">
-            <ProfileItem icon={<Calendar />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
+            <ProfileItem icon={<Clock />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
@@ -1164,7 +1162,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </section>
       </div>
 
-      <Separator />
+      <Separator className="my-4" />
 
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Clock className="h-4 w-4" /> Attendance</h3>
@@ -1248,6 +1246,10 @@ function ProfileItem({ icon, label, value, fullWidth = false }: any) {
       </div>
     </div>
   );
+}
+
+function Separator({ className }: { className?: string }) {
+  return <div className={`h-px w-full bg-border ${className}`} />;
 }
 
 export default function StudentsPage() {

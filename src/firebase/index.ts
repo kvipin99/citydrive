@@ -5,30 +5,26 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
+// Robust initialization for App Router and Client side
 export function initializeFirebase() {
+  let app: FirebaseApp;
+  
   if (!getApps().length) {
-    // Attempt to initialize using environmental defaults (App Hosting), fallback to manual config
-    let firebaseApp;
     try {
-      firebaseApp = initializeApp();
+      // Attempt to initialize using environmental defaults, fallback to manual config
+      app = initializeApp(firebaseConfig);
     } catch (e) {
-      // Fallback to manual configuration
-      firebaseApp = initializeApp(firebaseConfig);
+      console.error("Firebase initialization failed:", e);
+      app = initializeApp(firebaseConfig);
     }
-
-    return getSdks(firebaseApp);
+  } else {
+    app = getApp();
   }
 
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
-}
-
-export function getSdks(firebaseApp: FirebaseApp) {
   return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
+    firebaseApp: app,
+    auth: getAuth(app),
+    firestore: getFirestore(app)
   };
 }
 
