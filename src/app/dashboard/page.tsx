@@ -7,6 +7,7 @@ import StatsCards from "@/components/dashboard/stats-cards";
 import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
 import UpcomingClasses from "@/components/dashboard/upcoming-classes";
 import FleetStatus from "@/components/dashboard/fleet-status";
+import TomorrowTestAlerts from "@/components/dashboard/tomorrow-test-alerts";
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, where } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export default function DashboardPage() {
   const { user } = useUser();
   const db = useFirestore();
 
-  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
 
   if (isProfileLoading) {
@@ -97,6 +98,8 @@ export default function DashboardPage() {
             : `Here is the performance status for ${currentBranchDisplay}.`}
         </p>
       </div>
+
+      <TomorrowTestAlerts />
 
       <StatsCards />
 
