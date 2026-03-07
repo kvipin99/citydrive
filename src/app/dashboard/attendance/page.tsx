@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users, UserSquare } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,11 +31,16 @@ export default function AttendancePage() {
   
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
+  const [instructorFilter, setInstructorFilter] = useState<string>("All");
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [sessionType, setSessionType] = useState<'Practical' | 'Theory'>('Practical');
+  
+  const [selectedInstructorId, setSelectedInstructorId] = useState<string>("");
+  const [manualInstructorName, setManualInstructorName] = useState("");
   
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -55,7 +60,10 @@ export default function AttendancePage() {
     if (profile && !hasGlobalVisibility) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile, hasGlobalVisibility]);
+    if (profile && !selectedInstructorId) {
+      setSelectedInstructorId(user?.uid || "");
+    }
+  }, [profile, hasGlobalVisibility, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -63,11 +71,17 @@ export default function AttendancePage() {
   }, [db, user?.uid]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
+  const instructorsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return collection(db, 'instructors');
+  }, [db, user?.uid]);
+  const { data: instructors } = useCollection(instructorsQuery);
+
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
     if (isStudent) return query(base, where('userId', '==', user.uid));
-    return base; // Staff fetch all for robust local selection
+    return base;
   }, [db, user?.uid, profile, isStudent]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
@@ -94,10 +108,26 @@ export default function AttendancePage() {
 
   const filteredAttendance = useMemo(() => {
     if (!rawAttendance) return [];
+    let result = rawAttendance;
+
+    // Branch Filter
     const currentBranchContext = hasGlobalVisibility ? selectedBranch : (profile?.branch || "Branch 1");
-    if (currentBranchContext === "All") return rawAttendance;
-    return rawAttendance.filter(rec => isFromBranch(rec, currentBranchContext));
-  }, [rawAttendance, selectedBranch, profile, hasGlobalVisibility, isFromBranch]);
+    if (currentBranchContext !== "All") {
+      result = result.filter(rec => isFromBranch(rec, currentBranchContext));
+    }
+
+    // Instructor Filter
+    if (instructorFilter !== "All") {
+      if (instructorFilter === "Others") {
+        const registeredIds = new Set(instructors?.map(i => i.userId) || []);
+        result = result.filter(rec => !rec.instructorId || rec.instructorId === 'Manual' || !registeredIds.has(rec.instructorId));
+      } else {
+        result = result.filter(rec => rec.instructorId === instructorFilter);
+      }
+    }
+
+    return result;
+  }, [rawAttendance, selectedBranch, instructorFilter, profile, hasGlobalVisibility, isFromBranch, instructors]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -160,12 +190,28 @@ export default function AttendancePage() {
     const attendanceRef = doc(db, 'attendance', attendanceId);
     const duration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
+    
+    let instructorName = profile.name || "Unknown";
+    let instructorId = user.uid;
+
+    if (selectedInstructorId === 'Manual') {
+      instructorName = manualInstructorName || "Manual Entry";
+      instructorId = "Manual";
+    } else if (selectedInstructorId) {
+      const instr = instructors?.find(i => i.userId === selectedInstructorId);
+      if (instr) {
+        instructorName = instr.name;
+        instructorId = instr.userId;
+      }
+    }
 
     const record = {
       id: attendanceId,
       studentId: selectedStudent.id,
       studentUid: selectedStudent.userId, 
       studentName: selectedStudent.name,
+      instructorId,
+      instructorName,
       date: selectedDate,
       status: 'Present',
       type: sessionType,
@@ -192,6 +238,8 @@ export default function AttendancePage() {
     setSessionType('Practical');
     setStartTime("09:00");
     setEndTime("10:00");
+    setSelectedInstructorId(user?.uid || "");
+    setManualInstructorName("");
   };
 
   const handleDeleteRecord = (recordId: string) => {
@@ -224,10 +272,26 @@ export default function AttendancePage() {
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-2">
+              <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
+                <UserSquare className="h-3 w-3" /> Staff:
+              </Label>
+              <Select value={instructorFilter} onValueChange={setInstructorFilter}>
+                <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
+                  <SelectValue placeholder="All Staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Instructors</SelectItem>
+                  {instructors?.map(i => <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>)}
+                  <SelectItem value="Others">Manual Entries (Others)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {hasGlobalVisibility && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
-                  <Filter className="h-3 w-3" /> Branch Filter:
+                  <Filter className="h-3 w-3" /> Branch:
                 </Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                   <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
@@ -400,6 +464,30 @@ export default function AttendancePage() {
                     </div>
                   </div>
 
+                  <div className="grid gap-3">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Assigned Instructor</Label>
+                    <Select value={selectedInstructorId} onValueChange={setSelectedInstructorId}>
+                      <SelectTrigger className="h-11 border-2">
+                        <SelectValue placeholder="Select Instructor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={user?.uid || ""}>Me ({profile?.name || 'Self'})</SelectItem>
+                        {instructors?.filter(i => i.userId !== user?.uid).map(i => (
+                          <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>
+                        ))}
+                        <SelectItem value="Manual">Another Name (Manual Entry)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {selectedInstructorId === 'Manual' && (
+                      <Input 
+                        placeholder="Type Instructor Name" 
+                        value={manualInstructorName} 
+                        onChange={(e) => setManualInstructorName(e.target.value)}
+                        className="h-11 border-2 animate-in fade-in slide-in-from-top-1"
+                      />
+                    )}
+                  </div>
+
                   {sessionType === 'Practical' && (
                     <div className="grid gap-3 animate-in slide-in-from-top-2">
                       <Label className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground">
@@ -492,6 +580,7 @@ export default function AttendancePage() {
                 <TableRow>
                   {isStudent && <TableHead className="pl-6">Date</TableHead>}
                   {!isStudent && <TableHead className="pl-6">Student</TableHead>}
+                  <TableHead>Instructor</TableHead>
                   <TableHead>Session Type</TableHead>
                   <TableHead>Vehicle / Details</TableHead>
                   <TableHead>Timing</TableHead>
@@ -503,7 +592,7 @@ export default function AttendancePage() {
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isStudent ? 6 : 8} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 7 : 9} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
                         <p className="italic">No sessions logged for this period.</p>
@@ -531,6 +620,12 @@ export default function AttendancePage() {
                           </div>
                         </TableCell>
                       )}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <UserSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium">{record.instructorName || 'Unknown'}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>
                           {record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}

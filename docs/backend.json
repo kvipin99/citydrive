@@ -66,6 +66,8 @@
         "studentId": { "type": "string" },
         "studentUid": { "type": "string" },
         "studentName": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "instructorName": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "type": { "type": "string" },
         "branch": { "type": "string" },
