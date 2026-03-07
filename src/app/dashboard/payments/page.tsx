@@ -130,11 +130,13 @@ export default function StudentReceiptsPage() {
 
   const filteredSearchStudents = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
-    const currentBranchContext = isManagement ? "All" : (profileBranch || "Branch 1");
     
     let result = students || [];
-    if (!isAdmin && currentBranchContext !== "All") {
-      result = result.filter(s => isFromBranch(s, currentBranchContext));
+    
+    // Non-admins only see students from their own branch in the search
+    if (!isAdmin) {
+      const targetBranch = profileBranch || "Branch 1";
+      result = result.filter(s => isFromBranch(s, targetBranch));
     }
 
     return result.filter(s => 
@@ -142,7 +144,7 @@ export default function StudentReceiptsPage() {
       s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.phone?.includes(searchTerm)
     ).slice(0, 5);
-  }, [students, searchTerm, isManagement, profileBranch, isFromBranch, isAdmin]);
+  }, [students, searchTerm, profileBranch, isFromBranch, isAdmin]);
 
   const calculateBalance = (student: Student) => {
     const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
