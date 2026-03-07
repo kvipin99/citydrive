@@ -14,13 +14,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
-import { collection, doc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
 
@@ -64,6 +75,7 @@ function SettingsContent() {
   const [branchName, setBranchName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
 
   useEffect(() => {
@@ -152,6 +164,34 @@ function SettingsContent() {
     }
   };
 
+  // --- MODULAR RESET LOGIC ---
+  const performModularReset = async (category: string, collections: string[]) => {
+    if (!db || !isAdmin) return;
+    setIsResetting(true);
+    toast({ title: "Reset Started", description: `Wiping ${category} data...` });
+
+    try {
+      for (const colName of collections) {
+        const snapshot = await getDocs(collection(db, colName));
+        snapshot.docs.forEach(d => {
+          // Special check for 'users' collection to avoid deleting the master/admin user
+          if (colName === 'users') {
+            const userData = d.data();
+            if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) {
+              return;
+            }
+          }
+          deleteDocumentNonBlocking(doc(db, colName, d.id));
+        });
+      }
+      toast({ title: "Wipe Complete", description: `${category} has been cleared.` });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Reset Failed", description: error.message });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     if (!allUsers) return [];
     const unique = [];
@@ -210,6 +250,55 @@ function SettingsContent() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Advanced Modular Reset Tool */}
+            <Card className="border-destructive/20 bg-destructive/5">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  <CardTitle>Advanced System Reset</CardTitle>
+                </div>
+                <CardDescription className="text-destructive/80">Wipe all data from specific modules for a fresh start. This action is irreversible.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <ResetAction 
+                  title="Students & Enrollment" 
+                  description="Wipes all student records, photos, and their user login profiles."
+                  onReset={() => performModularReset("Students", ["students", "users"])}
+                  disabled={isResetting}
+                />
+                <ResetAction 
+                  title="Attendance & Schedule" 
+                  description="Wipes all training session logs and scheduled classes."
+                  onReset={() => performModularReset("Attendance", ["attendance", "classes"])}
+                  disabled={isResetting}
+                />
+                <ResetAction 
+                  title="Financial Records" 
+                  description="Wipes all student receipts, miscellaneous income, and expenses."
+                  onReset={() => performModularReset("Financials", ["payments", "expenses"])}
+                  disabled={isResetting}
+                />
+                <ResetAction 
+                  title="Instructors & Staff" 
+                  description="Wipes all staff lists and their login credentials (excluding Admins)."
+                  onReset={() => performModularReset("Staff", ["instructors", "users"])}
+                  disabled={isResetting}
+                />
+                <ResetAction 
+                  title="Vehicle Fleet" 
+                  description="Wipes all vehicle data and validity documents."
+                  onReset={() => performModularReset("Vehicles", ["vehicles"])}
+                  disabled={isResetting}
+                />
+                <ResetAction 
+                  title="Resources & Quizzes" 
+                  description="Wipes all learning materials, quiz links, and backup metadata."
+                  onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])}
+                  disabled={isResetting}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
         )}
 
@@ -264,6 +353,38 @@ function SettingsContent() {
           </TabsContent>
         )}
       </Tabs>
+    </div>
+  );
+}
+
+function ResetAction({ title, description, onReset, disabled }: { title: string, description: string, onReset: () => void, disabled?: boolean }) {
+  return (
+    <div className="flex flex-col justify-between p-4 rounded-xl border bg-white shadow-sm space-y-3">
+      <div className="space-y-1">
+        <h4 className="text-sm font-black uppercase tracking-tight">{title}</h4>
+        <p className="text-[10px] text-muted-foreground leading-tight">{description}</p>
+      </div>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/20 hover:bg-destructive hover:text-white" disabled={disabled}>
+            <Eraser className="h-3.5 w-3.5 mr-1.5" /> Wipe Module
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Wipe {title}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all records in this category. This action cannot be undone. Are you sure you want to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm Wipe
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

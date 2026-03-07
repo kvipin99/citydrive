@@ -142,12 +142,14 @@ function StudentsContent() {
     description: ''
   });
 
+  // --- AUTOMATIC STUDENT ID GENERATION ---
   const generateBranchStudentId = useCallback((branchName: string) => {
     if (!branchName) return "";
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
+    // Scan all existing students to find the highest sequence for this branch
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -158,6 +160,7 @@ function StudentsContent() {
       return max;
     }, 0);
     
+    // Start from 10001 if no students exist, otherwise increment
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 10001;
     return `${prefix}${nextSeq}`;
   }, [students]);
@@ -190,6 +193,7 @@ function StudentsContent() {
     setCleanupId("");
   }, [isAdmin, profileBranch]);
 
+  // Update ID automatically when branch changes or dialog opens
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
       const nextId = generateBranchStudentId(formData.branch);
@@ -325,8 +329,6 @@ function StudentsContent() {
       let errorMsg = "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
         errorMsg = `ID Conflict: Auth record for "${studentId}" already exists. Use the "Fix Auth Conflicts" tool below.`;
-      } else if (error.code === 'auth/invalid-email') {
-        errorMsg = "Generated Student ID is invalid for email creation.";
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -458,8 +460,6 @@ function StudentsContent() {
       let msg = "Could not find or delete that identity.";
       if (error.code === 'auth/invalid-credential') {
         msg = "Cleanup Failed: Password has likely been changed from default 'City123'. Manual deletion in console required.";
-      } else if (error.code === 'auth/user-not-found') {
-        msg = "Cleanup Failed: No such auth record found.";
       }
       toast({ variant: "destructive", title: "Cleanup Failed", description: msg });
       try { await deleteApp(secondaryApp); } catch {}
@@ -869,7 +869,7 @@ function StudentForm({
           </div>
           <div className="grid gap-2">
             <Label className="text-primary font-bold flex items-center gap-1.5">
-              Student ID (Read-only)
+              Student ID (Auto-generated)
               <Lock className="h-3 w-3 text-muted-foreground" />
             </Label>
             <Input 
