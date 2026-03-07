@@ -60,7 +60,7 @@ export default function StudentReceiptsPage() {
   const profileBranch = profile?.branch;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [listSearchTerm, setListSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -478,18 +478,18 @@ export default function StudentReceiptsPage() {
                       <Label>Receipt Date</Label>
                       <div className="relative">
                         {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                        <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                        <Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
                       </div>
                       {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
                         <Label>Amount (₹)</Label>
-                        <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                        <Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} />
                       </div>
                       <div className="grid gap-2">
                         <Label>Method</Label>
-                        <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
+                        <Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Cash">Cash</SelectItem>
@@ -501,11 +501,11 @@ export default function StudentReceiptsPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label>Receipt No.</Label>
-                      <Input placeholder="e.g. 1001" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
+                      <Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} />
                     </div>
                     <div className="grid gap-2">
                       <Label>Note (Optional)</Label>
-                      <Input placeholder="e.g. 2nd Installment" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                      <Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} />
                     </div>
                   </div>
                 </div>
