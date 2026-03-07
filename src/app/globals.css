@@ -75,10 +75,16 @@
 }
 
 @layer base {
+  html {
+    /* Set base font size to 110% of default (approx 17.6px) */
+    font-size: 110%;
+  }
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    /* Increase line height slightly for better readability with larger text */
+    line-height: 1.6;
   }
 }
