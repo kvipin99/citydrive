@@ -134,13 +134,21 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     let result = rawAttendance;
 
-    // Instructors are "Full Students" visibility, so they see all records unless they are filtering.
-    // Branch managers are restricted to their branch.
-    const currentBranchContext = isAdmin || isInstructor ? selectedBranch : (profile?.branch || "Branch 1");
-    if (currentBranchContext !== "All") {
-      result = result.filter(rec => isFromBranch(rec, currentBranchContext));
+    // RULE: Instructors ONLY see their own sessions across all branches.
+    // RULE: Branch Managers see all sessions in their branch.
+    // RULE: Admin sees everything.
+    
+    if (isInstructor && !isAdmin) {
+      result = result.filter(rec => rec.instructorId === user?.uid);
+    } else if (isBranchManager && !isAdmin) {
+      result = result.filter(rec => isFromBranch(rec, profile?.branch || "Branch 1"));
+    } else if (isAdmin) {
+      if (selectedBranch !== "All") {
+        result = result.filter(rec => isFromBranch(rec, selectedBranch));
+      }
     }
 
+    // Secondary UI Filter (Dropdown)
     if (instructorFilter !== "All") {
       if (instructorFilter === "Others") {
         const registeredIds = new Set(instructors?.map(i => i.userId) || []);
@@ -151,7 +159,7 @@ export default function AttendancePage() {
     }
 
     return result;
-  }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isAdmin, isInstructor, isFromBranch, instructors]);
+  }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isAdmin, isInstructor, isBranchManager, isFromBranch, instructors, user?.uid]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -181,8 +189,8 @@ export default function AttendancePage() {
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
     
-    // Updated visibility: Admin, Master, and Instructors see all students.
-    // Branch managers see only their branch students.
+    // VISIBILITY: Admin and Instructors can search ALL students.
+    // VISIBILITY: Branch managers restricted to their branch.
     const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
@@ -304,28 +312,30 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isManagement ? (selectedBranch === 'All' ? 'Global school training records.' : `Records for ${selectedBranch}`) : isInstructor ? 'Global school training records.' : `Records for your branch.`}
+            {isStudent ? 'My training sessions history.' : isInstructor ? 'Personal training history across all branches.' : isManagement ? (selectedBranch === 'All' ? 'Global school training records.' : `Records for ${selectedBranch}`) : `Records for your branch.`}
           </p>
         </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-2">
-              <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
-                <UserSquare className="h-3 w-3" /> Staff:
-              </Label>
-              <Select value={instructorFilter} onValueChange={setInstructorFilter}>
-                <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
-                  <SelectValue placeholder="All Staff" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Instructors</SelectItem>
-                  {instructors?.map(i => <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>)}
-                  <SelectItem value="Others">Manual Entries (Others)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!isInstructor && (
+              <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-2">
+                <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
+                  <UserSquare className="h-3 w-3" /> Staff:
+                </Label>
+                <Select value={instructorFilter} onValueChange={setInstructorFilter}>
+                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
+                    <SelectValue placeholder="All Staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Instructors</SelectItem>
+                    {instructors?.map(i => <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>)}
+                    <SelectItem value="Others">Manual Entries (Others)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            {(isManagement || isInstructor) && (
+            {isManagement && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Branch:
@@ -638,7 +648,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${headerRangeDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
+                {isStudent ? 'Historical training record' : isInstructor ? `My personal logs for ${headerRangeDisplay}` : `Records for ${headerRangeDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6 font-bold">
