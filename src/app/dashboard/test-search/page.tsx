@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -273,9 +272,10 @@ export default function TestSearchPage() {
 function StudentProfileViewContent({ student, db }: any) {
   const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !studentId) return null;
-    return query(collection(db, 'attendance'), where('studentId', '==', studentId));
-  }, [db, studentId]);
+    if (!db || !student?.userId) return null;
+    // CRITICAL: Must satisfies the studentUid == auth.uid rule
+    return query(collection(db, 'attendance'), where('studentUid', '==', student.userId));
+  }, [db, student?.userId]);
 
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 

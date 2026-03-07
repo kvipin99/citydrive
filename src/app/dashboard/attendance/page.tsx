@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -74,21 +73,21 @@ export default function AttendancePage() {
   }, [profile, isAdmin, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || !isStaff) return null; // Students don't need this list
     return collection(db, 'vehicles');
-  }, [db, user?.uid]);
+  }, [db, user?.uid, isStaff]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
   const instructorsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || !isStaff) return null; // Students don't need this list
     return collection(db, 'instructors');
-  }, [db, user?.uid]);
+  }, [db, user?.uid, isStaff]);
   const { data: instructors } = useCollection(instructorsQuery);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile?.role) return null;
+    if (!db || !user || !profile?.role || isStudent) return null; // Students don't fetch other students
     return collection(db, 'students');
-  }, [db, user?.uid, profile?.role]);
+  }, [db, user?.uid, profile?.role, isStudent]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
@@ -134,10 +133,6 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     let result = rawAttendance;
 
-    // RULE: Instructors ONLY see their own sessions across all branches.
-    // RULE: Branch Managers see all sessions in their branch.
-    // RULE: Admin sees everything.
-    
     if (isInstructor && !isAdmin) {
       result = result.filter(rec => rec.instructorId === user?.uid);
     } else if (isBranchManager && !isAdmin) {
@@ -148,8 +143,7 @@ export default function AttendancePage() {
       }
     }
 
-    // Secondary UI Filter (Dropdown)
-    if (instructorFilter !== "All") {
+    if (instructorFilter !== "All" && !isInstructor) {
       if (instructorFilter === "Others") {
         const registeredIds = new Set(instructors?.map(i => i.userId) || []);
         result = result.filter(rec => !rec.instructorId || rec.instructorId === 'Manual' || !registeredIds.has(rec.instructorId));
@@ -189,8 +183,6 @@ export default function AttendancePage() {
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
     
-    // VISIBILITY: Admin and Instructors can search ALL students.
-    // VISIBILITY: Branch managers restricted to their branch.
     const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');

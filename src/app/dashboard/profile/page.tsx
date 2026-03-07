@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from "@/firebase";
@@ -26,11 +25,11 @@ export default function StudentProfilePage() {
   const { data: studentRecords, isLoading: isStudentLoading } = useCollection(studentQuery);
   const student = studentRecords?.[0];
 
-  const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !studentId) return null;
-    return query(collection(db, "attendance"), where("studentId", "==", studentId));
-  }, [db, studentId]);
+    if (!db || !user?.uid) return null;
+    // CRITICAL: Students MUST query by studentUid to comply with security rules
+    return query(collection(db, "attendance"), where("studentUid", "==", user.uid));
+  }, [db, user?.uid]);
   const { data: attendance } = useCollection(attendanceQuery);
 
   const paidAmount = useMemo(() => {

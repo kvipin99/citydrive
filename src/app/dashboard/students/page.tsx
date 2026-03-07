@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -1114,9 +1113,10 @@ function StudentForm({
 function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
   const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !studentId) return null;
-    return query(collection(db, 'attendance'), where('studentId', '==', studentId));
-  }, [db, studentId]);
+    if (!db || !student?.userId) return null;
+    // CRITICAL: Students must satisfy the studentUid == auth.uid rule
+    return query(collection(db, 'attendance'), where('studentUid', '==', student.userId));
+  }, [db, student?.userId]);
 
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 

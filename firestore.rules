@@ -11,15 +11,16 @@ service cloud.firestore {
     }
 
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : {};
     }
 
     function isStaff() {
-      return isSignedIn() && getUserData().role in ['Admin', 'BranchManager', 'Instructor'];
+      return isSignedIn() && getUserData().get('role', 'none') in ['Admin', 'BranchManager', 'Instructor'];
     }
 
     function isAdmin() {
-      return isSignedIn() && getUserData().role == 'Admin';
+      return isSignedIn() && getUserData().get('role', 'none') == 'Admin';
     }
 
     function isOwner(uid) {
