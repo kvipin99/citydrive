@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -332,6 +333,7 @@ function StudentProfileViewContent({ student, db }: any) {
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
           <div className="grid gap-4 text-sm">
             <ProfileItem icon={<Clock />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
+            <ProfileItem icon={<Calendar />} label="Date of Birth" value={formatSafeDate(student.dob)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />

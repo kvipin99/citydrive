@@ -24,6 +24,7 @@
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "name": { "type": "string" },
+        "dob": { "type": "string", "format": "date", "description": "Student's date of birth." },
         "branch": { "type": "string" },
         "registrationDate": { "type": "string", "format": "date" },
         "status": { "type": "string" },

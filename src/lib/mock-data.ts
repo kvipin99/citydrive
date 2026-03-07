@@ -10,6 +10,7 @@ export type Student = {
   id: string;
   userId: string;
   name: string;
+  dob?: string;
   email: string;
   phone: string;
   branch: string;
@@ -87,6 +88,7 @@ export const students: Student[] = [
     id: 'B1-00001', 
     userId: 'u1',
     name: 'Liam Johnson', 
+    dob: '1995-05-15',
     email: 'liam.j@example.com', 
     phone: '555-0101', 
     branch: 'Branch 1',

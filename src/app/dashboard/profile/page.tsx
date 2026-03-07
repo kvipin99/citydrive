@@ -115,6 +115,7 @@ export default function StudentProfilePage() {
             <CardContent className="grid gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <DetailItem label="Mobile Number" value={student.phone} icon={<Phone />} />
+                <DetailItem label="Date of Birth" value={formatSafeDate(student.dob)} icon={<Calendar />} />
                 <DetailItem label="Aadhar Number" value={student.aadharNo} icon={<Fingerprint />} />
                 <DetailItem label="Online App ID" value={student.onlineAppNo} icon={<FileText />} />
                 <DetailItem label="Admission Date" value={formatSafeDate(student.registrationDate)} icon={<Calendar />} />

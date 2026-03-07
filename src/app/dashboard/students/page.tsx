@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -18,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, getDoc, Timestamp } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon, Filter } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon, Filter, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -31,6 +32,7 @@ export interface Student {
   id: string;
   userId: string;
   name: string;
+  dob?: string;
   email: string;
   phone: string;
   branch: string;
@@ -113,6 +115,7 @@ function StudentsContent() {
     discount: 0,
     amount: 0,
     name: "",
+    dob: "",
     phone: "",
     address: "",
     parentName: "",
@@ -187,6 +190,7 @@ function StudentsContent() {
       discount: 0, 
       amount: 0,
       name: "",
+      dob: "",
       phone: "",
       address: "",
       parentName: "",
@@ -690,7 +694,8 @@ function StudentsContent() {
                                     ...formDataRest,
                                     registrationDate: toInputDate(student.registrationDate),
                                     learnersDate: toInputDate(student.learnersDate),
-                                    testDate: toInputDate(student.testDate)
+                                    testDate: toInputDate(student.testDate),
+                                    dob: toInputDate(student.dob)
                                   }); 
                                   setTimeout(() => setIsEditDialogOpen(true), 200);
                                 }}>
@@ -944,6 +949,10 @@ function StudentForm({
             <Label>Mobile Contact No.</Label>
             <Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} />
           </div>
+          <div className="grid gap-2">
+            <Label>Date of Birth</Label>
+            <Input type="date" className="h-11" value={formData.dob || ''} onChange={(e) => setFormData((prev:any) => ({...prev, dob: e.target.value}))} />
+          </div>
         </div>
       </div>
 
@@ -1186,6 +1195,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
           <div className="grid gap-4 text-sm">
             <ProfileItem icon={<Clock />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
+            <ProfileItem icon={<Calendar />} label="Date of Birth" value={formatSafeDate(student.dob)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
