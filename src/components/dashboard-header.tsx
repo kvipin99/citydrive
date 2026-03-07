@@ -1,4 +1,3 @@
-
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -13,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FontSizeToggle } from "@/components/font-size-toggle";
 import { LogOut, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
@@ -85,6 +85,7 @@ export default function DashboardHeader() {
       <div className="flex w-full items-center justify-between">
         <h1 className="text-xl font-semibold">{getPageTitle()}</h1>
         <div className="flex items-center gap-4">
+          <FontSizeToggle />
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
