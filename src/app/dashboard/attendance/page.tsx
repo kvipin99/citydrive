@@ -29,7 +29,10 @@ export default function AttendancePage() {
   const { user } = useUser();
   const { toast } = useToast();
   
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
   const [instructorFilter, setInstructorFilter] = useState<string>("All");
   
@@ -89,9 +92,15 @@ export default function AttendancePage() {
     if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'attendance');
     if (profile.role === 'Student') return query(base, where('studentUid', '==', user.uid));
-    if (isStaff) return query(base, where('date', '==', selectedDate));
+    if (isStaff) {
+      return query(
+        base, 
+        where('date', '>=', dateRange.from),
+        where('date', '<=', dateRange.to)
+      );
+    }
     return null;
-  }, [db, user?.uid, profile?.role, isStaff, selectedDate]);
+  }, [db, user?.uid, profile?.role, isStaff, dateRange.from, dateRange.to]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -196,7 +205,9 @@ export default function AttendancePage() {
   const handleMarkAttendance = () => {
     if (!db || !user || !profile || !selectedStudent) return;
 
-    const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
+    // Use current date for recording if today is within range, or default to current day
+    const recordingDate = format(new Date(), 'yyyy-MM-dd');
+    const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
     const duration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
@@ -222,7 +233,7 @@ export default function AttendancePage() {
       studentName: selectedStudent.name,
       instructorId,
       instructorName,
-      date: selectedDate,
+      date: recordingDate,
       status: 'Present',
       type: sessionType,
       startTime,
@@ -258,6 +269,11 @@ export default function AttendancePage() {
     toast({ title: "Record Removed" });
   };
 
+  const handleToday = () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    setDateRange({ from: today, to: today });
+  };
+
   const sortedRecords = useMemo(() => {
     return [...filteredAttendance].sort((a, b) => {
       const dateCompare = (b.date || '').localeCompare(a.date || '');
@@ -266,10 +282,13 @@ export default function AttendancePage() {
     });
   }, [filteredAttendance]);
 
-  const headerDateDisplay = useMemo(() => {
-    const d = new Date(selectedDate);
-    return isValid(d) ? format(d, 'EEEE, MMMM do') : '...';
-  }, [selectedDate]);
+  const headerRangeDisplay = useMemo(() => {
+    if (dateRange.from === dateRange.to) {
+      const d = new Date(dateRange.from);
+      return isValid(d) ? format(d, 'EEEE, MMM do') : dateRange.from;
+    }
+    return `${dateRange.from} to ${dateRange.to}`;
+  }, [dateRange]);
 
   return (
     <div className="space-y-6">
@@ -315,14 +334,33 @@ export default function AttendancePage() {
               </div>
             )}
 
-            <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
-              <Label className="text-[10px] font-black px-2 text-primary uppercase">Date:</Label>
-              <Input 
-                type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold"
-              />
+            <div className="bg-muted/30 p-2 rounded-lg border flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">From:</Label>
+                <Input 
+                  type="date" 
+                  value={dateRange.from} 
+                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})}
+                  className="h-9 w-[130px] bg-background border-primary/20 text-xs font-bold"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">To:</Label>
+                <Input 
+                  type="date" 
+                  value={dateRange.to} 
+                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})}
+                  className="h-9 w-[130px] bg-background border-primary/20 text-xs font-bold"
+                />
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleToday}
+                className="h-9 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5"
+              >
+                Today
+              </Button>
             </div>
             
             <Button size="lg" className="shadow-lg h-11" onClick={() => setIsDialogOpen(true)}>
@@ -363,7 +401,7 @@ export default function AttendancePage() {
         <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
-              <Calculator className="h-3.5 w-3.5" /> Daily Overall Summary
+              <Calculator className="h-3.5 w-3.5" /> Period Overall Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
@@ -571,7 +609,7 @@ export default function AttendancePage() {
             <div>
               <CardTitle className="text-lg">Session Log</CardTitle>
               <CardDescription>
-                {isStudent ? 'Historical training record' : `Records for ${headerDateDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
+                {isStudent ? 'Historical training record' : `Records for ${headerRangeDisplay} at ${selectedBranch === 'All' ? 'All Branches' : selectedBranch}`}
               </CardDescription>
             </div>
             <Badge variant="outline" className="h-6 font-bold">
@@ -588,7 +626,7 @@ export default function AttendancePage() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  {isStudent && <TableHead className="pl-6">Date</TableHead>}
+                  {(isStudent || dateRange.from !== dateRange.to) && <TableHead className="pl-6">Date</TableHead>}
                   {!isStudent && <TableHead className="pl-6">Student</TableHead>}
                   <TableHead>Instructor</TableHead>
                   <TableHead>Session Type</TableHead>
@@ -602,7 +640,7 @@ export default function AttendancePage() {
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isStudent ? 7 : 9} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={isStudent ? 7 : 10} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <CalendarIcon className="h-10 w-10 opacity-20" />
                         <p className="italic">No sessions logged for this period.</p>
@@ -612,7 +650,7 @@ export default function AttendancePage() {
                 ) : (
                   sortedRecords.map((record) => (
                     <TableRow key={record.id} className="hover:bg-muted/20">
-                      {isStudent && (
+                      {(isStudent || dateRange.from !== dateRange.to) && (
                         <TableCell className="pl-6 font-medium text-xs">
                           {record.date && isValid(new Date(record.date)) ? format(new Date(record.date), 'MMM dd, yyyy') : 'N/A'}
                         </TableCell>
