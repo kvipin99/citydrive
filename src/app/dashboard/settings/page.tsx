@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertCircle, Trash } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
@@ -31,10 +32,8 @@ function SettingsContent() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab Sync Logic
   const [activeTab, setActiveTab] = useState("profile");
 
-  // Data Fetching - Profile first to determine role
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
@@ -134,7 +133,7 @@ function SettingsContent() {
       let rolesToWipe: string[] = [];
 
       switch (type) {
-        case "Students & Photos":
+        case "Students & Enrollment":
           collectionsToWipe = ["students"];
           rolesToWipe = ["Student"];
           break;
@@ -278,7 +277,7 @@ function SettingsContent() {
                 <CardDescription className="text-destructive">Clean up specific data modules. Wiping "Students" also removes their user profiles.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {["Students & Photos", "Instructors & Staff", "Attendance & Sessions", "Financial Records", "Vehicle Fleet", "Resources & Quizzes"].map(m => (
+                {["Students & Enrollment", "Instructors & Staff", "Attendance & Sessions", "Financial Records", "Vehicle Fleet", "Resources & Quizzes"].map(m => (
                   <Button 
                     key={m} 
                     variant="outline" 

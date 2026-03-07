@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock, Calendar as CalendarIcon, MapPin } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock, Calendar as CalendarIcon, MapPin, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -54,6 +54,15 @@ export default function OtherReceiptsPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [listSearchTerm, setListSearchTerm] = useState('');
+  
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
+
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const baseCol = collection(db, 'payments');
@@ -62,14 +71,6 @@ export default function OtherReceiptsPage() {
   }, [db, user?.uid, profile?.branch, isAdmin]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
-
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [listSearchTerm, setListSearchTerm] = useState('');
-  
-  const [dateRange, setDateRange] = useState({
-    from: format(new Date(), 'yyyy-MM-dd'),
-    to: format(new Date(), 'yyyy-MM-dd')
-  });
 
   const [formData, setFormData] = useState({
     amount: 0,
@@ -144,6 +145,10 @@ export default function OtherReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
+    if (isAdmin && selectedBranchFilter !== "All") {
+      result = result.filter(r => r.branch === selectedBranchFilter);
+    }
+
     if (dateRange.from || dateRange.to) {
       result = result.filter(r => {
         const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
@@ -171,7 +176,7 @@ export default function OtherReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange]);
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading;
 
@@ -211,6 +216,20 @@ export default function OtherReceiptsPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isAdmin && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3 w-3 text-muted-foreground" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background">
+                      <SelectValue placeholder="All Branches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
