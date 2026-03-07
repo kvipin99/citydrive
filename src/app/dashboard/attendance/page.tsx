@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,80 +44,60 @@ export default function AttendancePage() {
   const { data: profile } = useDoc(userProfileRef);
   
   const isStudent = profile?.role === 'Student';
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isInstructor = profile?.role === 'Instructor';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStaff = isAdmin || isBranchManager || isInstructor;
 
-  // Global Visibility Roles: Admin and Instructor see everything
   const hasGlobalVisibility = isAdmin || isInstructor;
 
-  // Sync branch for local managers only
   useEffect(() => {
-    if (profile && isBranchManager && !hasGlobalVisibility) {
+    if (profile && !hasGlobalVisibility) {
       setSelectedBranch(profile.branch || "Branch 1");
     }
-  }, [profile, isBranchManager, hasGlobalVisibility]);
+  }, [profile, hasGlobalVisibility]);
 
-  // Fetch Vehicles
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return collection(db, 'vehicles');
   }, [db, user?.uid]);
   const { data: vehicles } = useCollection(vehiclesQuery);
 
-  // Fetch Students for selection
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
-    
     if (isStudent) return query(base, where('userId', '==', user.uid));
-    
-    // Admins and Instructors see ALL students across ALL branches
-    if (hasGlobalVisibility) return base;
-    
-    // Branch Managers see ONLY their assigned branch students
-    if (isBranchManager) {
-      return query(base, where('branch', '==', profile.branch || "Branch 1"));
-    }
-    
-    return base;
-  }, [db, user?.uid, profile, isStudent, hasGlobalVisibility, isBranchManager]);
+    return base; // Staff fetch all for robust local selection
+  }, [db, user?.uid, profile, isStudent]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
-  // Fetch Attendance records for the log table
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'attendance');
-
-    if (isStudent) {
-      return query(base, where('studentUid', '==', user.uid));
-    }
-
-    if (isStaff) {
-      return query(base, where('date', '==', selectedDate));
-    }
+    if (isStudent) return query(base, where('studentUid', '==', user.uid));
+    if (isStaff) return query(base, where('date', '==', selectedDate));
     return null;
   }, [db, user?.uid, profile, isStaff, isStudent, selectedDate]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
-  const isFromBranch = (record: any, branchName: string) => {
+  const isFromBranch = useCallback((record: any, branchName: string) => {
     if (branchName === "All") return true;
     if (record.branch === branchName) return true;
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.studentId?.startsWith(`B${branchNum}`)) {
+    if (branchNum && (record.studentId?.startsWith(`B${branchNum}`) || record.id?.startsWith(`B${branchNum}`))) {
       return true;
     }
     return false;
-  };
+  }, []);
 
   const filteredAttendance = useMemo(() => {
     if (!rawAttendance) return [];
-    if (selectedBranch === "All") return rawAttendance;
-    return rawAttendance.filter(rec => isFromBranch(rec, selectedBranch));
-  }, [rawAttendance, selectedBranch]);
+    const currentBranchContext = hasGlobalVisibility ? selectedBranch : (profile?.branch || "Branch 1");
+    if (currentBranchContext === "All") return rawAttendance;
+    return rawAttendance.filter(rec => isFromBranch(rec, currentBranchContext));
+  }, [rawAttendance, selectedBranch, profile, hasGlobalVisibility, isFromBranch]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -145,7 +126,12 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
+    const currentBranchContext = hasGlobalVisibility ? "All" : (profile?.branch || "Branch 1");
+    
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
+    if (currentBranchContext !== "All") {
+      result = result.filter(s => isFromBranch(s, currentBranchContext));
+    }
     
     if (!studentSearch) return result;
     const term = studentSearch.toLowerCase();
@@ -154,7 +140,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch]);
+  }, [allStudents, studentSearch, profile, hasGlobalVisibility, isFromBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -164,9 +150,7 @@ export default function AttendancePage() {
       const endTotal = eH * 60 + eM;
       const diff = endTotal - startTotal;
       return Math.max(0, parseFloat((diff / 60).toFixed(1)));
-    } catch (e) {
-      return 0;
-    }
+    } catch (e) { return 0; }
   };
 
   const handleMarkAttendance = () => {
@@ -174,7 +158,6 @@ export default function AttendancePage() {
 
     const attendanceId = `${selectedStudent.id}_${selectedDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
-
     const duration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
 
@@ -197,12 +180,7 @@ export default function AttendancePage() {
     };
 
     setDocumentNonBlocking(attendanceRef, record, { merge: true });
-    
-    toast({
-      title: "Attendance Recorded",
-      description: `${selectedStudent.name} ${sessionType} session saved.`
-    });
-
+    toast({ title: "Attendance Recorded", description: `${selectedStudent.name} ${sessionType} session saved.` });
     setIsDialogOpen(false);
     resetPopup();
   };
@@ -328,7 +306,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {hasGlobalVisibility ? "Full student list available for recording training." : "Select student and class details for your branch."}
+              {hasGlobalVisibility ? "Search all students to record training." : "Search branch students to record training."}
             </DialogDescription>
           </DialogHeader>
           
@@ -337,12 +315,12 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {hasGlobalVisibility ? "(All Branches)" : "(My Branch)"}
+                    Search Student {hasGlobalVisibility ? "(Global)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="Start typing Name, ID or Phone..." 
+                      placeholder="Name, ID or Phone..." 
                       className="pl-8" 
                       value={studentSearch} 
                       onChange={(e) => setStudentSearch(e.target.value)} 

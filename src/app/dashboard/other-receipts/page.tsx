@@ -66,7 +66,6 @@ export default function OtherReceiptsPage() {
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    // Fetch all for staff to enable smart local filtering/visibility
     return collection(db, 'payments');
   }, [db, user?.uid, profile]);
 
@@ -102,7 +101,9 @@ export default function OtherReceiptsPage() {
     if (branchName === "All") return true;
     if (record.branch === branchName) return true;
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.id?.startsWith(`MISC-B${branchNum}`)) return true;
+    if (branchNum && (record.id?.startsWith(`MISC-B${branchNum}`) || record.id?.startsWith(`REC-B${branchNum}`))) {
+      return true;
+    }
     return false;
   }, []);
 
@@ -144,7 +145,6 @@ export default function OtherReceiptsPage() {
     };
 
     setDocumentNonBlocking(receiptRef, record, { merge: true });
-
     setIsDialogOpen(false);
     resetForm();
     toast({ title: "Receipt Recorded", description: `Receipt generated for ${record.studentName}.` });
@@ -206,72 +206,21 @@ export default function OtherReceiptsPage() {
         <div className="flex items-center gap-2">
            <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search receipts..." 
-              className="pl-8 w-[200px] lg:w-[300px]" 
-              value={listSearchTerm} 
-              onChange={(e) => setListSearchTerm(e.target.value)} 
-            />
+            <Input placeholder="Search receipts..." className="pl-8 w-[200px] lg:w-[300px]" value={listSearchTerm} onChange={(e) => setListSearchTerm(e.target.value)} />
           </div>
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} variant="outline" className="border-primary text-primary hover:bg-primary/5">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Record Income
-          </Button>
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} variant="outline" className="border-primary text-primary hover:bg-primary/5"><PlusCircle className="mr-2 h-4 w-4" />Record Income</Button>
         </div>
       </div>
 
       <Card>
         <CardHeader className="pb-3 border-b">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Layers className="h-5 w-5 text-primary" />
-              <div>
-                <CardTitle className="text-lg">Misc Income Log</CardTitle>
-                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
-              </div>
-            </div>
-
+            <div className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /><div><CardTitle className="text-lg">Misc Income Log</CardTitle><CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription></div></div>
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isAdmin && (
-                <div className="flex items-center gap-2 border-r pr-3 mr-1">
-                  <Filter className="h-3 w-3 text-muted-foreground" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background">
-                      <SelectValue placeholder="All Branches" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Branches</SelectItem>
-                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
-                <Input 
-                  type="date" 
-                  className="h-8 w-[130px] text-xs bg-background" 
-                  value={dateRange.from} 
-                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
-                <Input 
-                  type="date" 
-                  className="h-8 w-[130px] text-xs bg-background" 
-                  value={dateRange.to} 
-                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
-                />
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10"
-                onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
-              >
-                Today
-              </Button>
+              {isAdmin && (<div className="flex items-center gap-2 border-r pr-3 mr-1"><Filter className="h-3 w-3 text-muted-foreground" /><Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}><SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background"><SelectValue placeholder="All Branches" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
+              <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} /></div>
+              <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} /></div>
+              <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10" onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}>Today</Button>
             </div>
           </div>
         </CardHeader>
@@ -292,53 +241,16 @@ export default function OtherReceiptsPage() {
               </TableHeader>
               <TableBody>
                 {filteredReceipts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
-                      <div className="flex flex-col items-center gap-2 opacity-50">
-                        <CalendarIcon className="h-10 w-10" />
-                        <p className="italic text-sm font-medium">No records found.</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
                   filteredReceipts.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/20">
-                      <TableCell className="pl-6 text-muted-foreground text-xs">
-                        {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
-                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}
-                      </TableCell>
-                      <TableCell>
-                        <div className="grid gap-0.5">
-                          <span className="font-bold text-sm text-primary">{r.category}</span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <User className="h-3 w-3" /> {r.studentName}
-                          </span>
-                        </div>
-                      </TableCell>
+                      <TableCell className="pl-6 text-muted-foreground text-xs">{r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}</TableCell>
+                      <TableCell><div className="grid gap-0.5"><span className="font-bold text-sm text-primary">{r.category}</span><span className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> {r.studentName}</span></div></TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{r.branch}</Badge></TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-xs font-medium">
-                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                          {r.method}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-black text-green-600 pr-6">
-                        ₹{r.amount?.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {isAdmin && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete Receipt
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </TableCell>
+                      <TableCell><div className="flex items-center gap-2 text-xs font-medium"><CreditCard className="h-3.5 w-3.5 text-muted-foreground" />{r.method}</div></TableCell>
+                      <TableCell className="text-right font-black text-green-600 pr-6">₹{r.amount?.toLocaleString()}</TableCell>
+                      <TableCell>{isAdmin && (<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}><Trash2 className="mr-2 h-4 w-4" /> Delete Receipt</DropdownMenuItem></DropdownMenuContent></DropdownMenu>)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -350,92 +262,23 @@ export default function OtherReceiptsPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2 border-b shrink-0">
-            <DialogTitle>Issue Other Receipt</DialogTitle>
-            <DialogDescription>Record miscellaneous income.</DialogDescription>
-          </DialogHeader>
-          
+          <DialogHeader className="p-6 pb-2 border-b shrink-0"><DialogTitle>Issue Other Receipt</DialogTitle><DialogDescription>Record miscellaneous income.</DialogDescription></DialogHeader>
           <div className="flex-1 overflow-y-auto p-6">
             <div className="grid gap-6 pb-32">
               <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label className="flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-primary" />
-                    Target Branch {!isAdmin && <Lock className="h-3 w-3" />}
-                  </Label>
-                  <Select 
-                    value={formData.branch} 
-                    onValueChange={(v) => setFormData({...formData, branch: v})}
-                    disabled={!isAdmin}
-                  >
-                    <SelectTrigger className="h-11 font-bold border-primary/20">
-                      <SelectValue placeholder="Select Branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Income Category</Label>
-                  <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {RECEIPT_CATEGORIES.map(cat => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Received From (Name)</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
-                  </div>
-                </div>
-
+                <div className="grid gap-2"><Label className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-primary" />Target Branch {!isAdmin && <Lock className="h-3 w-3" />}</Label><Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})} disabled={!isAdmin}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label>Income Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{RECEIPT_CATEGORIES.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label>Received From (Name)</Label><div className="relative"><User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} /></div></div>
                 <div className="grid gap-4 pt-4 border-t">
-                  <div className="grid gap-2">
-                    <Label>Receipt Date</Label>
-                    <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label>Amount (₹)</Label>
-                      <Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Method</Label>
-                      <Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Cash">Cash</SelectItem>
-                          <SelectItem value="Online">Online</SelectItem>
-                          <SelectItem value="Cheque">Cheque</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Receipt No. (Optional)</Label>
-                    <Input placeholder="Auto-generated if blank" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Description (Optional)</Label>
-                    <Input placeholder="e.g. Form fee" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
-                  </div>
+                  <div className="grid gap-2"><Label>Receipt Date</Label><Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} /></div>
+                  <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
+                  <div className="grid gap-2"><Label>Receipt No. (Optional)</Label><Input placeholder="Auto-generated if blank" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} /></div>
+                  <div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. Form fee" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
                 </div>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10 shrink-0">
-            <Button onClick={handleCreateReceipt} className="w-full">
-              Generate Other Receipt
-            </Button>
-          </DialogFooter>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10 shrink-0"><Button onClick={handleCreateReceipt} className="w-full">Generate Other Receipt</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

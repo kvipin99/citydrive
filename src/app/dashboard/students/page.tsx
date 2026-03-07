@@ -83,7 +83,7 @@ function StudentsContent() {
     if (isStudent) {
       return query(base, where('userId', '==', user.uid));
     }
-    return base; // Staff fetch all, filter client-side for stability
+    return base; // Staff fetch all, filter client-side for robustness
   }, [db, user?.uid, profile, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
@@ -143,7 +143,7 @@ function StudentsContent() {
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    const branchStudents = students?.filter(s => s.branch === branchName) || [];
+    const branchStudents = students?.filter(s => s.branch === branchName || s.id?.startsWith(prefix)) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
         const seqPart = s.id.slice(prefix.length);
@@ -209,7 +209,7 @@ function StudentsContent() {
     return false;
   }, []);
 
-  const filteredStudents = useMemo(() => {
+  const filteredStudentsList = useMemo(() => {
     if (!students) return [];
     let result = students;
 
@@ -631,10 +631,10 @@ function StudentsContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStudents.length === 0 ? (
+                {filteredStudentsList.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
-                  filteredStudents.map((student) => (
+                  filteredStudentsList.map((student) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
