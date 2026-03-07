@@ -71,7 +71,7 @@ export default function AttendancePage() {
     if (profile && !selectedInstructorId) {
       setSelectedInstructorId(user?.uid || "");
     }
-  }, [profile?.branch, isAdmin, user?.uid, selectedInstructorId]);
+  }, [profile, isAdmin, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -134,7 +134,9 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     let result = rawAttendance;
 
-    const currentBranchContext = isManagement ? selectedBranch : (profile?.branch || "Branch 1");
+    // Instructors are "Full Students" visibility, so they see all records unless they are filtering.
+    // Branch managers are restricted to their branch.
+    const currentBranchContext = isAdmin || isInstructor ? selectedBranch : (profile?.branch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(rec => isFromBranch(rec, currentBranchContext));
     }
@@ -149,7 +151,7 @@ export default function AttendancePage() {
     }
 
     return result;
-  }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isManagement, isFromBranch, instructors]);
+  }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isAdmin, isInstructor, isFromBranch, instructors]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -178,7 +180,10 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    const searchBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
+    
+    // Updated visibility: Admin, Master, and Instructors see all students.
+    // Branch managers see only their branch students.
+    const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
     if (searchBranchContext !== "All") {
@@ -192,7 +197,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch, profile?.branch, isAdmin, isFromBranch]);
+  }, [allStudents, studentSearch, profile?.branch, isAdmin, isInstructor, isFromBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -299,7 +304,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isManagement ? (selectedBranch === 'All' ? 'Global school training records.' : `Records for ${selectedBranch}`) : `Records for your branch.`}
+            {isStudent ? 'My training sessions history.' : isManagement ? (selectedBranch === 'All' ? 'Global school training records.' : `Records for ${selectedBranch}`) : isInstructor ? 'Global school training records.' : `Records for your branch.`}
           </p>
         </div>
         {!isStudent && (
@@ -320,7 +325,7 @@ export default function AttendancePage() {
               </Select>
             </div>
 
-            {isManagement && (
+            {(isManagement || isInstructor) && (
               <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
                 <Label className="text-[10px] font-black px-2 text-primary uppercase flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Branch:
@@ -421,7 +426,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {isAdmin ? "Search all students to record training." : "Search branch students to record training."}
+              {(isAdmin || isInstructor) ? "Search all students to record training." : "Search branch students to record training."}
             </DialogDescription>
           </DialogHeader>
           
@@ -430,7 +435,7 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {isAdmin ? "(Global)" : "(My Branch)"}
+                    Search Student {(isAdmin || isInstructor) ? "(Global)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -531,12 +536,12 @@ export default function AttendancePage() {
 
                   <div className="grid gap-3">
                     <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
-                      Assigned Instructor {!isManagement && <Lock className="h-3 w-3" />}
+                      Assigned Instructor {isInstructor && <Lock className="h-3 w-3" />}
                     </Label>
                     <Select 
                       value={selectedInstructorId} 
                       onValueChange={setSelectedInstructorId}
-                      disabled={!isManagement}
+                      disabled={isInstructor}
                     >
                       <SelectTrigger className="h-11 border-2">
                         <SelectValue placeholder="Select Instructor" />
@@ -546,7 +551,7 @@ export default function AttendancePage() {
                         {instructors?.filter(i => i.userId !== user?.uid).map(i => (
                           <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>
                         ))}
-                        <SelectItem value="Manual">Another Name (Manual Entry)</SelectItem>
+                        {(isAdmin || isBranchManager) && <SelectItem value="Manual">Another Name (Manual Entry)</SelectItem>}
                       </SelectContent>
                     </Select>
                     {selectedInstructorId === 'Manual' && (
@@ -557,7 +562,7 @@ export default function AttendancePage() {
                         className="h-11 border-2 animate-in fade-in slide-in-from-top-1"
                       />
                     )}
-                    {!isManagement && <p className="text-[10px] text-muted-foreground italic">Identification locked to your staff profile.</p>}
+                    {isInstructor && <p className="text-[10px] text-muted-foreground italic">Identification locked to your staff profile.</p>}
                   </div>
 
                   {sessionType === 'Practical' && (
