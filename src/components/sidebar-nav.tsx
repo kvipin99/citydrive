@@ -1,4 +1,3 @@
-
 "use client";
 
 import { usePathname } from 'next/navigation';
@@ -56,7 +55,7 @@ export default function SidebarNav() {
   }, [db, user]);
 
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
   const isInstructor = profile?.role === 'Instructor';

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -75,29 +74,10 @@ export default function StudentReceiptsPage() {
   const [receiptFormData, setReceiptFormData] = useState({
     amount: 0,
     receiptNo: '',
-    method: 'Cash' as const,
+    method: 'Cash' as 'Cash' | 'Online' | 'Cheque',
     date: format(new Date(), 'yyyy-MM-dd'),
     description: ''
   });
-
-  useEffect(() => {
-    if (profile && !isAdmin) {
-      setSelectedBranchFilter(profileBranch || "Branch 1");
-    }
-  }, [profile?.branch, isAdmin, profileBranch]);
-
-  const receiptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile?.role) return null;
-    return collection(db, 'payments'); 
-  }, [db, user?.uid, profile?.role]);
-
-  const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile?.role) return null;
-    return collection(db, 'students');
-  }, [db, user?.uid, profile?.role]);
-
-  const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
-  const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
@@ -112,14 +92,29 @@ export default function StudentReceiptsPage() {
     if (branchNum) {
       const prefix = `B${branchNum}`;
       if (rBranch === prefix.toLowerCase()) return true;
-      
-      const rid = record.id || '';
-      const sid = record.studentId || '';
-      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
-      if (sid.startsWith(prefix)) return true;
+      if (record.id?.startsWith(prefix) || record.studentId?.startsWith(prefix) || record.id?.startsWith(`REC-${prefix}`)) return true;
     }
     return false;
   }, []);
+
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
+
+  const receiptsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile?.role) return null;
+    return collection(db, 'payments'); 
+  }, [db, user?.uid, profile?.role]);
+
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile?.role) return null;
+    return collection(db, 'students');
+  }, [db, user?.uid, profile?.role]);
+
+  const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
+  const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const resetForm = () => {
     setSelectedStudent(null);
@@ -138,7 +133,7 @@ export default function StudentReceiptsPage() {
     const currentBranchContext = isManagement ? "All" : (profileBranch || "Branch 1");
     
     let result = students || [];
-    if (currentBranchContext !== "All") {
+    if (!isAdmin && currentBranchContext !== "All") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
 
@@ -147,7 +142,7 @@ export default function StudentReceiptsPage() {
       s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.phone?.includes(searchTerm)
     ).slice(0, 5);
-  }, [students, searchTerm, isManagement, profileBranch, isFromBranch]);
+  }, [students, searchTerm, isManagement, profileBranch, isFromBranch, isAdmin]);
 
   const calculateBalance = (student: Student) => {
     const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
@@ -207,6 +202,7 @@ export default function StudentReceiptsPage() {
       return;
     }
 
+    setIsSubmitting(true);
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
@@ -252,10 +248,15 @@ export default function StudentReceiptsPage() {
       }
     } catch (e) { console.error(e); }
 
-    setIsReceiptDialogOpen(false);
-    resetForm();
-    toast({ title: "Receipt Generated", description: `Receipt #${record.receiptNo} for ${record.studentName} saved.` });
+    setTimeout(() => {
+      setIsReceiptDialogOpen(false);
+      setIsSubmitting(false);
+      resetForm();
+      toast({ title: "Receipt Generated", description: `Receipt #${record.receiptNo} for ${record.studentName} saved.` });
+    }, 100);
   };
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleDeleteReceipt = async (receipt: ReceiptRecord) => {
     if (!isAdmin) return;
@@ -402,7 +403,7 @@ export default function StudentReceiptsPage() {
               )}
             </div>
           </div>
-          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><Button disabled={!selectedStudent} onClick={handleCreateReceipt} className="w-full">Generate Student Receipt</Button></DialogFooter>
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><Button disabled={!selectedStudent || isSubmitting} onClick={handleCreateReceipt} className="w-full">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Generate Student Receipt</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

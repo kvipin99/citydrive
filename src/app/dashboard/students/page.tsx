@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -59,7 +58,6 @@ function StudentsContent() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const editPhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,24 +68,19 @@ function StudentsContent() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
-  // Use stable role checks
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
   const isManagement = isAdmin || isBranchManager;
-  const isStaff = isManagement || isInstructor;
   const profileBranch = profile?.branch;
 
-  // Optimized query dependency to prevent page freezes
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
-    const base = collection(db, 'students');
-    if (profile.role === 'Student') {
-      return query(base, where('userId', '==', user.uid));
-    }
-    return base; 
-  }, [db, user?.uid, profile?.role, isStudent]);
+    // We fetch all records for staff to handle smart filtering on client side
+    // This avoids missing records entered by admin/master for specific branches
+    return collection(db, 'students');
+  }, [db, user?.uid, profile?.role]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -140,16 +133,33 @@ function StudentsContent() {
     description: ''
   });
 
+  const isFromBranch = useCallback((record: Student, branchName: string) => {
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    // Tier 1: Exact/Normalized Name Match
+    if (rBranch === targetBranch) return true;
+
+    // Tier 2: ID Prefix Match (e.g. B1 matches Branch 1)
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum) {
+      const prefix = `B${branchNum}`;
+      if (rBranch === prefix.toLowerCase()) return true;
+      if (record.id?.startsWith(prefix)) return true;
+    }
+    return false;
+  }, []);
+
   const generateBranchStudentId = useCallback((branchName: string) => {
     if (!branchName) return "";
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    const branchStudents = students?.filter(s => {
-      const normalize = (val: string) => val?.replace(/\s+/g, '').toLowerCase() || '';
-      return normalize(s.branch) === normalize(branchName) || s.id?.startsWith(prefix);
-    }) || [];
+    const branchStudents = students?.filter(s => isFromBranch(s, branchName)) || [];
 
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -162,7 +172,7 @@ function StudentsContent() {
     
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 10001;
     return `${prefix}${nextSeq}`;
-  }, [students]);
+  }, [students, isFromBranch]);
 
   const resetForm = useCallback(() => {
     const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
@@ -207,24 +217,6 @@ function StudentsContent() {
       }
     }
   }, [isAddDialogOpen, formData.branch, students, generateBranchStudentId, formData.id]);
-
-  const isFromBranch = useCallback((record: Student, branchName: string) => {
-    if (!branchName || branchName === "All" || branchName === "Full") return true;
-    
-    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
-    const targetBranch = normalize(branchName);
-    
-    if (rBranch === targetBranch) return true;
-
-    const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum) {
-      const prefix = `B${branchNum}`;
-      if (rBranch === prefix.toLowerCase()) return true;
-      if (record.id?.startsWith(prefix)) return true;
-    }
-    return false;
-  }, []);
 
   const filteredStudentsList = useMemo(() => {
     if (!students) return [];
@@ -569,7 +561,6 @@ function StudentsContent() {
                   />
                 </div>
                 
-                {/* User Request: Remove Register Student for Admin/Master */}
                 {isBranchManager && (
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
                     <DialogTrigger asChild>
@@ -1069,7 +1060,7 @@ function StudentForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2">
               <div className="grid gap-2">
                 <Label className="text-xs font-bold text-primary">Custom Course Title</Label>
-                <Input value={formData.specialCourseName || ''} placeholder="e.g. VIP VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} />
+                <Input value={formData.specialCourseName || ''} placeholder="e.g. VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} />
               </div>
               <div className="grid gap-2">
                 <Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label>
