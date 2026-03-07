@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
@@ -72,6 +72,9 @@ function SettingsContent() {
 
   const settingsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "backup") : null), [db, isAdmin]);
   const { data: autoSettings } = useDoc(settingsRef);
+
+  const controlsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "controls") : null), [db, isAdmin]);
+  const { data: controls } = useDoc(controlsRef);
 
   const [newPassword, setNewPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -345,6 +348,28 @@ function SettingsContent() {
 
         {isAdmin && (
           <TabsContent value="automation" className="space-y-6 mt-6">
+            <Card className="border-orange-200 bg-orange-50/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-orange-600" />
+                  Operational Guardrails
+                </CardTitle>
+                <CardDescription>Control data entry policies for branch staff.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Lock Entry Date (Today Only)</Label>
+                    <p className="text-sm text-muted-foreground">Force branch users to record attendance, receipts, and expenses for the current day only.</p>
+                  </div>
+                  <Switch 
+                    checked={controls?.lockDateEntry ?? false} 
+                    onCheckedChange={(checked) => setDocumentNonBlocking(controlsRef!, { lockDateEntry: checked }, { merge: true })} 
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader><CardTitle className="flex items-center gap-2"><DatabaseBackup className="h-5 w-5 text-primary" />Backup Automation</CardTitle></CardHeader>
               <CardContent className="space-y-6">

@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -44,10 +44,16 @@ export default function ExpensesPage() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+
+  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
+  const { data: controls } = useDoc(controlsRef);
+
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
+
+  const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
@@ -149,8 +155,11 @@ export default function ExpensesPage() {
     const expenseId = selectedExpense ? selectedExpense.id : `EXP-${Date.now()}`;
     const expenseRef = doc(db, 'expenses', expenseId);
 
+    const expenseDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date;
+
     const expenseData = {
       ...formData,
+      date: expenseDate,
       id: expenseId,
       createdBy: selectedExpense?.createdBy || user?.uid,
       updatedAt: serverTimestamp(),
@@ -319,12 +328,14 @@ export default function ExpensesPage() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Date</Label>
+                <Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label>
                 <Input 
                   type="date" 
-                  value={formData.date} 
+                  value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} 
+                  disabled={isDateLocked}
                   onChange={(e) => setFormData({...formData, date: e.target.value})} 
                 />
+                {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Today only.</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Category</Label>

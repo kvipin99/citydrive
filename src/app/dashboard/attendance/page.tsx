@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
-import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users, UserSquare } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users, UserSquare, Lock } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -51,6 +51,9 @@ export default function AttendancePage() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile } = useDoc(userProfileRef);
+
+  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
+  const { data: controls } = useDoc(controlsRef);
   
   const isStudent = profile?.role === 'Student';
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
@@ -58,6 +61,8 @@ export default function AttendancePage() {
   const isInstructor = profile?.role === 'Instructor';
   const isManagement = isAdmin || isBranchManager;
   const isStaff = isManagement || isInstructor;
+
+  const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   useEffect(() => {
     if (profile && !isAdmin) {
@@ -173,7 +178,6 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    // Strict isolation for search: Branch Managers ONLY see their own branch students
     const searchBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
@@ -204,7 +208,7 @@ export default function AttendancePage() {
   const handleMarkAttendance = () => {
     if (!db || !user || !profile || !selectedStudent) return;
 
-    const recordingDate = entryDate || format(new Date(), 'yyyy-MM-dd');
+    const recordingDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : (entryDate || format(new Date(), 'yyyy-MM-dd'));
     const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
     const duration = calculateDuration(startTime, endTime);
@@ -491,13 +495,17 @@ export default function AttendancePage() {
                   </div>
 
                   <div className="grid gap-3">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Session Date</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                      Session Date {isDateLocked && <Lock className="h-3 w-3" />}
+                    </Label>
                     <Input 
                       type="date" 
-                      value={entryDate} 
+                      value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : entryDate} 
                       onChange={(e) => setEntryDate(e.target.value)}
+                      disabled={isDateLocked}
                       className="h-11 bg-background border-2 font-bold"
                     />
+                    {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Restricted to current date by administrator.</p>}
                   </div>
 
                   <div className="grid gap-3">

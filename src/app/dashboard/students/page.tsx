@@ -68,12 +68,17 @@ function StudentsContent() {
   }, [db, user?.uid]);
   
   const { data: profile } = useDoc(userProfileRef);
+
+  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
+  const { data: controls } = useDoc(controlsRef);
   
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
   const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
+
+  const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
@@ -387,7 +392,9 @@ function StudentsContent() {
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
-    const transactionDate = new Date(receiptFormData.date);
+    
+    const transactionDateStr = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date;
+    const transactionDate = new Date(transactionDateStr);
 
     const record = {
       id: receiptId,
@@ -820,8 +827,16 @@ function StudentsContent() {
 
                   <div className="grid gap-4 pt-4 border-t">
                     <div className="grid gap-2">
-                      <Label>Receipt Date</Label>
-                      <Input type="date" value={receiptFormData.date} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
+                      <Label className="flex items-center gap-2">
+                        Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}
+                      </Label>
+                      <Input 
+                        type="date" 
+                        value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} 
+                        disabled={isDateLocked}
+                        onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} 
+                      />
+                      {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Today only.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">

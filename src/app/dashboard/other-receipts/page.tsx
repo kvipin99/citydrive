@@ -52,10 +52,16 @@ export default function OtherReceiptsPage() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+
+  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
+  const { data: controls } = useDoc(controlsRef);
+
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
+
+  const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -139,7 +145,9 @@ export default function OtherReceiptsPage() {
     const branchNum = formData.branch.match(/\d+/)?.[0] || '1';
     const receiptId = `MISC-B${branchNum}-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
-    const transactionDate = new Date(formData.date);
+    
+    const transactionDateStr = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date;
+    const transactionDate = new Date(transactionDateStr);
     
     const record: ReceiptRecord = {
       id: receiptId,
@@ -280,7 +288,16 @@ export default function OtherReceiptsPage() {
                 <div className="grid gap-2"><Label>Income Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{RECEIPT_CATEGORIES.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}</SelectContent></Select></div>
                 <div className="grid gap-2"><Label>Received From (Name)</Label><div className="relative"><User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} /></div></div>
                 <div className="grid gap-4 pt-4 border-t">
-                  <div className="grid gap-2"><Label>Receipt Date</Label><Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} /></div>
+                  <div className="grid gap-2">
+                    <Label className="flex items-center gap-2">Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}</Label>
+                    <Input 
+                      type="date" 
+                      value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} 
+                      disabled={isDateLocked} 
+                      onChange={(e) => setFormData({...formData, date: e.target.value})} 
+                    />
+                    {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Locked to today by administrator.</p>}
+                  </div>
                   <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={formData.method} onValueChange={(v) => setFormData({...formData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
                   <div className="grid gap-2"><Label>Receipt No. (Optional)</Label><Input placeholder="Auto-generated if blank" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} /></div>
                   <div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. Form fee" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>

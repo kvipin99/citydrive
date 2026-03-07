@@ -56,10 +56,16 @@ export default function StudentReceiptsPage() {
   }, [db, user?.uid]);
   
   const { data: profile } = useDoc(userProfileRef);
+
+  const controlsRef = useMemoFirebase(() => (db ? doc(db, 'settings', 'controls') : null), [db]);
+  const { data: controls } = useDoc(controlsRef);
+
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
+
+  const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
@@ -135,7 +141,6 @@ export default function StudentReceiptsPage() {
     
     let result = students || [];
     
-    // Strict isolation: Branch Managers ONLY see their own branch students
     if (!isAdmin) {
       const targetBranch = profileBranch || "Branch 1";
       result = result.filter(s => isFromBranch(s, targetBranch));
@@ -210,7 +215,9 @@ export default function StudentReceiptsPage() {
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
-    const transactionDate = new Date(receiptFormData.date);
+    
+    const transactionDateStr = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date;
+    const transactionDate = new Date(transactionDateStr);
     
     const record: ReceiptRecord = {
       id: receiptId,
@@ -397,16 +404,28 @@ export default function StudentReceiptsPage() {
                   <div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p></div></div>
                   <div className="grid gap-4 pt-4 border-t">
                     <div className="grid gap-2">
-                      <Label>Receipt Date</Label>
+                      <Label className="flex items-center gap-2">
+                        Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}
+                      </Label>
                       <div className="relative">
-                        {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                        <Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
+                        <Input 
+                          type="date" 
+                          value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} 
+                          disabled={isDateLocked} 
+                          onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} 
+                        />
                       </div>
-                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
+                      {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date by administrator.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}> <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
-                    <div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div>
-                    <div className="grid gap-2"><Label>Note (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div>
+                    <div className="grid gap-2">
+                      <Label>Receipt No.</Label>
+                      <Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Note (Optional)</Label>
+                      <Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} />
+                    </div>
                   </div>
                 </div>
               )}
