@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,11 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Calendar as CalendarIcon } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
+
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Student {
   id: string;
@@ -54,26 +56,9 @@ export default function StudentReceiptsPage() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
-  const receiptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
-    const baseCol = collection(db, 'payments');
-    if (isAdmin) return baseCol;
-    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
-
-  // Updated studentsQuery to allow all staff to find any student
-  const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
-    const baseCol = collection(db, 'students');
-    if (profile.role === 'Student') return query(baseCol, where('userId', '==', user.uid));
-    return baseCol;
-  }, [db, user?.uid, profile?.role]);
-
-  const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
-  const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
-
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [listSearchTerm, setListSearchTerm] = useState('');
@@ -84,11 +69,28 @@ export default function StudentReceiptsPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
+  const receiptsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    const baseCol = collection(db, 'payments');
+    if (isAdmin) return baseCol;
+    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
+  }, [db, user?.uid, profile?.branch, isAdmin]);
+
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    const baseCol = collection(db, 'students');
+    if (profile.role === 'Student') return query(baseCol, where('userId', '==', user.uid));
+    return baseCol;
+  }, [db, user?.uid, profile?.role]);
+
+  const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
+  const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
+
   const [formData, setFormData] = useState({
     amount: 0,
     receiptNo: '',
     method: 'Cash' as const,
-    date: new Date().toISOString().split('T')[0],
+    date: format(new Date(), 'yyyy-MM-dd'),
     description: ''
   });
 
@@ -99,7 +101,7 @@ export default function StudentReceiptsPage() {
       amount: 0, 
       receiptNo: '', 
       method: 'Cash',
-      date: new Date().toISOString().split('T')[0],
+      date: format(new Date(), 'yyyy-MM-dd'),
       description: ''
     });
   };
@@ -215,6 +217,10 @@ export default function StudentReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
 
+    if (isAdmin && selectedBranchFilter !== "All") {
+      result = result.filter(r => r.branch === selectedBranchFilter);
+    }
+
     if (dateRange.from || dateRange.to) {
       result = result.filter(r => {
         const rDate = r.date?.seconds ? new Date(r.date.seconds * 1000) : (typeof r.date === 'string' ? parseISO(r.date) : new Date(r.date));
@@ -241,7 +247,7 @@ export default function StudentReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange]);
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
 
@@ -281,6 +287,20 @@ export default function StudentReceiptsPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isAdmin && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                      <SelectValue placeholder="All Branches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
