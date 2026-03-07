@@ -40,7 +40,7 @@ export default function AccountingPage() {
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
   
@@ -71,19 +71,23 @@ export default function AccountingPage() {
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
-    if (branchName === "All") return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    if (normalize(record.branch) === normalize(branchName)) return true;
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
-      if (record.id?.startsWith(prefix)) return true;
-      if (record.studentId?.startsWith(prefix)) return true;
-      if (record.id?.startsWith(`REC-B${branchNum}`)) return true;
-      if (record.id?.startsWith(`EXP-B${branchNum}`)) return true;
-      if (record.id?.startsWith(`MISC-B${branchNum}`)) return true;
+      if (rBranch === prefix.toLowerCase()) return true;
+      
+      const rid = record.id || '';
+      const sid = record.studentId || '';
+      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
+      if (sid.startsWith(prefix)) return true;
     }
     return false;
   }, []);
@@ -308,7 +312,7 @@ export default function AccountingPage() {
                   {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Branch identity locked.</p>}
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to your assigned branch.</p>}
             </div>
           </CardContent>
         </Card>

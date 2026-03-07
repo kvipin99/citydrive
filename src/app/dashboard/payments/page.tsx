@@ -1,5 +1,5 @@
 
-'use client';
+"use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,18 +100,23 @@ export default function StudentReceiptsPage() {
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
-    if (branchName === "All") return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    if (normalize(record.branch) === normalize(branchName)) return true;
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
-      const studentPrefix = `B${branchNum}`;
-      const receiptPrefix = `REC-B${branchNum}`;
-      if (record.studentId?.startsWith(studentPrefix) || record.id?.startsWith(studentPrefix) || record.id?.startsWith(receiptPrefix)) {
-        return true;
-      }
+      const prefix = `B${branchNum}`;
+      if (rBranch === prefix.toLowerCase()) return true;
+      
+      const rid = record.id || '';
+      const sid = record.studentId || '';
+      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
+      if (sid.startsWith(prefix)) return true;
     }
     return false;
   }, []);
@@ -276,7 +281,7 @@ export default function StudentReceiptsPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Student Receipts</h2>
-          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'Global course fee collections.' : `Fee collections for ${selectedBranchFilter}`) : `Fee collections for ${profile?.branch || 'your branch'}`}</p>
+          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'Global course fee collections.' : `Collections for ${selectedBranchFilter}`) : `Collections for your branch.`}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <div className="relative">
@@ -312,7 +317,7 @@ export default function StudentReceiptsPage() {
                   <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
                   <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
                     <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
-                      <SelectValue placeholder="All Branches" />
+                      <SelectValue placeholder="Branch" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Branches</SelectItem>
@@ -389,7 +394,7 @@ export default function StudentReceiptsPage() {
                   <div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p></div></div>
                   <div className="grid gap-4 pt-4 border-t">
                     <div className="grid gap-2"><Label>Receipt Date</Label><div className="relative">{!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}<Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} /></div></div>
-                    <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
+                    <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}> <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
                     <div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div>
                     <div className="grid gap-2"><Label>Note (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div>
                   </div>

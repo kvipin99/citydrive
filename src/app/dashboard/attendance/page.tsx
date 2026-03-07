@@ -52,8 +52,8 @@ export default function AttendancePage() {
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isInstructor = profile?.role === 'Instructor';
-  const isStaff = isAdmin || isBranchManager || isInstructor;
   const isManagement = isAdmin || isBranchManager;
+  const isStaff = isManagement || isInstructor;
 
   useEffect(() => {
     if (profile && !isAdmin) {
@@ -96,17 +96,23 @@ export default function AttendancePage() {
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
-    if (branchName === "All") return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    if (normalize(record.branch) === normalize(branchName)) return true;
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
-      if (record.studentId?.startsWith(prefix) || record.id?.startsWith(prefix) || record.id?.startsWith(`REC-B${branchNum}`)) {
-        return true;
-      }
+      if (rBranch === prefix.toLowerCase()) return true;
+      
+      const rid = record.id || '';
+      const sid = record.studentId || '';
+      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
+      if (sid.startsWith(prefix)) return true;
     }
     return false;
   }, []);
@@ -270,7 +276,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? 'My training sessions history.' : isManagement ? 'Global school training records.' : `Training sessions history for ${selectedBranch}.`}
+            {isStudent ? 'My training sessions history.' : isManagement ? (selectedBranch === 'All' ? 'Global school training records.' : `Records for ${selectedBranch}`) : `Records for your branch.`}
           </p>
         </div>
         {!isStudent && (

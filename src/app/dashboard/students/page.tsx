@@ -70,12 +70,12 @@ function StudentsContent() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const isBranchManager = profile?.role === 'BranchManager';
   const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
-  const isStaff = isAdmin || profile?.role === 'BranchManager' || isInstructor;
+  const isManagement = isAdmin || isBranchManager;
+  const isStaff = isManagement || isInstructor;
   const profileBranch = profile?.branch;
-
-  const hasGlobalVisibility = isAdmin || isInstructor;
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -83,7 +83,7 @@ function StudentsContent() {
     if (isStudent) {
       return query(base, where('userId', '==', user.uid));
     }
-    return base; // Staff fetch all, filter client-side for robustness
+    return base; 
   }, [db, user?.uid, profile, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
@@ -143,7 +143,11 @@ function StudentsContent() {
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    const branchStudents = students?.filter(s => s.branch === branchName || s.id?.startsWith(prefix)) || [];
+    const branchStudents = students?.filter(s => {
+      const normalize = (val: string) => val?.replace(/\s+/g, '').toLowerCase() || '';
+      return normalize(s.branch) === normalize(branchName) || s.id?.startsWith(prefix);
+    }) || [];
+
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
         const seqPart = s.id.slice(prefix.length);
@@ -187,10 +191,10 @@ function StudentsContent() {
   }, [isAdmin, profileBranch, generateBranchStudentId]);
 
   useEffect(() => {
-    if (profile && !isAdmin && !isInstructor) {
-      setSelectedBranchFilter(profile.branch || "Branch 1");
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
     }
-  }, [profile, isAdmin, isInstructor]);
+  }, [profile, isAdmin, profileBranch]);
 
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
@@ -202,10 +206,20 @@ function StudentsContent() {
   }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
 
   const isFromBranch = useCallback((record: Student, branchName: string) => {
-    if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
+    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
+
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
+    if (branchNum) {
+      const prefix = `B${branchNum}`;
+      if (rBranch === prefix.toLowerCase()) return true;
+      if (record.id?.startsWith(prefix)) return true;
+    }
     return false;
   }, []);
 
@@ -213,7 +227,7 @@ function StudentsContent() {
     if (!students) return [];
     let result = students;
 
-    const currentBranchContext = isAdmin || isInstructor ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
@@ -228,7 +242,7 @@ function StudentsContent() {
     }
 
     return result;
-  }, [students, searchQuery, selectedBranchFilter, isAdmin, isInstructor, profileBranch, isFromBranch]);
+  }, [students, searchQuery, selectedBranchFilter, isManagement, profileBranch, isFromBranch]);
 
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
@@ -522,17 +536,17 @@ function StudentsContent() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : hasGlobalVisibility ? 'Global school enrollment records.' : `Enrollment records for ${profile?.branchName || profileBranch || 'your branch'}.`}
+                {isStudent ? 'My training and profile record.' : isManagement ? (selectedBranchFilter === 'All' ? 'Global school enrollment records.' : `Records for ${selectedBranchFilter}`) : `Branch records.`}
               </CardDescription>
             </div>
             {!isStudent && (
               <div className="flex flex-wrap items-center gap-2">
-                {hasGlobalVisibility && (
+                {isManagement && (
                   <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-primary/10">
                     <Filter className="h-3.5 w-3.5 text-muted-foreground ml-2" />
-                    <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
                       <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
-                        <SelectValue placeholder="All Branches" />
+                        <SelectValue placeholder="Branch" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="All">All Branches</SelectItem>
