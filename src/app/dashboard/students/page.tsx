@@ -77,7 +77,6 @@ function StudentsContent() {
 
   const hasGlobalVisibility = isAdmin || isInstructor;
 
-  // We fetch all students for staff to ensure robust filtering and handle cross-branch data entered by Admins
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
     const base = collection(db, 'students');
@@ -202,6 +201,35 @@ function StudentsContent() {
     }
   }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
 
+  const isFromBranch = useCallback((record: Student, branchName: string) => {
+    if (branchName === "All") return true;
+    if (record.branch === branchName) return true;
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
+    return false;
+  }, []);
+
+  const filteredStudents = useMemo(() => {
+    if (!students) return [];
+    let result = students;
+
+    const currentBranchContext = isAdmin || isInstructor ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All") {
+      result = result.filter(s => isFromBranch(s, currentBranchContext));
+    }
+
+    if (searchQuery) {
+      const term = searchQuery.toLowerCase();
+      result = result.filter(s => 
+        s.name.toLowerCase().includes(term) || 
+        s.id.toLowerCase().includes(term) ||
+        s.phone?.includes(term)
+      );
+    }
+
+    return result;
+  }, [students, searchQuery, selectedBranchFilter, isAdmin, isInstructor, profileBranch, isFromBranch]);
+
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
     setIsAddDialogOpen(false);
@@ -227,36 +255,6 @@ function StudentsContent() {
     masterCourses?.forEach(c => { map[c.name] = c.amount; });
     return map;
   }, [masterCourses]);
-
-  const isFromBranch = useCallback((record: Student, branchName: string) => {
-    if (branchName === "All") return true;
-    if (record.branch === branchName) return true;
-    const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
-    return false;
-  }, []);
-
-  const filteredStudents = useMemo(() => {
-    if (!students) return [];
-    let result = students;
-
-    // Apply branch isolation for managers, or filter for admins
-    const currentBranchContext = isAdmin || isInstructor ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All") {
-      result = result.filter(s => isFromBranch(s, currentBranchContext));
-    }
-
-    if (searchQuery) {
-      const term = searchQuery.toLowerCase();
-      result = result.filter(s => 
-        s.name.toLowerCase().includes(term) || 
-        s.id.toLowerCase().includes(term) ||
-        s.phone?.includes(term)
-      );
-    }
-
-    return result;
-  }, [students, searchQuery, selectedBranchFilter, isAdmin, isInstructor, profileBranch, isFromBranch]);
 
   const calculateFees = useCallback((courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
@@ -1074,7 +1072,7 @@ function StudentForm({
                 disabled={!isAdmin} 
                 onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} 
               />
-              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Discount authorization is restricted to Head Office.</p>}
+              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Discount authorization restricted.</p>}
             </div>
           </div>
           

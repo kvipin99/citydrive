@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +53,7 @@ export default function OtherReceiptsPage() {
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const profileBranch = profile?.branch;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -65,10 +66,9 @@ export default function OtherReceiptsPage() {
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    const baseCol = collection(db, 'payments');
-    if (isAdmin) return baseCol;
-    return query(baseCol, where('branch', '==', profile.branch || "Branch 1"));
-  }, [db, user?.uid, profile?.branch, isAdmin]);
+    // Fetch all for staff to enable smart local filtering/visibility
+    return collection(db, 'payments');
+  }, [db, user?.uid, profile]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
 
@@ -92,6 +92,20 @@ export default function OtherReceiptsPage() {
     }
   }, [profile, isDialogOpen]);
 
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
+
+  const isFromBranch = useCallback((record: ReceiptRecord, branchName: string) => {
+    if (branchName === "All") return true;
+    if (record.branch === branchName) return true;
+    const branchNum = branchName.match(/\d+/)?.[0];
+    if (branchNum && record.id?.startsWith(`MISC-B${branchNum}`)) return true;
+    return false;
+  }, []);
+
   const resetForm = () => {
     setFormData({ 
       amount: 0, 
@@ -111,7 +125,8 @@ export default function OtherReceiptsPage() {
       return;
     }
 
-    const receiptId = `MISC-${Date.now()}`;
+    const branchNum = formData.branch.match(/\d+/)?.[0] || '1';
+    const receiptId = `MISC-B${branchNum}-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const transactionDate = new Date(formData.date);
     
@@ -145,8 +160,9 @@ export default function OtherReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
-    if (isAdmin && selectedBranchFilter !== "All") {
-      result = result.filter(r => r.branch === selectedBranchFilter);
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All") {
+      result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
 
     if (dateRange.from || dateRange.to) {
@@ -176,7 +192,7 @@ export default function OtherReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter]);
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading;
 
@@ -185,7 +201,7 @@ export default function OtherReceiptsPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Other Receipts</h2>
-          <p className="text-muted-foreground">Miscellaneous income like photostate, admission charges, and fines.</p>
+          <p className="text-muted-foreground text-sm">Miscellaneous income tracking.</p>
         </div>
         <div className="flex items-center gap-2">
            <div className="relative">
@@ -211,7 +227,7 @@ export default function OtherReceiptsPage() {
               <Layers className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Misc Income Log</CardTitle>
-                <CardDescription>Daily records of non-student income streams.</CardDescription>
+                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
               </div>
             </div>
 
@@ -280,7 +296,7 @@ export default function OtherReceiptsPage() {
                     <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2 opacity-50">
                         <CalendarIcon className="h-10 w-10" />
-                        <p className="italic text-sm font-medium">No miscellaneous records found for this period.</p>
+                        <p className="italic text-sm font-medium">No records found.</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -289,7 +305,7 @@ export default function OtherReceiptsPage() {
                     <TableRow key={r.id} className="hover:bg-muted/20">
                       <TableCell className="pl-6 text-muted-foreground text-xs">
                         {r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : 
-                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : 'Pending')}
+                         (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}
                       </TableCell>
                       <TableCell>
                         <div className="grid gap-0.5">
@@ -316,7 +332,7 @@ export default function OtherReceiptsPage() {
                               <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="text-destructive focus:text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}>
+                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Receipt
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -336,7 +352,7 @@ export default function OtherReceiptsPage() {
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 pb-2 border-b shrink-0">
             <DialogTitle>Issue Other Receipt</DialogTitle>
-            <DialogDescription>Record non-student fee income for the branch.</DialogDescription>
+            <DialogDescription>Record miscellaneous income.</DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-6">
@@ -359,7 +375,6 @@ export default function OtherReceiptsPage() {
                       {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to your assigned branch.</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -374,7 +389,7 @@ export default function OtherReceiptsPage() {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Received From (Name) <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span></Label>
+                  <Label>Received From (Name)</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} />
@@ -384,11 +399,7 @@ export default function OtherReceiptsPage() {
                 <div className="grid gap-4 pt-4 border-t">
                   <div className="grid gap-2">
                     <Label>Receipt Date</Label>
-                    <div className="relative">
-                      {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                      <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-                    </div>
-                    {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to today's date for branch users.</p>}
+                    <Input type="date" value={formData.date} disabled={!isAdmin} onChange={(e) => setFormData({...formData, date: e.target.value})} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
@@ -408,12 +419,12 @@ export default function OtherReceiptsPage() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label>Receipt No. <span className="text-[10px] font-normal text-muted-foreground ml-1">(Optional)</span></Label>
+                    <Label>Receipt No. (Optional)</Label>
                     <Input placeholder="Auto-generated if blank" value={formData.receiptNo} onChange={(e) => setFormData({...formData, receiptNo: e.target.value})} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Description (Optional)</Label>
-                    <Input placeholder="e.g. Form fee for B1002" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                    <Input placeholder="e.g. Form fee" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
                   </div>
                 </div>
               </div>
