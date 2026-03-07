@@ -181,7 +181,7 @@ function SettingsContent() {
   };
 
   const performModularReset = async (category: string, collections: string[]) => {
-    if (!db || !isAdmin) return;
+    if (!db || !isMaster) return;
     setIsResetting(true);
     toast({ title: "Reset Started", description: `Wiping ${category} data...` });
 
@@ -191,6 +191,7 @@ function SettingsContent() {
         snapshot.docs.forEach(d => {
           if (colName === 'users') {
             const userData = d.data();
+            // Protect Admins and Master account
             if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) {
               return;
             }
@@ -289,23 +290,25 @@ function SettingsContent() {
               </CardContent>
             </Card>
 
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardHeader>
-                <div className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  <CardTitle>Advanced System Reset</CardTitle>
-                </div>
-                <CardDescription className="text-destructive/80">Wipe data for fresh school entry. This action is irreversible.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <ResetAction title="Students & Photos" description="Wipes all student records, photos, and user logins." onReset={() => performModularReset("Students", ["students", "users"])} disabled={isResetting} />
-                <ResetAction title="Attendance & Session Logs" description="Wipes all training session logs and scheduled classes." onReset={() => performModularReset("Attendance", ["attendance", "classes"])} disabled={isResetting} />
-                <ResetAction title="Financial Receipts & Expenses" description="Wipes all fee collections and business expenses." onReset={() => performModularReset("Financials", ["payments", "expenses"])} disabled={isResetting} />
-                <ResetAction title="Instructors & Staff Lists" description="Wipes all staff records and logins (excluding Admins)." onReset={() => performModularReset("Staff", ["instructors", "users"])} disabled={isResetting} />
-                <ResetAction title="Vehicle Fleet Details" description="Wipes all vehicle registrations and validity data." onReset={() => performModularReset("Vehicles", ["vehicles"])} disabled={isResetting} />
-                <ResetAction title="Backups & Quiz Links" description="Wipes resources, quiz links, and backup metadata." onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])} disabled={isResetting} />
-              </CardContent>
-            </Card>
+            {isMaster && (
+              <Card className="border-destructive/20 bg-destructive/5">
+                <CardHeader>
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    <CardTitle>Advanced System Reset (Master Only)</CardTitle>
+                  </div>
+                  <CardDescription className="text-destructive/80">Wipe data for fresh school entry. This action is irreversible.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <ResetAction title="Students & Photos" description="Wipes all student records, photos, and user logins." onReset={() => performModularReset("Students", ["students", "users"])} disabled={isResetting} />
+                  <ResetAction title="Attendance & Session Logs" description="Wipes all training session logs and scheduled classes." onReset={() => performModularReset("Attendance", ["attendance", "classes"])} disabled={isResetting} />
+                  <ResetAction title="Financial Receipts & Expenses" description="Wipes all fee collections and business expenses." onReset={() => performModularReset("Financials", ["payments", "expenses"])} disabled={isResetting} />
+                  <ResetAction title="Instructors & Staff Lists" description="Wipes all staff records and logins (excluding Admins)." onReset={() => performModularReset("Staff", ["instructors", "users"])} disabled={isResetting} />
+                  <ResetAction title="Vehicle Fleet Details" description="Wipes all vehicle registrations and validity data." onReset={() => performModularReset("Vehicles", ["vehicles"])} disabled={isResetting} />
+                  <ResetAction title="Backups & Quiz Links" description="Wipes resources, quiz links, and backup metadata." onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])} disabled={isResetting} />
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         )}
 

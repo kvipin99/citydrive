@@ -148,6 +148,7 @@ function StudentsContent() {
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
+    // Scan ALL students to find the maximum ID for this branch prefix
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
