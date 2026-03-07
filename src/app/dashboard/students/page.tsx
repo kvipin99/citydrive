@@ -69,6 +69,8 @@ function StudentsContent() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+  
+  // Use stable role checks
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isInstructor = profile?.role === 'Instructor';
@@ -77,14 +79,15 @@ function StudentsContent() {
   const isStaff = isManagement || isInstructor;
   const profileBranch = profile?.branch;
 
+  // Optimized query dependency to prevent page freezes
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'students');
-    if (isStudent) {
+    if (profile.role === 'Student') {
       return query(base, where('userId', '==', user.uid));
     }
     return base; 
-  }, [db, user?.uid, profile, isStudent]);
+  }, [db, user?.uid, profile?.role, isStudent]);
 
   const coursesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -92,7 +95,7 @@ function StudentsContent() {
   }, [db, user?.uid]);
   
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
-  const { data: masterCourses, isLoading: isCoursesLoading } = useCollection<any>(coursesQuery);
+  const { data: masterCourses } = useCollection<any>(coursesQuery);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
@@ -197,13 +200,13 @@ function StudentsContent() {
   }, [profile, isAdmin, profileBranch]);
 
   useEffect(() => {
-    if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
+    if (isAddDialogOpen && formData.branch && students) {
       const nextId = generateBranchStudentId(formData.branch);
       if (formData.id !== nextId) {
         setFormData(prev => ({ ...prev, id: nextId }));
       }
     }
-  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
+  }, [isAddDialogOpen, formData.branch, students, generateBranchStudentId, formData.id]);
 
   const isFromBranch = useCallback((record: Student, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
@@ -526,7 +529,7 @@ function StudentsContent() {
     return Math.max(0, (student.amount || 0) - paid);
   }, []);
 
-  const isActuallyLoading = isProfileLoading || isStudentsLoading || isCoursesLoading;
+  const isActuallyLoading = isProfileLoading || isStudentsLoading;
 
   return (
     <div className="space-y-6">
@@ -566,66 +569,69 @@ function StudentsContent() {
                   />
                 </div>
                 
-                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={resetForm}>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Register Student
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-                    <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
-                      <DialogTitle>New Student Registration</DialogTitle>
-                      <DialogDescription>IDs are auto-generated based on the last record in the branch.</DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="flex-1 overflow-y-auto px-6 py-4">
-                      <div className="space-y-8 pb-32">
-                        <StudentForm 
-                          formData={formData} 
-                          setFormData={setFormData} 
-                          isAdmin={isAdmin} 
-                          masterCourses={masterCourses} 
-                          calculateFees={calculateFees} 
-                          handlePhotoUpload={handlePhotoUpload} 
-                          photoInputRef={photoInputRef}
-                          handleCourseToggle={handleCourseToggle}
-                        />
-                        
-                        <div className="pt-6 border-t">
-                          <div className="flex items-center gap-2 text-orange-600 mb-2">
-                            <AlertCircle className="h-4 w-4" />
-                            <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
-                            If registration fails because the ID already exists in the system but not in the list, use this tool to clear the hidden identity.
-                          </p>
-                          <div className="flex gap-2 max-w-sm">
-                            <Input 
-                              placeholder="Conflict ID (e.g. B110001)" 
-                              className="h-9 text-xs" 
-                              value={cleanupId} 
-                              onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
-                            />
-                            <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
-                              <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity
-                            </Button>
+                {/* User Request: Remove Register Student for Admin/Master */}
+                {isBranchManager && (
+                  <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
+                    <DialogTrigger asChild>
+                      <Button onClick={resetForm}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Register Student
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
+                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0">
+                        <DialogTitle>New Student Registration</DialogTitle>
+                        <DialogDescription>IDs are auto-generated based on the last record in the branch.</DialogDescription>
+                      </DialogHeader>
+                      
+                      <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <div className="space-y-8 pb-32">
+                          <StudentForm 
+                            formData={formData} 
+                            setFormData={setFormData} 
+                            isAdmin={isAdmin} 
+                            masterCourses={masterCourses} 
+                            calculateFees={calculateFees} 
+                            handlePhotoUpload={handlePhotoUpload} 
+                            photoInputRef={photoInputRef}
+                            handleCourseToggle={handleCourseToggle}
+                          />
+                          
+                          <div className="pt-6 border-t">
+                            <div className="flex items-center gap-2 text-orange-600 mb-2">
+                              <AlertCircle className="h-4 w-4" />
+                              <h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mb-3 leading-tight">
+                              If registration fails because the ID already exists in the system but not in the list, use this tool to clear the hidden identity.
+                            </p>
+                            <div className="flex gap-2 max-w-sm">
+                              <Input 
+                                placeholder="Conflict ID (e.g. B110001)" 
+                                className="h-9 text-xs" 
+                                value={cleanupId} 
+                                onChange={(e) => setCleanupId(e.target.value.toUpperCase())} 
+                              />
+                              <Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}>
+                                <Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
-                      <div className="flex w-full justify-end gap-3">
-                        <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
-                          {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                          Confirm Registration
-                        </Button>
-                      </div>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
+                        <div className="flex w-full justify-end gap-3">
+                          <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                          <Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">
+                            {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                            Confirm Registration
+                          </Button>
+                        </div>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
             )}
           </div>
@@ -908,7 +914,7 @@ function StudentForm({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="grid gap-2">
-            <Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && <Lock className="h-3 w-3" />}</Label>
+            <Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && !isEdit && <Lock className="h-3 w-3" />}</Label>
             <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
               <SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger>
               <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>

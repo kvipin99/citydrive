@@ -41,7 +41,7 @@ export default function ExpensesPage() {
   const userProfileRef = useMemoFirebase(() => {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid);
-  }, [db, user]);
+  }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
@@ -60,12 +60,12 @@ export default function ExpensesPage() {
     if (profile && !isAdmin) {
       setSelectedBranchFilter(profileBranch || "Branch 1");
     }
-  }, [profile, isAdmin, profileBranch]);
+  }, [profile?.branch, isAdmin, profileBranch]);
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     return collection(db, 'expenses'); 
-  }, [db, user, profile]);
+  }, [db, user?.uid, profile?.role]);
 
   const { data: expenses, isLoading: isExpensesLoading } = useCollection<ExpenseRecord>(expensesQuery);
 
@@ -84,13 +84,16 @@ export default function ExpensesPage() {
       const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
-  }, [profile, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
+  }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
-    if (branchName === "All") return true;
+    if (!branchName || branchName === "All") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    if (normalize(record.branch) === normalize(branchName)) return true;
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum && record.id?.startsWith(`EXP-B${branchNum}`)) return true;
@@ -221,12 +224,7 @@ export default function ExpensesPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
-                <Input 
-                  type="date" 
-                  className="h-8 w-[130px] text-xs bg-background" 
-                  value={dateRange.to} 
-                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
-                />
+                <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} />
               </div>
               <Button 
                 variant="ghost" 

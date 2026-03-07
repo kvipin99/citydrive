@@ -84,17 +84,17 @@ export default function StudentReceiptsPage() {
     if (profile && !isAdmin) {
       setSelectedBranchFilter(profileBranch || "Branch 1");
     }
-  }, [profile, isAdmin, profileBranch]);
+  }, [profile?.branch, isAdmin, profileBranch]);
 
   const receiptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     return collection(db, 'payments'); 
-  }, [db, user?.uid, profile]);
+  }, [db, user?.uid, profile?.role]);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     return collection(db, 'students');
-  }, [db, user?.uid, profile]);
+  }, [db, user?.uid, profile?.role]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);

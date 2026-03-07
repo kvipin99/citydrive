@@ -67,9 +67,9 @@ export default function OtherReceiptsPage() {
   });
 
   const receiptsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     return collection(db, 'payments');
-  }, [db, user?.uid, profile]);
+  }, [db, user?.uid, profile?.role]);
 
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
 
@@ -91,28 +91,28 @@ export default function OtherReceiptsPage() {
         branch: profile.branch || "Branch 1" 
       }));
     }
-  }, [profile, isDialogOpen]);
+  }, [profile?.branch, isDialogOpen]);
 
   useEffect(() => {
     if (profile && !isAdmin) {
       setSelectedBranchFilter(profileBranch || "Branch 1");
     }
-  }, [profile, isAdmin, profileBranch]);
+  }, [profile?.branch, isAdmin, profileBranch]);
 
   const isFromBranch = useCallback((record: ReceiptRecord, branchName: string) => {
-    if (branchName === "All") return true;
+    if (!branchName || branchName === "All") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    if (normalize(record.branch) === normalize(branchName)) return true;
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
-      const receiptPrefix = `REC-B${branchNum}`;
-      const miscPrefix = `MISC-B${branchNum}`;
-      if (record.studentId?.startsWith(prefix) || record.id?.startsWith(prefix) || record.id?.startsWith(receiptPrefix) || record.id?.startsWith(miscPrefix)) {
-        return true;
-      }
+      if (rBranch === prefix.toLowerCase()) return true;
+      if (record.studentId?.startsWith(prefix) || record.id?.startsWith(`REC-${prefix}`) || record.id?.startsWith(`MISC-${prefix}`)) return true;
     }
     return false;
   }, []);
@@ -227,7 +227,7 @@ export default function OtherReceiptsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /><div><CardTitle className="text-lg">Misc Income Log</CardTitle><CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription></div></div>
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isManagement && (<div className="flex items-center gap-2 border-r pr-3 mr-1"><Filter className="h-3 w-3 text-muted-foreground" /><Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}><SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background"><SelectValue placeholder="All Branches" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
+              {isManagement && (<div className="flex items-center gap-2 border-r pr-3 mr-1"><Filter className="h-3.5 w-3.5 text-muted-foreground" /><Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}><SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background"><SelectValue placeholder="All Branches" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
               <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} /></div>
               <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} /></div>
               <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10" onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}>Today</Button>

@@ -62,7 +62,7 @@ export default function AttendancePage() {
     if (profile && !selectedInstructorId) {
       setSelectedInstructorId(user?.uid || "");
     }
-  }, [profile, isAdmin, user?.uid, selectedInstructorId]);
+  }, [profile?.branch, isAdmin, user?.uid, selectedInstructorId]);
 
   const vehiclesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -77,21 +77,21 @@ export default function AttendancePage() {
   const { data: instructors } = useCollection(instructorsQuery);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'students');
-    if (isStudent) return query(base, where('userId', '==', user.uid));
+    if (profile.role === 'Student') return query(base, where('userId', '==', user.uid));
     return base;
-  }, [db, user?.uid, profile, isStudent]);
+  }, [db, user?.uid, profile?.role]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
   const attendanceQuery = useMemoFirebase(() => {
-    if (!db || !user || !profile) return null;
+    if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'attendance');
-    if (isStudent) return query(base, where('studentUid', '==', user.uid));
+    if (profile.role === 'Student') return query(base, where('studentUid', '==', user.uid));
     if (isStaff) return query(base, where('date', '==', selectedDate));
     return null;
-  }, [db, user?.uid, profile, isStaff, isStudent, selectedDate]);
+  }, [db, user?.uid, profile?.role, isStaff, selectedDate]);
 
   const { data: rawAttendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
@@ -136,7 +136,7 @@ export default function AttendancePage() {
     }
 
     return result;
-  }, [rawAttendance, selectedBranch, instructorFilter, profile, isManagement, isFromBranch, instructors]);
+  }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isManagement, isFromBranch, instructors]);
 
   const statsSummary = useMemo(() => {
     const uniquePractical = new Set();
@@ -179,7 +179,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch, profile, isManagement, isFromBranch]);
+  }, [allStudents, studentSearch, profile?.branch, isManagement, isFromBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
