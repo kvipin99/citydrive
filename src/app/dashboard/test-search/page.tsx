@@ -28,7 +28,7 @@ export default function TestSearchPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin';
 
-  const [testType, setTestType] = useState<"learners" | "driving">("driving");
+  const [testType, setTestType] = useState<"learners" | "driving" >("driving");
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
@@ -379,6 +379,30 @@ function StudentProfileViewContent({ student, db }: any) {
                     <TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell>
                     <TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell>
                     <TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
+        {!student.payments || student.payments.length === 0 ? (
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts issued.</p>
+        ) : (
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {student.payments.map((p: any) => (
+                  <TableRow key={p.id} className="hover:bg-muted/30">
+                    <TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell>
+                    <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
+                    <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
