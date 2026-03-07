@@ -70,6 +70,15 @@ export default function StudentReceiptsPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
+  // State for recording a new receipt
+  const [receiptFormData, setReceiptFormData] = useState({
+    amount: 0,
+    receiptNo: '',
+    method: 'Cash' as const,
+    date: format(new Date(), 'yyyy-MM-dd'),
+    description: ''
+  });
+
   // Sync branch filter for non-admins
   useEffect(() => {
     if (profile && !isAdmin) {
@@ -79,7 +88,9 @@ export default function StudentReceiptsPage() {
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
-    return collection(db, 'payments'); // Fetch all for staff, filter client-side for robustness
+    // Fetch all for staff to enable smart local filtering/visibility
+    // This ensures records created by Admin for a branch are visible to that branch manager
+    return collection(db, 'payments'); 
   }, [db, user?.uid, profile]);
 
   const studentsQuery = useMemoFirebase(() => {
@@ -92,18 +103,10 @@ export default function StudentReceiptsPage() {
   const { data: allReceipts, isLoading: isReceiptsLoading } = useCollection<ReceiptRecord>(receiptsQuery);
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
 
-  const [formData, setFormData] = useState({
-    amount: 0,
-    receiptNo: '',
-    method: 'Cash' as const,
-    date: format(new Date(), 'yyyy-MM-dd'),
-    description: ''
-  });
-
   const resetForm = () => {
     setSelectedStudent(null);
     setSearchTerm('');
-    setFormData({ 
+    setReceiptFormData({ 
       amount: 0, 
       receiptNo: '', 
       method: 'Cash',
@@ -130,7 +133,12 @@ export default function StudentReceiptsPage() {
     if (branchName === "All") return true;
     if (record.branch === branchName) return true;
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && (record.studentId?.startsWith(`B${branchNum}`) || record.id?.startsWith(`REC-B${branchNum}`))) return true;
+    if (branchNum) {
+      const studentPrefix = `B${branchNum}`;
+      const receiptPrefix = `REC-B${branchNum}`;
+      if (record.studentId?.startsWith(studentPrefix)) return true;
+      if (record.id?.startsWith(receiptPrefix)) return true;
+    }
     return false;
   }, []);
 
@@ -177,12 +185,12 @@ export default function StudentReceiptsPage() {
       return;
     }
     
-    if (!formData.receiptNo) {
+    if (!receiptFormData.receiptNo) {
       toast({ variant: "destructive", title: "Error", description: "Receipt Number is required." });
       return;
     }
 
-    if (formData.amount <= 0) {
+    if (receiptFormData.amount <= 0) {
       toast({ variant: "destructive", title: "Error", description: "Please enter a valid amount." });
       return;
     }
@@ -190,7 +198,7 @@ export default function StudentReceiptsPage() {
     const receiptId = `REC-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
-    const transactionDate = new Date(formData.date);
+    const transactionDate = new Date(receiptFormData.date);
     
     const record: ReceiptRecord = {
       id: receiptId,
@@ -199,13 +207,13 @@ export default function StudentReceiptsPage() {
       studentUid: selectedStudent.userId, 
       studentName: selectedStudent.name,
       studentPhone: selectedStudent.phone,
-      amount: formData.amount,
+      amount: receiptFormData.amount,
       date: Timestamp.fromDate(transactionDate),
-      receiptNo: formData.receiptNo,
-      method: formData.method,
+      receiptNo: receiptFormData.receiptNo,
+      method: receiptFormData.method,
       branch: selectedStudent.branch,
       receivedBy: user?.uid!,
-      description: formData.description
+      description: receiptFormData.description
     };
 
     setDocumentNonBlocking(receiptRef, record, { merge: true });
@@ -218,10 +226,10 @@ export default function StudentReceiptsPage() {
           ...currentPayments,
           {
             id: receiptId,
-            amount: formData.amount,
+            amount: receiptFormData.amount,
             date: transactionDate.toISOString(),
-            receiptNo: formData.receiptNo,
-            method: formData.method,
+            receiptNo: receiptFormData.receiptNo,
+            method: receiptFormData.method,
             category: "Course Fee"
           }
         ];
@@ -468,7 +476,7 @@ export default function StudentReceiptsPage() {
                       <p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p>
                     </div>
                     <div className="p-2 border rounded bg-destructive/5">
-                      <p className="text-xs text-muted-foreground">Balance</p>
+                      <p className="text-xs text-muted-foreground">Current Balance</p>
                       <p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p>
                     </div>
                   </div>
@@ -478,14 +486,24 @@ export default function StudentReceiptsPage() {
                       <Label>Receipt Date</Label>
                       <div className="relative">
                         {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
-                        <Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
+                        <Input 
+                          type="date" 
+                          value={receiptFormData.date} 
+                          disabled={!isAdmin} 
+                          onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} 
+                        />
                       </div>
                       {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
                         <Label>Amount (₹)</Label>
-                        <Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} />
+                        <Input 
+                          type="number" 
+                          placeholder="0.00" 
+                          value={receiptFormData.amount || ''} 
+                          onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} 
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label>Method</Label>
@@ -501,11 +519,19 @@ export default function StudentReceiptsPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label>Receipt No.</Label>
-                      <Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} />
+                      <Input 
+                        placeholder="e.g. 1001" 
+                        value={receiptFormData.receiptNo} 
+                        onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} 
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label>Note (Optional)</Label>
-                      <Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} />
+                      <Input 
+                        placeholder="e.g. 2nd Installment" 
+                        value={receiptFormData.description} 
+                        onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} 
+                      />
                     </div>
                   </div>
                 </div>
