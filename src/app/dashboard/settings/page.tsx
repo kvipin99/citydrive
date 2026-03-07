@@ -13,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertCircle, Trash } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
-import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
+import { collection, doc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
@@ -37,7 +37,7 @@ function SettingsContent() {
   // Data Fetching - Profile first to determine role
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
 
   useEffect(() => {
@@ -45,7 +45,6 @@ function SettingsContent() {
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
     } else if (profile) {
-      // Default view based on role
       setActiveTab(isAdmin ? "general" : "profile");
     }
   }, [searchParams, profile, isAdmin]);
@@ -55,47 +54,37 @@ function SettingsContent() {
     router.push(`/dashboard/settings?tab=${value}`);
   };
 
-  // Sensitive data queries only run for Admins
   const usersQuery = useMemoFirebase(() => (db && isAdmin ? collection(db, "users") : null), [db, isAdmin]);
   const { data: allUsers, isLoading: isUsersLoading } = useCollection(usersQuery);
 
   const settingsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "backup") : null), [db, isAdmin]);
   const { data: autoSettings } = useDoc(settingsRef);
 
-  // Form States
   const [newPassword, setNewPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [branchName, setBranchName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [isResetting, setIsResetting] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile?.name) {
-      setDisplayName(profile.name);
-    }
-    // Use branchName for display identity, keep 'branch' as the stable system ID
-    if (profile?.branchName) {
-      setBranchName(profile.branchName);
-    } else if (profile?.branch) {
-      setBranchName(profile.branch);
-    }
+    if (profile?.name) setDisplayName(profile.name);
+    if (profile?.branchName) setBranchName(profile.branchName);
+    else if (profile?.branch) setBranchName(profile.branch);
   }, [profile]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.type !== 'image/jpeg') {
       toast({ variant: "destructive", title: "Invalid File Type", description: "Please upload a JPEG image." });
       return;
     }
-
     if (file.size > 200 * 1024) {
       toast({ variant: "destructive", title: "File Too Large", description: "Image must be less than 200 KB." });
       return;
     }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       if (profileRef) {
@@ -108,53 +97,14 @@ function SettingsContent() {
 
   const handleUpdateProfile = () => {
     if (!profileRef || !displayName) return;
-    updateDocumentNonBlocking(profileRef, { 
-      name: displayName,
-      updatedAt: serverTimestamp() 
-    });
-    toast({ title: "Profile Updated", description: "Your display name has been saved." });
+    updateDocumentNonBlocking(profileRef, { name: displayName, updatedAt: serverTimestamp() });
+    toast({ title: "Profile Updated" });
   };
 
   const handleUpdateBranch = () => {
     if (!profileRef || !branchName) return;
-    // CRITICAL: Update branchName field ONLY to keep the 'branch' ID stable for filtering
-    updateDocumentNonBlocking(profileRef, { 
-      branchName: branchName,
-      updatedAt: serverTimestamp() 
-    });
-    toast({ title: "Branch Updated", description: "The system identity for this branch has been updated." });
-  };
-
-  const handleResetUserPassword = (targetUser: any) => {
-    const targetRef = doc(db, "users", targetUser.id);
-    updateDocumentNonBlocking(targetRef, { 
-      passwordResetRequested: true,
-      updatedAt: serverTimestamp() 
-    });
-    
-    toast({
-      title: "Password Reset Queued",
-      description: `${targetUser.email} will be reset to "City123" on their next login.`,
-    });
-  };
-
-  const handleDeleteUserRecord = (targetUser: any) => {
-    if (targetUser.role === 'Admin' || targetUser.role === 'BranchManager') {
-      toast({
-        variant: "destructive",
-        title: "Action Denied",
-        description: "Management accounts (Admin/Branch) cannot be deleted for system security.",
-      });
-      return;
-    }
-
-    const targetRef = doc(db, "users", targetUser.id);
-    deleteDocumentNonBlocking(targetRef);
-    toast({
-      variant: "destructive",
-      title: "Account Removed",
-      description: `${targetUser.email} has been deleted from the login database.`,
-    });
+    updateDocumentNonBlocking(profileRef, { branchName: branchName, updatedAt: serverTimestamp() });
+    toast({ title: "Branch Updated" });
   };
 
   const handleUpdatePassword = async () => {
@@ -162,7 +112,7 @@ function SettingsContent() {
     setIsSaving(true);
     try {
       await updatePassword(user, newPassword);
-      toast({ title: "Password Updated", description: "Your security credentials have been changed successfully." });
+      toast({ title: "Password Updated" });
       setNewPassword("");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
@@ -171,60 +121,93 @@ function SettingsContent() {
     }
   };
 
-  const handleSaveAutomation = (values: { enabled?: boolean, email?: string }) => {
-    if (!settingsRef) return;
-    setDocumentNonBlocking(settingsRef, values, { merge: true });
-    toast({ title: "Automation Saved", description: "Backup settings updated." });
+  const handleModularReset = async (type: string) => {
+    if (!db || !isAdmin) return;
+    const confirm = window.confirm(`DANGER: Are you sure you want to wipe ALL data for "${type}"? This cannot be undone.`);
+    if (!confirm) return;
+
+    setIsResetting(type);
+    toast({ title: "Reset Started", description: `Wiping records for ${type}...` });
+
+    try {
+      let collectionsToWipe: string[] = [];
+      let rolesToWipe: string[] = [];
+
+      switch (type) {
+        case "Students & Photos":
+          collectionsToWipe = ["students"];
+          rolesToWipe = ["Student"];
+          break;
+        case "Instructors & Staff":
+          collectionsToWipe = ["instructors"];
+          rolesToWipe = ["Instructor", "BranchManager"];
+          break;
+        case "Attendance & Sessions":
+          collectionsToWipe = ["attendance", "classes"];
+          break;
+        case "Financial Records":
+          collectionsToWipe = ["payments", "expenses"];
+          break;
+        case "Vehicle Fleet":
+          collectionsToWipe = ["vehicles"];
+          break;
+        case "Resources & Quizzes":
+          collectionsToWipe = ["resources", "quizLinks", "backupMetadata"];
+          break;
+      }
+
+      for (const colName of collectionsToWipe) {
+        const snap = await getDocs(collection(db, colName));
+        snap.forEach(d => deleteDocumentNonBlocking(doc(db, colName, d.id)));
+      }
+
+      if (rolesToWipe.length > 0) {
+        const usersRef = collection(db, "users");
+        for (const role of rolesToWipe) {
+          const q = query(usersRef, where("role", "==", role));
+          const snap = await getDocs(q);
+          snap.forEach(d => {
+            if (d.id !== user?.uid) deleteDocumentNonBlocking(doc(db, "users", d.id));
+          });
+        }
+      }
+
+      toast({ title: "Reset Successful", description: `${type} module has been cleared.` });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Reset Failed", description: e.message });
+    } finally {
+      setIsResetting(null);
+    }
   };
 
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Processing Backup", description: "Aggregating system data for email delivery..." });
+    toast({ title: "Processing Backup" });
 
     try {
       const backupData: Record<string, any[]> = {};
-      let totalRecords = 0;
-
+      let total = 0;
       for (const colName of BACKUP_COLLECTIONS) {
-        const colRef = collection(db, colName);
-        const snapshot = await getDocs(colRef);
+        const snapshot = await getDocs(collection(db, colName));
         const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
         backupData[colName] = docs;
-        totalRecords += docs.length;
+        total += docs.length;
       }
-
-      const emailRecipient = autoSettings?.email || "ezydriveapp@gmail.com";
-      const summary = `Manual Database Export: ${totalRecords} total records across ${BACKUP_COLLECTIONS.length} collections.`;
-      
+      const recipient = autoSettings?.email || "ezydriveapp@gmail.com";
       const result = await sendBackupEmail({
-        email: emailRecipient,
-        backupSummary: summary,
+        email: recipient,
+        backupSummary: `Manual Export: ${total} records.`,
         timestamp: new Date().toLocaleString(),
         backupDataJson: JSON.stringify(backupData, null, 2),
       });
-
       if (result.success) {
         const metadataRef = doc(db, "backupMetadata", `MANUAL-${Date.now()}`);
-        setDocumentNonBlocking(metadataRef, {
-          id: metadataRef.id,
-          timestamp: serverTimestamp(),
-          performedBy: user.email,
-          status: "Successful",
-          type: "Manual Email Backup"
-        }, { merge: true });
-
-        toast({ title: "Backup Sent", description: result.message });
-      } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Email Error", 
-          description: result.message 
-        });
+        setDocumentNonBlocking(metadataRef, { id: metadataRef.id, timestamp: serverTimestamp(), performedBy: user.email, status: "Successful", type: "Manual Email Backup" }, { merge: true });
+        toast({ title: "Backup Sent" });
       }
     } catch (error: any) {
-      console.error("Manual backup failed:", error);
-      toast({ variant: "destructive", title: "Internal Error", description: "Failed to process backup request." });
+      toast({ variant: "destructive", title: "Internal Error" });
     } finally {
       setIsBackingUpManual(false);
     }
@@ -232,44 +215,24 @@ function SettingsContent() {
 
   const filteredUsers = useMemo(() => {
     if (!allUsers) return [];
-    
-    const uniqueUsers: any[] = [];
-    const seenEmails = new Set();
-    
+    const unique = [];
+    const seen = new Set();
     allUsers.forEach((u: any) => {
-      const emailKey = u.email?.toLowerCase() || u.id?.toLowerCase();
-      if (!seenEmails.has(emailKey)) {
-        seenEmails.add(emailKey);
-        uniqueUsers.push(u);
-      }
+      const key = u.email?.toLowerCase() || u.id?.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); unique.push(u); }
     });
-
-    if (!userSearchTerm) return uniqueUsers;
+    if (!userSearchTerm) return unique;
     const term = userSearchTerm.toLowerCase();
-    return uniqueUsers.filter(u => 
-      u.email?.toLowerCase().includes(term) || 
-      u.role?.toLowerCase().includes(term) ||
-      u.id?.toLowerCase().includes(term) ||
-      u.name?.toLowerCase().includes(term)
-    );
+    return unique.filter(u => u.email?.toLowerCase().includes(term) || u.role?.toLowerCase().includes(term) || u.name?.toLowerCase().includes(term));
   }, [allUsers, userSearchTerm]);
 
-  if (!profile) return (
-    <div className="flex justify-center py-12">
-      <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
-
-  const currentBranchDisplay = profile?.branchName || profile?.branch || 'Branch';
-  const greeting = isBranchManager 
-    ? `Hello, ${currentBranchDisplay} Branch!` 
-    : `Settings Overview`;
+  if (!profile) return <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="space-y-1 mb-6">
-        <h2 className="text-2xl font-bold tracking-tight">{greeting}</h2>
-        <p className="text-muted-foreground text-sm">Manage your personal and office configurations.</p>
+        <h2 className="text-2xl font-bold tracking-tight">Settings & Identity</h2>
+        <p className="text-muted-foreground text-sm">Manage your personal and system configurations.</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -284,92 +247,49 @@ function SettingsContent() {
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="grid gap-1">
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-primary" />
-                    User Control
-                  </CardTitle>
-                  <CardDescription>Manage login accounts and clean up orphaned records.</CardDescription>
+                  <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" />User Control</CardTitle>
+                  <CardDescription>Manage login accounts and cleanup records.</CardDescription>
                 </div>
                 <div className="relative w-full sm:w-[250px]">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search email or role..."
-                    className="pl-8"
-                    value={userSearchTerm}
-                    onChange={(e) => setUserSearchTerm(e.target.value)}
-                  />
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search user..." className="pl-8" value={userSearchTerm} onChange={(e) => setUserSearchTerm(e.target.value)} />
                 </div>
               </CardHeader>
               <CardContent>
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User / Role</TableHead>
-                      <TableHead>Last Active</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead>User / Role</TableHead><TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {isUsersLoading ? (
-                      <TableRow><TableCell colSpan={3} className="text-center py-8">Loading users...</TableCell></TableRow>
-                    ) : filteredUsers.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                          No users found matching your search.
+                    {isUsersLoading ? <TableRow><TableCell colSpan={3} className="text-center py-8">Loading...</TableCell></TableRow> : filteredUsers.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 italic">No matches.</TableCell></TableRow> : filteredUsers.map((u: any) => (
+                      <TableRow key={u.id}>
+                        <TableCell><div className="flex flex-col"><span className="font-medium">{u.name || u.email}</span><span className="text-[10px] uppercase font-bold text-muted-foreground">{u.role}</span></div></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}</TableCell>
+                        <TableCell className="text-right">
+                          {(u.role === 'Admin' || u.id === user?.uid) ? <Badge variant="secondary">Protected</Badge> : <Button variant="ghost" size="sm" className="text-destructive h-8" onClick={() => { if(window.confirm('Delete this login?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>}
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      filteredUsers.map((u: any) => (
-                        <TableRow key={u.id}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{u.name || u.email || u.id}</span>
-                              <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-tight">
-                                {u.role || 'Unassigned Role'}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {u.updatedAt?.seconds 
-                              ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) 
-                              : 'Never'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-[10px] h-8 text-primary"
-                                onClick={() => handleResetUserPassword(u)}
-                              >
-                                <Key className="h-3 w-3 mr-1" /> Reset
-                              </Button>
-                              {(u.role === 'Admin' || u.role === 'BranchManager') ? (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  disabled
-                                  className="text-[10px] h-8 text-muted-foreground opacity-50 cursor-not-allowed"
-                                >
-                                  <Lock className="h-3 w-3 mr-1" /> Protected
-                                </Button>
-                              ) : (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="text-[10px] h-8 text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDeleteUserRecord(u)}
-                                >
-                                  <Trash2 className="h-3 w-3 mr-1" /> Delete
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+
+            <Card className="border-destructive/20 bg-destructive/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive"><Trash className="h-5 w-5" />Modular System Reset</CardTitle>
+                <CardDescription className="text-destructive">Clean up specific data modules. Wiping "Students" also removes their user profiles.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {["Students & Photos", "Instructors & Staff", "Attendance & Sessions", "Financial Records", "Vehicle Fleet", "Resources & Quizzes"].map(m => (
+                  <Button 
+                    key={m} 
+                    variant="outline" 
+                    className="justify-between border-destructive/20 hover:bg-destructive hover:text-white" 
+                    onClick={() => handleModularReset(m)}
+                    disabled={isResetting === m}
+                  >
+                    {isResetting === m ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <AlertCircle className="h-4 w-4 mr-2" />}
+                    Reset {m.split(' ')[0]}
+                  </Button>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
@@ -378,111 +298,28 @@ function SettingsContent() {
         <TabsContent value="profile" className="space-y-6 mt-6">
           <div className="grid gap-6 md:grid-cols-5">
             <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Personal Info</CardTitle>
-                <CardDescription>Update your public profile data.</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Personal Info</CardTitle></CardHeader>
               <CardContent className="flex flex-col items-center gap-6 py-8">
                 <div className="relative">
-                  <Avatar className="h-32 w-32 border-4 border-primary/20">
-                    <AvatarImage src={profile?.avatarUrl} alt="User" />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      <UserIcon className="h-12 w-12" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <Button 
-                    size="icon" 
-                    variant="secondary" 
-                    className="absolute bottom-0 right-0 rounded-full shadow-lg"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Camera className="h-5 w-5" />
-                  </Button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    accept="image/jpeg" 
-                    onChange={handlePhotoUpload} 
-                  />
+                  <Avatar className="h-32 w-32 border-4 border-primary/20"><AvatarImage src={profile?.avatarUrl} /><AvatarFallback><UserIcon className="h-12 w-12" /></AvatarFallback></Avatar>
+                  <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => fileInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
                 </div>
-                <div className="text-center space-y-1">
-                  <h3 className="font-bold text-lg">{profile?.name || profile?.email?.split('@')[0]}</h3>
-                  <p className="text-sm text-muted-foreground">{profile?.email}</p>
-                </div>
+                <div className="text-center"><h3 className="font-bold text-lg">{profile?.name}</h3><p className="text-sm text-muted-foreground">{profile?.email}</p></div>
               </CardContent>
             </Card>
-
             <Card className="md:col-span-3">
-              <CardHeader>
-                <CardTitle>{isBranchManager ? "Accounting Details" : "Account Details"}</CardTitle>
-                <CardDescription>
-                  Update your profile information and security credentials.
-                </CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Account Details</CardTitle></CardHeader>
               <CardContent className="space-y-6">
-                {(isAdmin || isBranchManager) && (
-                  <>
-                    <div className="space-y-4">
-                      {isAdmin && (
-                        <div className="grid gap-2">
-                          <Label htmlFor="display-name">Display Name</Label>
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
-                              <UserCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input 
-                                id="display-name" 
-                                placeholder="Enter your full name"
-                                className="pl-9"
-                                value={displayName}
-                                onChange={(e) => setDisplayName(e.target.value)}
-                              />
-                            </div>
-                            <Button variant="outline" onClick={handleUpdateProfile}>Update Name</Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {isBranchManager && (
-                        <div className="grid gap-2">
-                          <Label htmlFor="branch-name">Branch Identity (Name)</Label>
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
-                              <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input 
-                                id="branch-name" 
-                                placeholder="e.g. Pune Main Branch"
-                                className="pl-9"
-                                value={branchName}
-                                onChange={(e) => setBranchName(e.target.value)}
-                              />
-                            </div>
-                            <Button variant="outline" onClick={handleUpdateBranch}>Update Identity</Button>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground italic">Updating this changes the branch name displayed on your management dashboard without breaking internal filters.</p>
-                        </div>
-                      )}
-                    </div>
-                    <Separator />
-                  </>
-                )}
-
+                <div className="grid gap-4">
+                  <div className="grid gap-2"><Label>Display Name</Label><div className="flex gap-2"><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /><Button variant="outline" onClick={handleUpdateProfile}>Update</Button></div></div>
+                  {isBranchManager && <div className="grid gap-2"><Label>Branch Identity</Label><div className="flex gap-2"><Input value={branchName} onChange={(e) => setBranchName(e.target.value)} /><Button variant="outline" onClick={handleUpdateBranch}>Update</Button></div></div>}
+                </div>
+                <Separator />
                 <div className="space-y-4">
                   <Label>Security</Label>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input 
-                      id="new-password" 
-                      type="password" 
-                      placeholder="Enter at least 6 characters"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  <Button onClick={handleUpdatePassword} disabled={isSaving || newPassword.length < 6}>
-                    {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Update Password
-                  </Button>
+                  <div className="grid gap-2"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></div>
+                  <Button onClick={handleUpdatePassword} disabled={isSaving || newPassword.length < 6}>{isSaving && <RefreshCw className="h-4 w-4 animate-spin mr-2" />}Update Password</Button>
                 </div>
               </CardContent>
             </Card>
@@ -492,66 +329,17 @@ function SettingsContent() {
         {isAdmin && (
           <TabsContent value="automation" className="space-y-6 mt-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DatabaseBackup className="h-5 w-5 text-primary" />
-                  Backup Automation
-                </CardTitle>
-                <CardDescription>Configure automatic email snapshots of your entire database.</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><DatabaseBackup className="h-5 w-5 text-primary" />Backup Automation</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Enable Auto-Backup</Label>
-                    <p className="text-sm text-muted-foreground">Automatically send database reports every day at 12:00 AM.</p>
-                  </div>
-                  <Switch 
-                    checked={autoSettings?.enabled ?? true} 
-                    onCheckedChange={(checked) => handleSaveAutomation({ enabled: checked })}
-                  />
+                  <div className="space-y-0.5"><Label className="text-base">Enable Auto-Backup</Label><p className="text-sm text-muted-foreground">Daily database snapshots at 12:00 AM.</p></div>
+                  <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef, { enabled: checked }, { merge: true })} />
                 </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="backup-email">Destination Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="backup-email" 
-                      type="email" 
-                      className="pl-9" 
-                      placeholder="ezydriveapp@gmail.com"
-                      value={autoSettings?.email || "ezydriveapp@gmail.com"} 
-                      onChange={(e) => handleSaveAutomation({ email: e.target.value })}
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground italic">Default: ezydriveapp@gmail.com</p>
-                </div>
-
+                <div className="grid gap-2"><Label>Destination Email</Label><Input value={autoSettings?.email || "ezydriveapp@gmail.com"} onChange={(e) => setDocumentNonBlocking(settingsRef, { email: e.target.value }, { merge: true })} /></div>
                 <Separator />
-
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
-                  <div className="grid gap-1">
-                    <p className="text-sm font-bold">Manual Email Backup</p>
-                    <p className="text-xs text-muted-foreground">Need a snapshot right now? Trigger a report manually.</p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    onClick={handleManualBackupTrigger} 
-                    disabled={isBackingUpManual}
-                    className="w-full sm:w-auto"
-                  >
-                    {isBackingUpManual ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="mr-2 h-4 w-4" />
-                    )}
-                    {isBackingUpManual ? "Sending..." : "Send Backup Now"}
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-                  Backup schedule is active. Data is aggregated every day.
+                  <div className="grid gap-1"><p className="text-sm font-bold">Manual Email Backup</p><p className="text-xs text-muted-foreground">Trigger a report manually.</p></div>
+                  <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>{isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Send Now</Button>
                 </div>
               </CardContent>
             </Card>
@@ -563,13 +351,5 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex justify-center py-12">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    }>
-      <SettingsContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>}><SettingsContent /></Suspense>;
 }

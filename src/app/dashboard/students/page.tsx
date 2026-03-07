@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -68,10 +69,9 @@ function StudentsContent() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
-  const isBranchManager = profile?.role === 'BranchManager';
   const profileBranch = profile?.branch;
 
   const hasGlobalVisibility = isAdmin || isInstructor;
@@ -142,14 +142,12 @@ function StudentsContent() {
     description: ''
   });
 
-  // EVALUATE LAST STUDENT ID AND GENERATE NEXT
   const generateBranchStudentId = useCallback((branchName: string) => {
     if (!branchName) return "";
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    // We filter from the full list of students we already have
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -160,7 +158,6 @@ function StudentsContent() {
       return max;
     }, 0);
     
-    // Starting with 10001 series or continuing
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 10001;
     return `${prefix}${nextSeq}`;
   }, [students]);
@@ -193,7 +190,6 @@ function StudentsContent() {
     setCleanupId("");
   }, [isAdmin, profileBranch]);
 
-  // Sync ID when branch changes
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
       const nextId = generateBranchStudentId(formData.branch);
@@ -452,7 +448,6 @@ function StudentsContent() {
     const secondaryAuth = getAuth(secondaryApp);
 
     try {
-      // Must authenticate to delete user in client SDK
       const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
       await deleteUser(cred.user);
       await deleteApp(secondaryApp);

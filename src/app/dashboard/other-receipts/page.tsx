@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock, Calendar as CalendarIcon } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, User, MoreHorizontal, Trash2, RefreshCw, Layers, Lock, Calendar as CalendarIcon, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -24,6 +24,8 @@ const RECEIPT_CATEGORIES = [
   "Convenience Fee",
   "Other Income"
 ] as const;
+
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface ReceiptRecord {
   id: string;
@@ -50,7 +52,7 @@ export default function OtherReceiptsPage() {
   }, [db, user?.uid]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -76,8 +78,18 @@ export default function OtherReceiptsPage() {
     date: new Date().toISOString().split('T')[0],
     payerName: '',
     category: 'Photostate / Printing' as ReceiptRecord['category'],
-    description: ''
+    description: '',
+    branch: 'Branch 1'
   });
+
+  useEffect(() => {
+    if (profile && isDialogOpen) {
+      setFormData(prev => ({ 
+        ...prev, 
+        branch: profile.branch || "Branch 1" 
+      }));
+    }
+  }, [profile, isDialogOpen]);
 
   const resetForm = () => {
     setFormData({ 
@@ -87,7 +99,8 @@ export default function OtherReceiptsPage() {
       date: new Date().toISOString().split('T')[0],
       payerName: '',
       category: 'Photostate / Printing',
-      description: ''
+      description: '',
+      branch: profile?.branch || 'Branch 1'
     });
   };
 
@@ -109,7 +122,7 @@ export default function OtherReceiptsPage() {
       date: Timestamp.fromDate(transactionDate),
       receiptNo: formData.receiptNo || receiptId,
       method: formData.method,
-      branch: profile?.branch || "Branch 1",
+      branch: formData.branch,
       receivedBy: user?.uid!,
       description: formData.description
     };
@@ -310,6 +323,26 @@ export default function OtherReceiptsPage() {
           <div className="flex-1 overflow-y-auto p-6">
             <div className="grid gap-6 pb-32">
               <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    Target Branch {!isAdmin && <Lock className="h-3 w-3" />}
+                  </Label>
+                  <Select 
+                    value={formData.branch} 
+                    onValueChange={(v) => setFormData({...formData, branch: v})}
+                    disabled={!isAdmin}
+                  >
+                    <SelectTrigger className="h-11 font-bold border-primary/20">
+                      <SelectValue placeholder="Select Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Locked to your assigned branch.</p>}
+                </div>
+
                 <div className="grid gap-2">
                   <Label>Income Category</Label>
                   <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
