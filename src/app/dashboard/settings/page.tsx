@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertCircle, Trash } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -65,7 +65,6 @@ function SettingsContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [isResetting, setIsResetting] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.name) setDisplayName(profile.name);
@@ -117,65 +116,6 @@ function SettingsContent() {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleModularReset = async (type: string) => {
-    if (!db || !isAdmin) return;
-    const confirm = window.confirm(`DANGER: Are you sure you want to wipe ALL data for "${type}"? This cannot be undone.`);
-    if (!confirm) return;
-
-    setIsResetting(type);
-    toast({ title: "Reset Started", description: `Wiping records for ${type}...` });
-
-    try {
-      let collectionsToWipe: string[] = [];
-      let rolesToWipe: string[] = [];
-
-      switch (type) {
-        case "Students & Enrollment":
-          collectionsToWipe = ["students"];
-          rolesToWipe = ["Student"];
-          break;
-        case "Instructors & Staff":
-          collectionsToWipe = ["instructors"];
-          rolesToWipe = ["Instructor", "BranchManager"];
-          break;
-        case "Attendance & Sessions":
-          collectionsToWipe = ["attendance", "classes"];
-          break;
-        case "Financial Records":
-          collectionsToWipe = ["payments", "expenses"];
-          break;
-        case "Vehicle Fleet":
-          collectionsToWipe = ["vehicles"];
-          break;
-        case "Resources & Quizzes":
-          collectionsToWipe = ["resources", "quizLinks", "backupMetadata"];
-          break;
-      }
-
-      for (const colName of collectionsToWipe) {
-        const snap = await getDocs(collection(db, colName));
-        snap.forEach(d => deleteDocumentNonBlocking(doc(db, colName, d.id)));
-      }
-
-      if (rolesToWipe.length > 0) {
-        const usersRef = collection(db, "users");
-        for (const role of rolesToWipe) {
-          const q = query(usersRef, where("role", "==", role));
-          const snap = await getDocs(q);
-          snap.forEach(d => {
-            if (d.id !== user?.uid) deleteDocumentNonBlocking(doc(db, "users", d.id));
-          });
-        }
-      }
-
-      toast({ title: "Reset Successful", description: `${type} module has been cleared.` });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Reset Failed", description: e.message });
-    } finally {
-      setIsResetting(null);
     }
   };
 
@@ -268,27 +208,6 @@ function SettingsContent() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive"><Trash className="h-5 w-5" />Modular System Reset</CardTitle>
-                <CardDescription className="text-destructive">Clean up specific data modules. Wiping "Students" also removes their user profiles.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {["Students & Enrollment", "Instructors & Staff", "Attendance & Sessions", "Financial Records", "Vehicle Fleet", "Resources & Quizzes"].map(m => (
-                  <Button 
-                    key={m} 
-                    variant="outline" 
-                    className="justify-between border-destructive/20 hover:bg-destructive hover:text-white" 
-                    onClick={() => handleModularReset(m)}
-                    disabled={isResetting === m}
-                  >
-                    {isResetting === m ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <AlertCircle className="h-4 w-4 mr-2" />}
-                    Reset {m.split(' ')[0]}
-                  </Button>
-                ))}
               </CardContent>
             </Card>
           </TabsContent>
