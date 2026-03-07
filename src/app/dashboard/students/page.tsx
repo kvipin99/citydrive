@@ -471,7 +471,7 @@ function StudentsContent() {
       toast({ title: "Cleanup Successful" });
       setCleanupId("");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Cleanup Failed" });
+      toast({ variant: "destructive", title: "Cleanup Failed", description: "Identity not found or password changed." });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
