@@ -15,9 +15,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser } from "lucide-react";
-import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
+import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
-import { updatePassword } from "firebase/auth";
+import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
@@ -38,6 +38,7 @@ const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "cou
 function SettingsContent() {
   const { toast } = useToast();
   const db = useFirestore();
+  const auth = useAuth();
   const { user } = useUser();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -47,7 +48,9 @@ function SettingsContent() {
 
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
-  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  
+  const isMaster = user?.email === 'master@citydriving.in';
+  const isAdmin = profile?.role === 'Admin' || isMaster;
   const isBranchManager = profile?.role === 'BranchManager';
 
   useEffect(() => {
@@ -131,6 +134,19 @@ function SettingsContent() {
     }
   };
 
+  const handleResetUserPassword = async (email: string) => {
+    if (!email) return;
+    try {
+      await sendPasswordResetEmail(auth!, email);
+      toast({ 
+        title: "Reset Email Sent", 
+        description: `A password reset link has been sent to ${email}. Ask the user to check their inbox.` 
+      });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Reset Failed", description: error.message });
+    }
+  };
+
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
@@ -164,7 +180,6 @@ function SettingsContent() {
     }
   };
 
-  // --- MODULAR RESET LOGIC ---
   const performModularReset = async (category: string, collections: string[]) => {
     if (!db || !isAdmin) return;
     setIsResetting(true);
@@ -174,7 +189,6 @@ function SettingsContent() {
       for (const colName of collections) {
         const snapshot = await getDocs(collection(db, colName));
         snapshot.docs.forEach(d => {
-          // Special check for 'users' collection to avoid deleting the master/admin user
           if (colName === 'users') {
             const userData = d.data();
             if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) {
@@ -227,7 +241,7 @@ function SettingsContent() {
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="grid gap-1">
                   <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" />User Control</CardTitle>
-                  <CardDescription>Manage login accounts and cleanup records.</CardDescription>
+                  <CardDescription>Manage password resets and system access.</CardDescription>
                 </div>
                 <div className="relative w-full sm:w-[250px]">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search user..." className="pl-8" value={userSearchTerm} onChange={(e) => setUserSearchTerm(e.target.value)} />
@@ -242,7 +256,31 @@ function SettingsContent() {
                         <TableCell><div className="flex flex-col"><span className="font-medium">{u.name || u.email}</span><span className="text-[10px] uppercase font-bold text-muted-foreground">{u.role}</span></div></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}</TableCell>
                         <TableCell className="text-right">
-                          {(u.role === 'Admin' || u.id === user?.uid) ? <Badge variant="secondary">Protected</Badge> : <Button variant="ghost" size="sm" className="text-destructive h-8" onClick={() => { if(window.confirm('Delete this login?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>}
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] font-bold" 
+                              onClick={() => handleResetUserPassword(u.email)}
+                            >
+                              <Key className="h-3 w-3 mr-1" /> Reset Pwd
+                            </Button>
+                            
+                            {isMaster && u.id !== user?.uid && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-destructive h-8 text-[10px] font-bold" 
+                                onClick={() => { if(window.confirm('Delete this user profile permanently?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" /> Delete
+                              </Button>
+                            )}
+                            
+                            {(!isMaster && u.id !== user?.uid && u.role === 'Admin') && (
+                              <Badge variant="secondary" className="text-[9px]">Protected</Badge>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -251,52 +289,21 @@ function SettingsContent() {
               </CardContent>
             </Card>
 
-            {/* Advanced Modular Reset Tool */}
             <Card className="border-destructive/20 bg-destructive/5">
               <CardHeader>
                 <div className="flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-5 w-5" />
                   <CardTitle>Advanced System Reset</CardTitle>
                 </div>
-                <CardDescription className="text-destructive/80">Wipe all data from specific modules for a fresh start. This action is irreversible.</CardDescription>
+                <CardDescription className="text-destructive/80">Wipe data for fresh school entry. This action is irreversible.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <ResetAction 
-                  title="Students & Enrollment" 
-                  description="Wipes all student records, photos, and their user login profiles."
-                  onReset={() => performModularReset("Students", ["students", "users"])}
-                  disabled={isResetting}
-                />
-                <ResetAction 
-                  title="Attendance & Schedule" 
-                  description="Wipes all training session logs and scheduled classes."
-                  onReset={() => performModularReset("Attendance", ["attendance", "classes"])}
-                  disabled={isResetting}
-                />
-                <ResetAction 
-                  title="Financial Records" 
-                  description="Wipes all student receipts, miscellaneous income, and expenses."
-                  onReset={() => performModularReset("Financials", ["payments", "expenses"])}
-                  disabled={isResetting}
-                />
-                <ResetAction 
-                  title="Instructors & Staff" 
-                  description="Wipes all staff lists and their login credentials (excluding Admins)."
-                  onReset={() => performModularReset("Staff", ["instructors", "users"])}
-                  disabled={isResetting}
-                />
-                <ResetAction 
-                  title="Vehicle Fleet" 
-                  description="Wipes all vehicle data and validity documents."
-                  onReset={() => performModularReset("Vehicles", ["vehicles"])}
-                  disabled={isResetting}
-                />
-                <ResetAction 
-                  title="Resources & Quizzes" 
-                  description="Wipes all learning materials, quiz links, and backup metadata."
-                  onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])}
-                  disabled={isResetting}
-                />
+                <ResetAction title="Students & Photos" description="Wipes all student records, photos, and user logins." onReset={() => performModularReset("Students", ["students", "users"])} disabled={isResetting} />
+                <ResetAction title="Attendance & Session Logs" description="Wipes all training session logs and scheduled classes." onReset={() => performModularReset("Attendance", ["attendance", "classes"])} disabled={isResetting} />
+                <ResetAction title="Financial Receipts & Expenses" description="Wipes all fee collections and business expenses." onReset={() => performModularReset("Financials", ["payments", "expenses"])} disabled={isResetting} />
+                <ResetAction title="Instructors & Staff Lists" description="Wipes all staff records and logins (excluding Admins)." onReset={() => performModularReset("Staff", ["instructors", "users"])} disabled={isResetting} />
+                <ResetAction title="Vehicle Fleet Details" description="Wipes all vehicle registrations and validity data." onReset={() => performModularReset("Vehicles", ["vehicles"])} disabled={isResetting} />
+                <ResetAction title="Backups & Quiz Links" description="Wipes resources, quiz links, and backup metadata." onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])} disabled={isResetting} />
               </CardContent>
             </Card>
           </TabsContent>

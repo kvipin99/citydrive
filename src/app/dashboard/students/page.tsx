@@ -142,14 +142,12 @@ function StudentsContent() {
     description: ''
   });
 
-  // --- AUTOMATIC STUDENT ID GENERATION ---
   const generateBranchStudentId = useCallback((branchName: string) => {
     if (!branchName) return "";
     const numMatch = branchName.match(/\d+/);
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    // Scan all existing students to find the highest sequence for this branch
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -160,15 +158,15 @@ function StudentsContent() {
       return max;
     }, 0);
     
-    // Start from 10001 if no students exist, otherwise increment
     const nextSeq = maxSequence > 0 ? maxSequence + 1 : 10001;
     return `${prefix}${nextSeq}`;
   }, [students]);
 
   const resetForm = useCallback(() => {
     const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
+    const nextId = generateBranchStudentId(defaultBranch);
     setFormData({ 
-      id: "",
+      id: nextId,
       branch: defaultBranch, 
       status: "Active", 
       courses: [], 
@@ -191,9 +189,8 @@ function StudentsContent() {
       specialCourseFee: 0
     });
     setCleanupId("");
-  }, [isAdmin, profileBranch]);
+  }, [isAdmin, profileBranch, generateBranchStudentId]);
 
-  // Update ID automatically when branch changes or dialog opens
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
       const nextId = generateBranchStudentId(formData.branch);
@@ -201,7 +198,7 @@ function StudentsContent() {
         setFormData(prev => ({ ...prev, id: nextId }));
       }
     }
-  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId]);
+  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
 
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
@@ -519,7 +516,7 @@ function StudentsContent() {
                   />
                 </div>
                 
-                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(!open) resetForm(); }}>
+                <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
                   <DialogTrigger asChild>
                     <Button onClick={resetForm}>
                       <PlusCircle className="mr-2 h-4 w-4" />
