@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -44,12 +43,14 @@ export default function ExpensesPage() {
   }, [db, user]);
   
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
+
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -138,9 +139,14 @@ export default function ExpensesPage() {
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
-    return expenses.filter(e => isWithinRange(e.date))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange]);
+    let result = expenses.filter(e => isWithinRange(e.date));
+
+    if (isAdmin && selectedBranchFilter !== "All") {
+      result = result.filter(e => e.branch === selectedBranchFilter);
+    }
+
+    return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [expenses, dateRange, isAdmin, selectedBranchFilter]);
 
   const isActuallyLoading = isProfileLoading || isExpensesLoading;
 
@@ -164,11 +170,25 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isAdmin ? 'all branches' : (profile?.branchName || profile?.branch)}.</CardDescription>
+                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profile?.branchName || profile?.branch)}.</CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isAdmin && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                      <SelectValue placeholder="All Branches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
