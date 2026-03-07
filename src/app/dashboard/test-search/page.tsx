@@ -10,11 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc, query, where } from "firebase/firestore";
-import { Search, Calendar, GraduationCap, Car, Filter, RefreshCw, ArrowRight, User } from "lucide-react";
+import { Search, Calendar, GraduationCap, Car, Filter, RefreshCw, ArrowRight, User, Phone, MapPin, Clock, CreditCard, Wallet, BookOpen, Fingerprint, FileText } from "lucide-react";
 import { format, addDays, isValid, parseISO } from "date-fns";
-import Link from "next/link";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -32,6 +34,10 @@ export default function TestSearchPage() {
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
+
+  // State for Profile View
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
 
   // Sync branch for non-admins
   useEffect(() => {
@@ -67,10 +73,7 @@ export default function TestSearchPage() {
     if (!students) return [];
     
     return students.filter(s => {
-      // 1. Branch Filter
       if (!isFromBranch(s, selectedBranch)) return false;
-
-      // 2. Date Filter based on Tab
       const targetDate = testType === "learners" ? s.learnersDate : s.testDate;
       return isWithinRange(targetDate);
     }).sort((a, b) => {
@@ -208,9 +211,12 @@ export default function TestSearchPage() {
                           <TableRow key={s.id} className="hover:bg-muted/5 group">
                             <TableCell className="pl-6">
                               <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                                  {s.name?.charAt(0) || 'S'}
-                                </div>
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={s.photoUrl} alt={s.name} />
+                                  <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                                    {s.name?.charAt(0) || 'S'}
+                                  </AvatarFallback>
+                                </Avatar>
                                 <div className="grid gap-0.5">
                                   <span className="font-bold text-sm leading-none">{s.name}</span>
                                   <span className="text-[10px] text-muted-foreground uppercase font-mono">{s.id}</span>
@@ -229,10 +235,13 @@ export default function TestSearchPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right pr-6">
-                              <Button variant="ghost" size="sm" asChild className="group-hover:text-primary group-hover:bg-primary/5">
-                                <Link href={`/dashboard/students?studentId=${s.id}`}>
-                                  Profile <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                                </Link>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="group-hover:text-primary group-hover:bg-primary/5"
+                                onClick={() => { setSelectedStudent(s); setIsProfileSheetOpen(true); }}
+                              >
+                                View Profile <ArrowRight className="ml-2 h-3.5 w-3.5" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -245,6 +254,171 @@ export default function TestSearchPage() {
             </Card>
           </Tabs>
         </div>
+      </div>
+
+      <Sheet open={isProfileSheetOpen} onOpenChange={setIsProfileSheetOpen}>
+        <SheetContent className="sm:max-w-3xl overflow-y-auto">
+          <SheetHeader className="pb-6">
+            <SheetTitle>Student Profile Dashboard</SheetTitle>
+          </SheetHeader>
+          {selectedStudent && (
+            <StudentProfileViewContent student={selectedStudent} db={db} />
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function StudentProfileViewContent({ student, db }: any) {
+  const studentId = student?.id;
+  const attendanceQuery = useMemoFirebase(() => {
+    if (!db || !studentId) return null;
+    return query(collection(db, 'attendance'), where('studentId', '==', studentId));
+  }, [db, studentId]);
+
+  const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+
+  const stats = useMemo(() => {
+    const hours = (attendance || []).reduce((acc, curr) => {
+      const h = Number(curr.duration) || 0;
+      if (curr.type === 'Theory') acc.theory += h;
+      else acc.practical += h;
+      return acc;
+    }, { practical: 0, theory: 0 });
+
+    const paid = student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
+    const balance = Math.max(0, (student.amount || 0) - paid);
+
+    return { ...hours, paid, balance };
+  }, [attendance, student]);
+
+  const formatSafeDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  return (
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
+        <Avatar className="h-24 w-24 border-4 border-white shadow-xl">
+          <AvatarImage src={student.photoUrl} alt={student.name} />
+          <AvatarFallback className="text-2xl font-bold bg-primary text-white">{student.name?.charAt(0)}</AvatarFallback>
+        </Avatar>
+        <div className="grid gap-1">
+          <h2 className="text-2xl font-black tracking-tight">{student.name}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <Badge variant="secondary" className="font-mono font-bold">{student.id}</Badge>
+            <Badge variant="outline" className="uppercase font-bold text-[10px]">{student.branch}</Badge>
+          </div>
+          <Badge className="mx-auto mt-2" variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatSummary label="Practical Hr" value={`${stats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" />
+        <StatSummary label="Theory Hr" value={`${stats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
+        <StatSummary label="Paid" value={`₹${stats.paid.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
+        <StatSummary label="Balance" value={`₹${stats.balance.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="space-y-4">
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
+          <div className="grid gap-4 text-sm">
+            <ProfileItem icon={<Clock />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
+            <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
+            <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
+            <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
+            <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
+            <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
+            <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><GraduationCap className="h-4 w-4" /> Courses</h3>
+          <div className="space-y-2">
+            {student.courses?.map((c: string, i: number) => (
+              <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
+                <span className="font-medium text-sm">{c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}</span>
+                <Badge variant="outline">Enrolled</Badge>
+              </div>
+            ))}
+          </div>
+          {student.remarks && (
+            <div className="mt-6 p-4 rounded-lg bg-orange-50 border border-orange-100">
+              <p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Remarks</p>
+              <p className="text-xs text-orange-800 italic">{student.remarks}</p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Calendar className="h-4 w-4" /> Attendance Log</h3>
+        {isAttendanceLoading ? (
+          <div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : !attendance || attendance.length === 0 ? (
+          <p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No logs found.</p>
+        ) : (
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {[...attendance].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((a: any) => (
+                  <TableRow key={a.id} className="hover:bg-muted/30">
+                    <TableCell className="text-xs font-medium">{formatSafeDate(a.date)}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell>
+                    <TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell>
+                    <TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StatSummary({ label, value, icon, color }: any) {
+  const colorMap: Record<string, string> = {
+    primary: "bg-primary/5 border-primary/10 text-primary",
+    green: "bg-green-50/50 border-green-100 text-green-700",
+    red: "bg-red-50/50 border-red-100 text-red-700",
+    blue: "bg-blue-50/50 border-blue-100 text-blue-700",
+    orange: "bg-orange-50/50 border-orange-100 text-orange-700"
+  };
+  return (
+    <Card className={colorMap[color]}>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-xs font-bold uppercase flex items-center gap-2">{icon} {label}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        <div className="text-xl font-black">{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProfileItem({ icon, label, value, fullWidth = false }: any) {
+  return (
+    <div className={`grid gap-1 ${fullWidth ? 'col-span-full' : ''}`}>
+      <div className="flex items-center gap-2 text-muted-foreground font-medium text-[10px] uppercase tracking-wider">
+        <span className="text-primary/60">{icon}</span>
+        {label}
+      </div>
+      <div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent">
+        {value || 'N/A'}
       </div>
     </div>
   );
