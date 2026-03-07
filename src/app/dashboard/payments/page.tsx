@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -54,7 +55,7 @@ export default function StudentReceiptsPage() {
     return doc(db, 'users', user.uid);
   }, [db, user?.uid]);
   
-  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+  const { data: profile } = useDoc(userProfileRef);
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   const isManagement = isAdmin || isBranchManager;
@@ -65,6 +66,7 @@ export default function StudentReceiptsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [listSearchTerm, setListSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
@@ -133,7 +135,7 @@ export default function StudentReceiptsPage() {
     
     let result = students || [];
     
-    // Non-admins only see students from their own branch in the search
+    // Strict isolation: Non-admins only see students from their own branch in the search
     if (!isAdmin) {
       const targetBranch = profileBranch || "Branch 1";
       result = result.filter(s => isFromBranch(s, targetBranch));
@@ -155,7 +157,7 @@ export default function StudentReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
 
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
@@ -186,7 +188,7 @@ export default function StudentReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleCreateReceipt = async () => {
     if (!selectedStudent) {
@@ -258,8 +260,6 @@ export default function StudentReceiptsPage() {
     }, 100);
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleDeleteReceipt = async (receipt: ReceiptRecord) => {
     if (!isAdmin) return;
     deleteDocumentNonBlocking(doc(db, 'payments', receipt.id));
@@ -277,14 +277,14 @@ export default function StudentReceiptsPage() {
     toast({ variant: "destructive", title: "Receipt Deleted" });
   };
 
-  const isActuallyLoading = isProfileLoading || isReceiptsLoading || isStudentsLoading;
+  const isActuallyLoading = isReceiptsLoading || isStudentsLoading;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Student Receipts</h2>
-          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'Global course fee collections.' : `Collections for ${selectedBranchFilter}`) : `Collections for your branch.`}</p>
+          <p className="text-muted-foreground">{isAdmin ? (selectedBranchFilter === 'All' ? 'Global course fee collections.' : `Collections for ${selectedBranchFilter}`) : `Collections for your branch.`}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <div className="relative">
@@ -357,10 +357,10 @@ export default function StudentReceiptsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredReceipts.length === 0 ? (
+                {(filteredReceipts || []).length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
-                  filteredReceipts.map((r) => (
+                  (filteredReceipts || []).map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/20">
                       <TableCell className="pl-6 text-muted-foreground text-xs">{r.date?.seconds ? format(new Date(r.date.seconds * 1000), 'MMM d, yyyy') : (isValid(new Date(r.date)) ? format(new Date(r.date), 'MMM d, yyyy') : '...')}</TableCell>
                       <TableCell><div className="grid gap-0.5"><span className="font-bold text-sm">#{r.receiptNo || 'N/A'}</span><span className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> {r.studentName}</span></div></TableCell>

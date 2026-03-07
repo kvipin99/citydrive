@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -66,19 +67,16 @@ function StudentsContent() {
     return doc(db, 'users', user.uid);
   }, [db, user?.uid]);
   
-  const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+  const { data: profile } = useDoc(userProfileRef);
   
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
-  const isInstructor = profile?.role === 'Instructor';
   const isStudent = profile?.role === 'Student';
   const isManagement = isAdmin || isBranchManager;
   const profileBranch = profile?.branch;
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
-    // We fetch all records for staff to handle smart filtering on client side
-    // This avoids missing records entered by admin/master for specific branches
     return collection(db, 'students');
   }, [db, user?.uid, profile?.role]);
 
@@ -140,10 +138,8 @@ function StudentsContent() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // Tier 1: Exact/Normalized Name Match
     if (rBranch === targetBranch) return true;
 
-    // Tier 2: ID Prefix Match (e.g. B1 matches Branch 1)
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const prefix = `B${branchNum}`;
@@ -207,7 +203,7 @@ function StudentsContent() {
     if (profile && !isAdmin) {
       setSelectedBranchFilter(profileBranch || "Branch 1");
     }
-  }, [profile, isAdmin, profileBranch]);
+  }, [profile?.branch, isAdmin, profileBranch]);
 
   useEffect(() => {
     if (isAddDialogOpen && formData.branch && students) {
@@ -222,7 +218,7 @@ function StudentsContent() {
     if (!students) return [];
     let result = students;
 
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
@@ -237,7 +233,7 @@ function StudentsContent() {
     }
 
     return result;
-  }, [students, searchQuery, selectedBranchFilter, isManagement, profileBranch, isFromBranch]);
+  }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
 
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
@@ -521,7 +517,7 @@ function StudentsContent() {
     return Math.max(0, (student.amount || 0) - paid);
   }, []);
 
-  const isActuallyLoading = isProfileLoading || isStudentsLoading;
+  const isActuallyLoading = isStudentsLoading;
 
   return (
     <div className="space-y-6">
@@ -531,7 +527,7 @@ function StudentsContent() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : isManagement ? (selectedBranchFilter === 'All' ? 'Global school enrollment records.' : `Records for ${selectedBranchFilter}`) : `Branch records.`}
+                {isStudent ? 'My training and profile record.' : isAdmin ? (selectedBranchFilter === 'All' ? 'Global school enrollment records.' : `Records for ${selectedBranchFilter}`) : `Records for your branch.`}
               </CardDescription>
             </div>
             {!isStudent && (
@@ -1111,7 +1107,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 
   const hourStats = useMemo(() => {
     if (!attendance) return { practical: 0, theory: 0 };
-    return attendance.reduce((acc, curr) => {
+    return (attendance || []).reduce((acc, curr) => {
       const h = Number(curr.duration) || 0;
       if (curr.type === 'Theory') acc.theory += h;
       else acc.practical += h;

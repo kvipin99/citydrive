@@ -142,7 +142,7 @@ export default function AttendancePage() {
     const uniquePractical = new Set();
     const uniqueTheory = new Set();
     
-    const totals = filteredAttendance.reduce((acc, curr) => {
+    const totals = (filteredAttendance || []).reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
       if (curr.type === 'Theory') {
         acc.theoryHours += hours;
@@ -159,17 +159,18 @@ export default function AttendancePage() {
       theoryHours: totals.theoryHours,
       practicalCount: uniquePractical.size,
       theoryCount: uniqueTheory.size,
-      totalUniqueStudents: new Set(filteredAttendance.map(a => a.studentId)).size
+      totalUniqueStudents: new Set((filteredAttendance || []).map(a => a.studentId)).size
     };
   }, [filteredAttendance]);
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    const currentBranchContext = isManagement ? "All" : (profile?.branch || "Branch 1");
+    // Strict isolation for search: Only global admins see all students in the dropdown
+    const searchBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
-    if (currentBranchContext !== "All") {
-      result = result.filter(s => isFromBranch(s, currentBranchContext));
+    if (searchBranchContext !== "All") {
+      result = result.filter(s => isFromBranch(s, searchBranchContext));
     }
     
     if (!studentSearch) return result;
@@ -179,7 +180,7 @@ export default function AttendancePage() {
       s.id.toLowerCase().includes(term) ||
       s.phone?.includes(term)
     );
-  }, [allStudents, studentSearch, profile?.branch, isManagement, isFromBranch]);
+  }, [allStudents, studentSearch, profile?.branch, isAdmin, isFromBranch]);
 
   const calculateDuration = (start: string, end: string) => {
     try {
@@ -379,7 +380,7 @@ export default function AttendancePage() {
           <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
             <DialogTitle>Record Student Session</DialogTitle>
             <DialogDescription>
-              {isManagement ? "Search all students to record training." : "Search branch students to record training."}
+              {isAdmin ? "Search all students to record training." : "Search branch students to record training."}
             </DialogDescription>
           </DialogHeader>
           
@@ -388,7 +389,7 @@ export default function AttendancePage() {
               {!selectedStudent ? (
                 <div className="grid gap-2">
                   <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                    Search Student {isManagement ? "(Global)" : "(My Branch)"}
+                    Search Student {isAdmin ? "(Global)" : "(My Branch)"}
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
