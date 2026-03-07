@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from "@/firebase";
@@ -7,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint, FileText } from "lucide-react";
+import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint, FileText, Receipt as ReceiptIcon } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useMemo } from "react";
 
@@ -169,6 +170,44 @@ export default function StudentProfilePage() {
                 </Table>
               ) : (
                 <div className="text-center py-12 text-muted-foreground italic">No sessions logged yet.</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Receipts Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ReceiptIcon className="h-5 w-5 text-primary" />
+                Fee Payment History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {student.payments && student.payments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Receipt No.</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...student.payments].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((p: any, i: number) => (
+                      <TableRow key={p.id || i} className="hover:bg-muted/30">
+                        <TableCell className="text-sm font-medium">{formatSafeDate(p.date)}</TableCell>
+                        <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px] uppercase">{p.method}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-green-600">₹{p.amount?.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground italic">No fee receipts recorded yet.</div>
               )}
             </CardContent>
           </Card>
