@@ -75,7 +75,6 @@ function StudentsContent() {
   const isBranchManager = profile?.role === 'BranchManager';
   const profileBranch = profile?.branch;
 
-  // Elevate Instructor to Admin-level global student visibility
   const hasGlobalVisibility = isAdmin || isInstructor;
 
   const studentsQuery = useMemoFirebase(() => {
@@ -86,12 +85,10 @@ function StudentsContent() {
       return query(base, where('userId', '==', user.uid));
     }
     
-    // Instructors and Admins see everyone across all branches
     if (hasGlobalVisibility) {
       return base;
     }
     
-    // Branch Managers only see their branch
     const branchId = profileBranch || "Branch 1";
     return query(base, where('branch', '==', branchId));
   }, [db, user?.uid, profileBranch, hasGlobalVisibility, isStudent]);
@@ -115,6 +112,7 @@ function StudentsContent() {
   const [cleanupId, setCleanupId] = useState("");
 
   const [formData, setFormData] = useState<Partial<Student>>({
+    id: "",
     branch: "",
     status: "Active",
     courses: [],
@@ -144,6 +142,63 @@ function StudentsContent() {
     date: format(new Date(), 'yyyy-MM-dd'),
     description: ''
   });
+
+  const generateBranchStudentId = useCallback((branchName: string) => {
+    if (!branchName) return "";
+    const numMatch = branchName.match(/\d+/);
+    const branchNumber = numMatch ? numMatch[0] : "1";
+    const prefix = `B${branchNumber}`;
+    
+    const branchStudents = students?.filter(s => s.branch === branchName) || [];
+    const maxSequence = branchStudents.reduce((max, s) => {
+      if (s.id && s.id.startsWith(prefix)) {
+        const seqPart = s.id.slice(prefix.length);
+        const seq = parseInt(seqPart, 10);
+        return !isNaN(seq) && seq > max ? seq : max;
+      }
+      return max;
+    }, 0);
+    
+    const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
+    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  }, [students]);
+
+  const resetForm = useCallback(() => {
+    const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
+    setFormData({ 
+      id: "",
+      branch: defaultBranch, 
+      status: "Active", 
+      courses: [], 
+      discount: 0, 
+      amount: 0,
+      name: "",
+      phone: "",
+      address: "",
+      parentName: "",
+      aadharNo: "",
+      onlineAppNo: "",
+      learnersNo: "",
+      learnersDate: "",
+      drivingNo: "",
+      testDate: "",
+      remarks: "",
+      photoUrl: "",
+      registrationDate: format(new Date(), 'yyyy-MM-dd'),
+      specialCourseName: "",
+      specialCourseFee: 0
+    });
+    setCleanupId("");
+  }, [isAdmin, profileBranch]);
+
+  useEffect(() => {
+    if (isAddDialogOpen && formData.branch && students && !isStudentsLoading) {
+      const nextId = generateBranchStudentId(formData.branch);
+      if (formData.id !== nextId) {
+        setFormData(prev => ({ ...prev, id: nextId }));
+      }
+    }
+  }, [isAddDialogOpen, formData.branch, students, isStudentsLoading, generateBranchStudentId, formData.id]);
 
   const closeAllModals = useCallback(() => {
     setIsEditDialogOpen(false);
@@ -183,16 +238,6 @@ function StudentsContent() {
     }
   }, [isStudent, students, selectedStudent]);
 
-  useEffect(() => {
-    if (profile && isAddDialogOpen) {
-      const defaultBranch = isAdmin ? (formData.branch || "Branch 1") : (profileBranch || "Branch 1");
-      setFormData(prev => {
-        if (prev.branch === defaultBranch) return prev;
-        return { ...prev, branch: defaultBranch };
-      });
-    }
-  }, [profileBranch, isAddDialogOpen, isAdmin, formData.branch]);
-
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
     masterCourses?.forEach(c => { map[c.name] = c.amount; });
@@ -212,25 +257,6 @@ function StudentsContent() {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
     return Math.max(0, baseAmount + (specialFee || 0) - (discount || 0));
   }, [coursePriceMap]);
-
-  const generateBranchStudentId = useCallback((branchName: string) => {
-    const numMatch = branchName.match(/\d+/);
-    const branchNumber = numMatch ? numMatch[0] : "1";
-    const prefix = `B${branchNumber}`;
-    
-    const branchStudents = students?.filter(s => s.branch === branchName) || [];
-    const maxSequence = branchStudents.reduce((max, s) => {
-      if (s.id && s.id.startsWith(prefix)) {
-        const seqPart = s.id.slice(prefix.length);
-        const seq = parseInt(seqPart, 10);
-        return !isNaN(seq) && seq > max ? seq : max;
-      }
-      return max;
-    }, 0);
-    
-    const nextSeq = maxSequence > 0 ? maxSequence + 1 : 1;
-    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
-  }, [students]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -282,14 +308,13 @@ function StudentsContent() {
   };
 
   const handleAddStudent = async () => {
-    if (!formData.name || !formData.branch) {
-      toast({ variant: "destructive", title: "Error", description: "Name and Branch are required." });
+    if (!formData.name || !formData.branch || !formData.id) {
+      toast({ variant: "destructive", title: "Error", description: "Name, Branch, and Student ID are required." });
       return;
     }
 
     setIsSubmitting(true);
-    const branchName = formData.branch!;
-    const studentId = generateBranchStudentId(branchName);
+    const studentId = formData.id;
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
     
     try {
@@ -453,33 +478,6 @@ function StudentsContent() {
     }
   };
 
-  const resetForm = useCallback(() => {
-    const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
-    setFormData({ 
-      branch: defaultBranch, 
-      status: "Active", 
-      courses: [], 
-      discount: 0, 
-      amount: 0,
-      name: "",
-      phone: "",
-      address: "",
-      parentName: "",
-      aadharNo: "",
-      onlineAppNo: "",
-      learnersNo: "",
-      learnersDate: "",
-      drivingNo: "",
-      testDate: "",
-      remarks: "",
-      photoUrl: "",
-      registrationDate: format(new Date(), 'yyyy-MM-dd'),
-      specialCourseName: "",
-      specialCourseFee: 0
-    });
-    setCleanupId("");
-  }, [isAdmin, profileBranch]);
-
   const handleCourseToggle = (course: string) => {
     const currentCourses = formData.courses || [];
     let newCourses;
@@ -555,7 +553,6 @@ function StudentsContent() {
                           handlePhotoUpload={handlePhotoUpload} 
                           photoInputRef={photoInputRef}
                           handleCourseToggle={handleCourseToggle}
-                          generateBranchStudentId={generateBranchStudentId}
                         />
                         
                         <div className="pt-6 border-t">
@@ -845,7 +842,6 @@ function StudentForm({
   handlePhotoUpload, 
   photoInputRef,
   handleCourseToggle,
-  generateBranchStudentId,
   isEdit = false
 }: any) {
   return (
@@ -879,9 +875,22 @@ function StudentForm({
             </Select>
           </div>
           <div className="grid gap-2">
+            <Label className="text-primary font-bold flex items-center gap-1.5">
+              Student ID (Auto-generated)
+              <Lock className="h-3 w-3 text-muted-foreground" />
+            </Label>
+            <Input 
+              className="h-11 bg-muted font-bold text-primary border-primary/20 cursor-not-allowed" 
+              value={formData.id || ''} 
+              readOnly 
+            />
+          </div>
+          <div className="grid gap-2">
             <Label>Full Student Name</Label>
             <Input className="h-11" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} />
           </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="grid gap-2">
             <Label>Mobile Contact No.</Label>
             <Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} />
