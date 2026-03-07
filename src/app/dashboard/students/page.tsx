@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, getDoc, Timestamp } from "firebase/firestore";
-import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon } from "lucide-react";
+import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
@@ -101,6 +101,7 @@ function StudentsContent() {
   const { data: masterCourses, isLoading: isCoursesLoading } = useCollection<any>(coursesQuery);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
@@ -148,7 +149,6 @@ function StudentsContent() {
     const branchNumber = numMatch ? numMatch[0] : "1";
     const prefix = `B${branchNumber}`;
     
-    // Scan ALL students to find the maximum ID for this branch prefix
     const branchStudents = students?.filter(s => s.branch === branchName) || [];
     const maxSequence = branchStudents.reduce((max, s) => {
       if (s.id && s.id.startsWith(prefix)) {
@@ -229,12 +229,23 @@ function StudentsContent() {
 
   const filteredStudents = useMemo(() => {
     if (!students) return [];
-    return students.filter(s => 
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.phone?.includes(searchQuery)
-    );
-  }, [students, searchQuery]);
+    let result = students;
+
+    if (hasGlobalVisibility && selectedBranchFilter !== "All") {
+      result = result.filter(s => s.branch === selectedBranchFilter);
+    }
+
+    if (searchQuery) {
+      const term = searchQuery.toLowerCase();
+      result = result.filter(s => 
+        s.name.toLowerCase().includes(term) || 
+        s.id.toLowerCase().includes(term) ||
+        s.phone?.includes(term)
+      );
+    }
+
+    return result;
+  }, [students, searchQuery, selectedBranchFilter, hasGlobalVisibility]);
 
   const calculateFees = useCallback((courses: string[], discount: number, specialFee: number = 0) => {
     const baseAmount = courses.reduce((sum, courseName) => sum + (coursePriceMap[courseName] || 0), 0);
@@ -507,11 +518,26 @@ function StudentsContent() {
             </div>
             {!isStudent && (
               <div className="flex flex-wrap items-center gap-2">
+                {hasGlobalVisibility && (
+                  <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-primary/10">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground ml-2" />
+                    <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                      <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                        <SelectValue placeholder="All Branches" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="All">All Branches</SelectItem>
+                        {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search ID, Name or Mobile..."
-                    className="pl-8 w-[200px] lg:w-[300px]"
+                    className="pl-8 w-[200px] lg:w-[250px]"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
