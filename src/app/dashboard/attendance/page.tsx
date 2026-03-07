@@ -44,6 +44,7 @@ export default function AttendancePage() {
   
   const [selectedInstructorId, setSelectedInstructorId] = useState<string>("");
   const [manualInstructorName, setManualInstructorName] = useState("");
+  const [entryDate, setEntryDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -81,9 +82,7 @@ export default function AttendancePage() {
 
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
-    const base = collection(db, 'students');
-    if (profile.role === 'Student') return query(base, where('userId', '==', user.uid));
-    return base;
+    return collection(db, 'students');
   }, [db, user?.uid, profile?.role]);
 
   const { data: allStudents, isLoading: isStudentsLoading } = useCollection(studentsQuery);
@@ -174,7 +173,7 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    // Strict isolation for search: Only global admins see all students in the dropdown
+    // Strict isolation for search: Branch Managers ONLY see their own branch students
     const searchBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
@@ -205,8 +204,7 @@ export default function AttendancePage() {
   const handleMarkAttendance = () => {
     if (!db || !user || !profile || !selectedStudent) return;
 
-    // Use current date for recording if today is within range, or default to current day
-    const recordingDate = format(new Date(), 'yyyy-MM-dd');
+    const recordingDate = entryDate || format(new Date(), 'yyyy-MM-dd');
     const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
     const duration = calculateDuration(startTime, endTime);
@@ -259,6 +257,7 @@ export default function AttendancePage() {
     setSessionType('Practical');
     setStartTime("09:00");
     setEndTime("10:00");
+    setEntryDate(format(new Date(), 'yyyy-MM-dd'));
     setSelectedInstructorId(user?.uid || "");
     setManualInstructorName("");
   };
@@ -489,6 +488,16 @@ export default function AttendancePage() {
                     <Button variant="outline" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full border-primary/20">
                       <X className="h-4 w-4" />
                     </Button>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Session Date</Label>
+                    <Input 
+                      type="date" 
+                      value={entryDate} 
+                      onChange={(e) => setEntryDate(e.target.value)}
+                      className="h-11 bg-background border-2 font-bold"
+                    />
                   </div>
 
                   <div className="grid gap-3">

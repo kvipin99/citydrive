@@ -955,11 +955,11 @@ function StudentForm({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="grid gap-2">
-            <Label>Aadhar Card Number</Label>
+            <Label>Aadhar Number</Label>
             <Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} />
           </div>
           <div className="grid gap-2">
-            <Label>RTO Online Application No.</Label>
+            <Label>Online Application No.</Label>
             <Input className="h-11 font-mono" placeholder="e.g. 234000123" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} />
           </div>
         </div>

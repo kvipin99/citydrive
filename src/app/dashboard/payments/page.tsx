@@ -135,7 +135,7 @@ export default function StudentReceiptsPage() {
     
     let result = students || [];
     
-    // Strict isolation: Non-admins only see students from their own branch in the search
+    // Strict isolation: Branch Managers ONLY see their own branch students
     if (!isAdmin) {
       const targetBranch = profileBranch || "Branch 1";
       result = result.filter(s => isFromBranch(s, targetBranch));
