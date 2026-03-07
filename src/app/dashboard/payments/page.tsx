@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, getDoc, Timestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { PlusCircle, Search, CreditCard, Receipt as ReceiptIcon, User, MoreHorizontal, Trash2, RefreshCw, Lock, Calendar as CalendarIcon, Filter, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -394,7 +394,14 @@ export default function StudentReceiptsPage() {
                   <div className="p-3 rounded-lg border bg-primary/5 flex justify-between items-center"><div><p className="font-bold text-primary">{selectedStudent.name}</p><p className="text-xs text-muted-foreground">{selectedStudent.id}</p></div><Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>Change</Button></div>
                   <div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalance(selectedStudent).toLocaleString()}</p></div></div>
                   <div className="grid gap-4 pt-4 border-t">
-                    <div className="grid gap-2"><Label>Receipt Date</Label><div className="relative">{!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}<Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} /></div></div>
+                    <div className="grid gap-2">
+                      <Label>Receipt Date</Label>
+                      <div className="relative">
+                        {!isAdmin && <Lock className="absolute right-3 top-3 h-3 w-3 text-muted-foreground z-10" />}
+                        <Input type="date" value={receiptFormData.date} disabled={!isAdmin} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />
+                      </div>
+                      {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to today's date.</p>}
+                    </div>
                     <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}> <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div>
                     <div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div>
                     <div className="grid gap-2"><Label>Note (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div>
@@ -403,7 +410,12 @@ export default function StudentReceiptsPage() {
               )}
             </div>
           </div>
-          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><Button disabled={!selectedStudent || isSubmitting} onClick={handleCreateReceipt} className="w-full">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Generate Student Receipt</Button></DialogFooter>
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0">
+            <Button disabled={!selectedStudent || isSubmitting} onClick={handleCreateReceipt} className="w-full">
+              {isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Generate Student Receipt
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
