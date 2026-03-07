@@ -530,8 +530,14 @@ export default function AttendancePage() {
                   </div>
 
                   <div className="grid gap-3">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Assigned Instructor</Label>
-                    <Select value={selectedInstructorId} onValueChange={setSelectedInstructorId}>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                      Assigned Instructor {!isManagement && <Lock className="h-3 w-3" />}
+                    </Label>
+                    <Select 
+                      value={selectedInstructorId} 
+                      onValueChange={setSelectedInstructorId}
+                      disabled={!isManagement}
+                    >
                       <SelectTrigger className="h-11 border-2">
                         <SelectValue placeholder="Select Instructor" />
                       </SelectTrigger>
@@ -551,6 +557,7 @@ export default function AttendancePage() {
                         className="h-11 border-2 animate-in fade-in slide-in-from-top-1"
                       />
                     )}
+                    {!isManagement && <p className="text-[10px] text-muted-foreground italic">Identification locked to your staff profile.</p>}
                   </div>
 
                   {sessionType === 'Practical' && (
