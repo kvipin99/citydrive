@@ -73,27 +73,30 @@ export default function AccountingPage() {
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch || '');
+    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
+    const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct normalized match
-    if (rBranch === targetBranch) return true;
+    // 1. Direct match
+    if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric match (e.g. "b1" matches "branch1")
+    // 2. Numeric identifier match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID-based identification (fallback)
-    const branchNum = tNum;
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
-      const rid = (record.id || '').toLowerCase();
-      const sid = (record.studentId || '').toLowerCase();
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `-${bCode}`];
+    // 3. ID Based Matching
+    const rid = normalize(record.id || '');
+    const sid = normalize(record.studentId || '');
+    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    
+    if (searchNum) {
+      const bCode = `b${searchNum}`;
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
       if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
+      if (rid.startsWith(bCode)) return true;
     }
+
     return false;
   }, []);
 
@@ -137,11 +140,12 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
-    if (selectedBranch !== "All" && selectedBranch !== "Full") {
-      result = result.filter(t => isFromBranch(t, selectedBranch));
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
+      result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
     return result;
-  }, [allTransactions, dateRange, selectedBranch, isFromBranch]);
+  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -191,7 +195,8 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = (selectedBranch === "All" || selectedBranch === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    const sourceData = (currentBranchContext === "All" || currentBranchContext === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, currentBranchContext));
     
     sourceData.forEach(t => {
       const monthKey = format(t.date, 'yyyy-MM');
@@ -200,11 +205,12 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch, isFromBranch]);
+  }, [allTransactions, selectedBranch, isAdmin, profile?.branch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = (selectedBranch === "All" || selectedBranch === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    const sourceData = (currentBranchContext === "All" || currentBranchContext === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, currentBranchContext));
     
     sourceData.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
@@ -213,7 +219,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch, isFromBranch]);
+  }, [allTransactions, selectedBranch, isAdmin, profile?.branch, isFromBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -244,7 +250,7 @@ export default function AccountingPage() {
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2>
           <p className="text-muted-foreground text-sm">
-            Daily intake and expenditure accounts for {selectedBranch === 'All' ? 'all branches' : selectedBranch}.
+            Daily intake and expenditure accounts for {isAdmin && selectedBranch === 'All' ? 'all branches' : (isAdmin ? selectedBranch : profile?.branch)}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -415,7 +421,7 @@ export default function AccountingPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Monthly Summaries</CardTitle>
-                  <CardDescription>Aggregated performance by month for {selectedBranch === 'All' ? 'Full School' : selectedBranch}.</CardDescription>
+                  <CardDescription>Aggregated performance by month for {isAdmin && selectedBranch === 'All' ? 'Full School' : (isAdmin ? selectedBranch : profile?.branch)}.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoading ? <LoadingSpinner /> : (

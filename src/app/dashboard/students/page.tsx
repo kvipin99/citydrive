@@ -545,7 +545,9 @@ function StudentsContent() {
                           <div className="grid gap-0.5">
                             <span className="font-bold text-primary">{student.id}</span>
                             <span className="text-sm">{student.name}</span>
-                            {student.registerNo && <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>}
+                            {student.registerNo && (
+                              <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>
+                            )}
                           </div>
                         </div>
                       </TableCell>

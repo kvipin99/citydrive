@@ -93,31 +93,34 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
-  // Robust branch matching logic synchronized with Student Receipts
+  // Enhanced robust branch matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch || '');
+    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
+    const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct normalized match
-    if (rBranch === targetBranch) return true;
+    // 1. Direct match
+    if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric match (e.g. "b1" matches "branch1")
+    // 2. Numeric identifier match (e.g. "1" from "Branch 1" and "B1")
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID-based identification (fallback)
-    const branchNum = tNum;
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
-      const rid = (record.id || '').toLowerCase();
-      const patterns = [bCode, `-${bCode}-`, `exp-b${branchNum}`, `exp-${bCode}`, `-${bCode}`];
+    // 3. ID Prefix checks (Robust fallback)
+    const rid = normalize(record.id || '');
+    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    
+    if (searchNum) {
+      const bCode = `b${searchNum}`;
+      // Common ID patterns: "exp-b1", "b1...", "-b1-"
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
       if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
+
     return false;
   }, []);
 
@@ -130,13 +133,15 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    // Fix: For Managers, always use their profile branch. For Admins, use the filter.
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -219,15 +224,15 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
+                <CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isManagement && (
+              {isAdmin && (
                 <div className="flex items-center gap-2 border-r pr-3 mr-1">
                   <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
                     <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
                       <SelectValue placeholder="Branch" />
                     </SelectTrigger>
@@ -316,7 +321,7 @@ export default function ExpensesPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleOpenDialog(exp)}>
-                              <Edit2 className="mr-2 h-4 w-4" /> Edit
+                              <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteExpense(exp.id)}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete Record
