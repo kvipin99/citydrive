@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
-import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter, Lock, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
@@ -93,7 +93,7 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
-  // Synchronized robust branch matching utility
+  // Robust matching logic synchronized across files
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -101,14 +101,24 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // 1. Direct match
     if (rBranch && rBranch === targetBranch) return true;
 
+    // 2. Numeric identifier match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
+    // 3. ID Based Matching Fallback
+    const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    if (branchNum && (record.id?.toLowerCase().startsWith(`exp-b${branchNum}`) || record.id?.toLowerCase().startsWith(`rec-b${branchNum}`) || record.studentId?.toLowerCase().startsWith(`b${branchNum}`))) return true;
+    
+    if (branchNum) {
+      const bCode = `b${branchNum}`;
+      // Check if ID contains branch code (e.g. EXP-B1-...)
+      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
+      if (rid.startsWith(bCode)) return true;
+    }
 
     return false;
   }, []);
@@ -122,14 +132,14 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    // Management branch filtering
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    // Management branch filtering: Admins use filter, Managers use assigned branch
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {

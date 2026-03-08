@@ -106,7 +106,7 @@ export default function OtherReceiptsPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
-  // Synchronized robust branch matching utility
+  // Synchronized robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -121,12 +121,11 @@ export default function OtherReceiptsPage() {
     if (rNum && tNum && rNum === tNum) return true;
 
     const rid = normalize(record.id || '');
-    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
     
-    if (searchNum) {
-      const bCode = `b${searchNum}`;
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
-      if (patterns.some(p => rid.includes(p))) return true;
+    if (branchNum) {
+      const bCode = `b${branchNum}`;
+      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
       if (rid.startsWith(bCode)) return true;
     }
 
@@ -188,7 +187,8 @@ export default function OtherReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    // Filter by context
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
@@ -220,7 +220,7 @@ export default function OtherReceiptsPage() {
       };
       return getTime(b.date) - getTime(a.date);
     });
-  }, [allReceipts, listSearchTerm, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [allReceipts, listSearchTerm, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const isActuallyLoading = isProfileLoading || isReceiptsLoading;
 
@@ -243,9 +243,9 @@ export default function OtherReceiptsPage() {
       <Card>
         <CardHeader className="pb-3 border-b">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /><div><CardTitle className="text-lg">Misc Income Log</CardTitle><CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription></div></div>
+            <div className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /><div><CardTitle className="text-lg">Misc Income Log</CardTitle><CardDescription>Records for {isAdmin ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription></div></div>
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isManagement && (<div className="flex items-center gap-2 border-r pr-3 mr-1"><Filter className="h-3.5 w-3.5 text-muted-foreground" /><Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}><SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background"><SelectValue placeholder="All Branches" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
+              {isAdmin && (<div className="flex items-center gap-2 border-r pr-3 mr-1"><Filter className="h-3.5 w-3.5 text-muted-foreground" /><Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}><SelectTrigger className="h-8 w-[130px] text-[10px] font-bold bg-background"><SelectValue placeholder="All Branches" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
               <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} /></div>
               <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label><Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} /></div>
               <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10" onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}>Today</Button>

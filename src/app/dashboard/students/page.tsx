@@ -155,8 +155,14 @@ function StudentsContent() {
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
+    const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    if (branchNum && (record.id?.toLowerCase().startsWith(`b${branchNum}`) || record.studentId?.toLowerCase().startsWith(`b${branchNum}`))) return true;
+    
+    if (branchNum) {
+      const bCode = `b${branchNum}`;
+      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
+      if (rid.startsWith(bCode)) return true;
+    }
     return false;
   }, []);
 

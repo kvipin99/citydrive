@@ -10,15 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Filter, Layers, FileDown, Printer, MapPin } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -43,17 +40,10 @@ export default function AccountingPage() {
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
-
-  useEffect(() => {
-    if (profile && !isAdmin) {
-      setSelectedBranchFilter(profile.branch || "Branch 1");
-    }
-  }, [profile, isAdmin]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -82,8 +72,14 @@ export default function AccountingPage() {
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
+    const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    if (branchNum && (record.id?.toLowerCase().startsWith(`exp-b${branchNum}`) || record.id?.toLowerCase().startsWith(`rec-b${branchNum}`) || record.studentId?.toLowerCase().startsWith(`b${branchNum}`))) return true;
+    
+    if (branchNum) {
+      const bCode = `b${branchNum}`;
+      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
+      if (rid.startsWith(bCode)) return true;
+    }
     
     return false;
   }, []);
@@ -129,13 +125,14 @@ export default function AccountingPage() {
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
     
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profile?.branch || "Branch 1");
+    // Admins see all consolidated, Managers see branch only
+    const currentBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
     
     return result;
-  }, [allTransactions, dateRange, isAdmin, selectedBranchFilter, profile?.branch, isFromBranch]);
+  }, [allTransactions, dateRange, isAdmin, profile?.branch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -185,7 +182,7 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? selectedBranchFilter : (profile?.branch || "Branch 1");
+    const context = isAdmin ? "All" : (profile?.branch || "Branch 1");
     const sourceData = allTransactions.filter(t => isFromBranch(t, context));
     
     sourceData.forEach(t => {
@@ -195,11 +192,11 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, selectedBranchFilter, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? selectedBranchFilter : (profile?.branch || "Branch 1");
+    const context = isAdmin ? "All" : (profile?.branch || "Branch 1");
     const sourceData = allTransactions.filter(t => isFromBranch(t, context));
     
     sourceData.forEach(t => {
@@ -209,7 +206,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, selectedBranchFilter, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -264,25 +261,10 @@ export default function AccountingPage() {
         <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Reports & Filter
+              <CalendarIcon className="h-4 w-4" /> Period Filter
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {isAdmin && (
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Branch Context</Label>
-                <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-                  <SelectTrigger className="h-9 font-bold">
-                    <SelectValue placeholder="All Branches" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">Full School (All)</SelectItem>
-                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             {!isAdmin && (
               <div className="p-3 rounded-lg bg-muted/50 border border-primary/10">
                 <p className="text-[10px] font-black uppercase text-primary mb-1">Current Branch</p>
@@ -291,7 +273,7 @@ export default function AccountingPage() {
             )}
 
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Period</Label>
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
               <div className="space-y-2">
                 <div className="grid gap-1">
                   <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
@@ -402,7 +384,7 @@ export default function AccountingPage() {
                     <CardContent className="p-0">
                       <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
                       {expenseTransactions.length > 0 && (
-                        <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
+                        <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
                           <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
                           <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
                         </div>
@@ -418,7 +400,7 @@ export default function AccountingPage() {
                 <CardHeader>
                   <CardTitle>Monthly Summaries</CardTitle>
                   <CardDescription>
-                    Aggregated performance by month for {isAdmin ? (selectedBranchFilter === 'All' ? 'Full School' : selectedBranchFilter) : profile?.branch}.
+                    Aggregated performance by month for {isAdmin ? 'Full School' : profile?.branch}.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
