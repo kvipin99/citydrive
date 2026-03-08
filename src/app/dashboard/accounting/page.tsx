@@ -77,19 +77,20 @@ export default function AccountingPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Explicit branch name match
+    // 1. Direct normalized match
     if (rBranch === targetBranch) return true;
 
-    const branchNum = branchName.match(/\d+/)?.[0];
+    // 2. Numeric match (e.g. "b1" matches "branch1")
+    const rNum = rBranch.match(/\d+/)?.[0];
+    const tNum = targetBranch.match(/\d+/)?.[0];
+    if (rNum && tNum && rNum === tNum) return true;
+
+    // 3. ID-based identification (fallback)
+    const branchNum = tNum;
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      // 2. Check if the branch field is just the code
-      if (rBranch === bCode) return true;
-      
       const rid = (record.id || '').toLowerCase();
       const sid = (record.studentId || '').toLowerCase();
-      
-      // 3. Robust pattern matching in IDs (covers exp-b1, rec-b1, etc)
       const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `-${bCode}`];
       if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
     }

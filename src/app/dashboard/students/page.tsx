@@ -141,13 +141,20 @@ function StudentsContent() {
     description: ''
   });
 
-  const isFromBranch = useCallback((record: Student, branchName: string) => {
+  const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
+    
     if (rBranch === targetBranch) return true;
-    const branchNum = branchName.match(/\d+/)?.[0];
+
+    const rNum = rBranch.match(/\d+/)?.[0];
+    const tNum = targetBranch.match(/\d+/)?.[0];
+    if (rNum && tNum && rNum === tNum) return true;
+
+    const branchNum = tNum;
     if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
     return false;
   }, []);
@@ -357,7 +364,8 @@ function StudentsContent() {
       return;
     }
     setIsSubmitting(true);
-    const receiptId = `REC-${Date.now()}`;
+    const branchNum = selectedStudent.branch.match(/\d+/)?.[0] || '1';
+    const receiptId = `REC-B${branchNum}-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
     const transactionDateStr = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date;
@@ -667,7 +675,14 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </section>
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CheckCircle2 className="h-4 w-4" /> Courses</h3>
-          <div className="space-y-2">{student.courses?.map((c: string, i: number) => (<div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center"><span className="font-medium text-sm">{c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}</span><Badge variant="outline">Enrolled</Badge></div>))}</div>
+          <div className="space-y-2">{student.courses?.map((c: string, i: number) => (
+            <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
+              <span className="font-medium text-sm">
+                {c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}
+              </span>
+              <Badge variant="outline">Enrolled</Badge>
+            </div>
+          ))}</div>
           {student.remarks && (<div className="mt-6 p-4 rounded-lg bg-orange-50 border border-orange-100"><p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Remarks</p><p className="text-xs text-orange-800 italic">{student.remarks}</p></div>)}
         </section>
       </div>
@@ -685,11 +700,11 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
       </section>
       <section className="space-y-4">
         <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
-        {student.payments?.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts issued.</p>) : (
+        {!student.payments || student.payments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts issued.</p>) : (
           <div className="rounded-xl border overflow-hidden">
             <Table>
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>{student.payments?.map((p: any) => (<TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30"><TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody>
+              <TableBody>{student.payments.map((p: any) => (<TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30"><TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody>
             </Table>
           </div>
         )}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -92,16 +93,22 @@ export default function StudentReceiptsPage() {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
     if (rBranch === targetBranch) return true;
 
-    const branchNum = branchName.match(/\d+/)?.[0];
+    const rNum = rBranch.match(/\d+/)?.[0];
+    const tNum = targetBranch.match(/\d+/)?.[0];
+    if (rNum && tNum && rNum === tNum) return true;
+
+    const branchNum = tNum;
     if (branchNum) {
-      const prefix = `B${branchNum}`;
-      if (rBranch === prefix.toLowerCase()) return true;
-      if (record.id?.startsWith(prefix) || record.studentId?.startsWith(prefix) || record.id?.startsWith(`REC-${prefix}`)) return true;
+      const bCode = `b${branchNum}`;
+      const rid = (record.id || '').toLowerCase();
+      const sid = (record.studentId || '').toLowerCase();
+      const patterns = [bCode, `-${bCode}-`, `rec-${bCode}`, `-${bCode}`];
+      if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
     }
     return false;
   }, []);
@@ -164,7 +171,7 @@ export default function StudentReceiptsPage() {
     let result = allReceipts.filter(r => r.category === "Course Fee" || (!!r.studentId));
 
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All") {
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
 
@@ -213,7 +220,8 @@ export default function StudentReceiptsPage() {
     }
 
     setIsSubmitting(true);
-    const receiptId = `REC-${Date.now()}`;
+    const branchNum = selectedStudent.branch.match(/\d+/)?.[0] || '1';
+    const receiptId = `REC-B${branchNum}-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
     const studentRef = doc(db, 'students', selectedStudent.id);
     

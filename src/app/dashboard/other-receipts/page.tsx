@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -107,19 +108,27 @@ export default function OtherReceiptsPage() {
   }, [profile?.branch, isAdmin, profileBranch]);
 
   const isFromBranch = useCallback((record: ReceiptRecord, branchName: string) => {
-    if (!branchName || branchName === "All") return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // 1. Direct normalized match
     if (rBranch === targetBranch) return true;
 
-    const branchNum = branchName.match(/\d+/)?.[0];
+    // 2. Numeric match (e.g. "b1" matches "branch1")
+    const rNum = rBranch.match(/\d+/)?.[0];
+    const tNum = targetBranch.match(/\d+/)?.[0];
+    if (rNum && tNum && rNum === tNum) return true;
+
+    // 3. ID-based identification (fallback)
+    const branchNum = tNum;
     if (branchNum) {
-      const prefix = `B${branchNum}`;
-      if (rBranch === prefix.toLowerCase()) return true;
-      if (record.studentId?.startsWith(prefix) || record.id?.startsWith(`REC-${prefix}`) || record.id?.startsWith(`MISC-${prefix}`)) return true;
+      const bCode = `b${branchNum}`;
+      const rid = (record.id || '').toLowerCase();
+      const patterns = [bCode, `-${bCode}-`, `misc-${bCode}`, `rec-${bCode}`, `-${bCode}`];
+      if (patterns.some(p => rid.includes(p))) return true;
     }
     return false;
   }, []);
@@ -180,7 +189,7 @@ export default function OtherReceiptsPage() {
     let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
     const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All") {
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
 

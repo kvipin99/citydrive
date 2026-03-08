@@ -100,14 +100,20 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // 1. Exact normalized match
     if (rBranch === targetBranch) return true;
 
-    const branchNum = branchName.match(/\d+/)?.[0];
+    // 2. Numeric match (e.g. "b1" matches "branch1")
+    const rNum = rBranch.match(/\d+/)?.[0];
+    const tNum = targetBranch.match(/\d+/)?.[0];
+    if (rNum && tNum && rNum === tNum) return true;
+
+    // 3. ID-based identification (fallback)
+    const branchNum = tNum;
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      if (rBranch === bCode) return true;
       const rid = (record.id || '').toLowerCase();
-      const patterns = [`-${bCode}-`, `exp-${bCode}`, `-${bCode}`, bCode];
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `-${bCode}`];
       if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
