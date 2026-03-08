@@ -68,27 +68,27 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Unified robust matching logic
+  // Robust Precise Branch Matching
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // Direct Match
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // Numeric Match
+    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // ID Match (Regex boundaries)
+    // 3. ID Based Matching (Regex with boundaries)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
@@ -405,9 +405,9 @@ export default function AccountingPage() {
                     <CardContent className="p-0">
                       <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
                       {expenseTransactions.length > 0 && (
-                        <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-green-700">Total Debit</span>
-                          <span className="text-lg font-black text-green-700">₹{totalExpenses.toLocaleString()}</span>
+                        <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
+                          <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
                         </div>
                       )}
                     </CardContent>

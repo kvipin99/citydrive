@@ -85,23 +85,26 @@ export default function ExpensesPage() {
     }
   }, [profile, isAdmin, profileBranch]);
 
-  // Robust matching logic
+  // Robust Precise Branch Matching
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
+    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
+    // 3. ID Based Matching (Regex with boundaries)
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
     
@@ -181,6 +184,7 @@ export default function ExpensesPage() {
   };
 
   const handleDeleteExpense = (id: string) => {
+    if (!isAdmin) return;
     const expenseRef = doc(db, 'expenses', id);
     deleteDocumentNonBlocking(expenseRef);
     toast({ variant: "destructive", title: "Expense Deleted" });
@@ -268,17 +272,19 @@ export default function ExpensesPage() {
                       <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{exp.branch}</Badge></TableCell>
                       <TableCell className="text-right font-black text-red-600 pr-6">₹{exp.amount?.toLocaleString()}</TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(exp); }}>
-                              <Edit2 className="mr-2 h-4 w-4" /> Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); handleDeleteExpense(exp.id); }}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete Record
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(exp); }}>
+                                <Edit2 className="mr-2 h-4 w-4" /> Edit Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); handleDeleteExpense(exp.id); }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Record
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
