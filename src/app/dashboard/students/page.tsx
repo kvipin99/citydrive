@@ -54,6 +54,7 @@ export interface Student {
   payments: any[];
   specialCourseName?: string;
   specialCourseFee?: number;
+  registerNo?: string;
 }
 
 function StudentsContent() {
@@ -129,7 +130,8 @@ function StudentsContent() {
     photoUrl: "",
     registrationDate: format(new Date(), 'yyyy-MM-dd'),
     specialCourseName: "",
-    specialCourseFee: 0
+    specialCourseFee: 0,
+    registerNo: ""
   });
 
   const [receiptFormData, setReceiptFormData] = useState({
@@ -204,7 +206,8 @@ function StudentsContent() {
       photoUrl: "",
       registrationDate: format(new Date(), 'yyyy-MM-dd'),
       specialCourseName: "",
-      specialCourseFee: 0
+      specialCourseFee: 0,
+      registerNo: ""
     });
     setCleanupId("");
   }, [isAdmin, profileBranch, generateBranchStudentId]);
@@ -238,7 +241,8 @@ function StudentsContent() {
       result = result.filter(s => 
         s.name.toLowerCase().includes(term) || 
         s.id.toLowerCase().includes(term) ||
-        s.phone?.includes(term)
+        s.phone?.includes(term) ||
+        s.registerNo?.toLowerCase().includes(term)
       );
     }
 
@@ -920,7 +924,7 @@ function StudentForm({
           <User className="h-4 w-4" />
           <h3 className="text-sm uppercase tracking-wider">Basic Identity</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="grid gap-2">
             <Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && !isEdit && <Lock className="h-3 w-3" />}</Label>
             <Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}>
@@ -938,6 +942,10 @@ function StudentForm({
               value={formData.id || ''} 
               readOnly 
             />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-primary font-bold">Register Number</Label>
+            <Input className="h-11 font-bold" placeholder="Manual Book No." value={formData.registerNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registerNo: e.target.value}))} />
           </div>
           <div className="grid gap-2">
             <Label>Full Student Name</Label>
@@ -1177,6 +1185,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
           <h2 className="text-2xl font-black tracking-tight">{student.name}</h2>
           <div className="flex items-center justify-center gap-2">
             <Badge variant="secondary" className="font-mono font-bold">{student.id}</Badge>
+            {student.registerNo && <Badge variant="outline" className="font-bold border-primary/20 text-primary">REG: {student.registerNo}</Badge>}
             <Badge variant="outline" className="uppercase font-bold text-[10px]">{student.branch}</Badge>
           </div>
           <Badge className="mx-auto mt-2" variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>

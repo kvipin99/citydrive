@@ -315,6 +315,7 @@ function StudentProfileViewContent({ student, db }: any) {
           <h2 className="text-2xl font-black tracking-tight">{student.name}</h2>
           <div className="flex items-center justify-center gap-2">
             <Badge variant="secondary" className="font-mono font-bold">{student.id}</Badge>
+            {student.registerNo && <Badge variant="outline" className="font-bold border-primary/20 text-primary">REG: {student.registerNo}</Badge>}
             <Badge variant="outline" className="uppercase font-bold text-[10px]">{student.branch}</Badge>
           </div>
           <Badge className="mx-auto mt-2" variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>

@@ -88,6 +88,7 @@ export default function StudentProfilePage() {
           <h1 className="text-3xl font-black tracking-tight">{student.name}</h1>
           <div className="flex flex-wrap justify-center md:justify-start gap-2">
             <Badge variant="secondary" className="font-mono font-bold">{student.id}</Badge>
+            {student.registerNo && <Badge variant="outline" className="font-bold border-primary/20 text-primary">REG: {student.registerNo}</Badge>}
             <Badge variant="outline" className="uppercase font-bold text-[10px] tracking-widest">{student.branch}</Badge>
             <Badge variant={student.status === 'Active' ? 'default' : 'secondary'}>{student.status}</Badge>
           </div>
@@ -116,6 +117,7 @@ export default function StudentProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <DetailItem label="Mobile Number" value={student.phone} icon={<Phone />} />
                 <DetailItem label="Date of Birth" value={formatSafeDate(student.dob)} icon={<Calendar />} />
+                <DetailItem label="Register Number" value={student.registerNo} icon={<FileText className="text-primary/60" />} />
                 <DetailItem label="Aadhar Number" value={student.aadharNo} icon={<Fingerprint />} />
                 <DetailItem label="Online App ID" value={student.onlineAppNo} icon={<FileText />} />
                 <DetailItem label="Admission Date" value={formatSafeDate(student.registrationDate)} icon={<Calendar />} />

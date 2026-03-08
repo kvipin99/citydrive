@@ -34,7 +34,8 @@
         "specialCourseName": { "type": "string", "description": "Custom name for 'Others' course selection." },
         "specialCourseFee": { "type": "number", "description": "Custom fee for 'Others' course selection." },
         "learnersNo": { "type": "string", "description": "Learners license identification number." },
-        "drivingNo": { "type": "string", "description": "Permanent driving license identification number." }
+        "drivingNo": { "type": "string", "description": "Permanent driving license identification number." },
+        "registerNo": { "type": "string", "description": "Manual book registration number." }
       }
     },
     "Instructor": {
