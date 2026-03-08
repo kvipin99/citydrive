@@ -61,8 +61,6 @@ export default function ExpensesPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
   
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
-
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
     return collection(db, 'expenses'); 
@@ -81,19 +79,13 @@ export default function ExpensesPage() {
   });
 
   useEffect(() => {
-    if (profile && !isAdmin) {
-      setSelectedBranchFilter(profileBranch || "Branch 1");
-    }
-  }, [profile, isAdmin, profileBranch]);
-
-  useEffect(() => {
     if (profile && !selectedExpense && isDialogOpen) {
       const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
       setFormData(prev => ({ ...prev, branch: defaultBranch }));
     }
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
-  // Robust matching logic synchronized across files
+  // Robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -101,16 +93,13 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct normalized match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric identifier match (e.g. "Branch 1" vs "B1" vs "1")
     const getNum = (s: string) => s.match(/\d+/)?.[0] || '';
     const rNum = getNum(rBranch);
     const tNum = getNum(targetBranch);
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID Based Matching Fallback
     const rid = normalize(record.id || '');
     const bCode = tNum ? `b${tNum}` : '';
     if (bCode) {
@@ -130,12 +119,16 @@ export default function ExpensesPage() {
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
+    
+    // Administrators see all consolidated logs within the date range.
+    // Managers see only their assigned branch.
+    if (!isAdmin) {
+      const currentBranchContext = profileBranch || "Branch 1";
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
+    
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isAdmin, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -158,7 +151,6 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    // Micro-delay to prevent Radix UI focus conflicts
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 
@@ -181,7 +173,6 @@ export default function ExpensesPage() {
     };
     setDocumentNonBlocking(expenseRef, expenseData, { merge: true });
     
-    // Smooth transition
     setTimeout(() => {
       setIsDialogOpen(false);
       toast({ 
@@ -220,26 +211,12 @@ export default function ExpensesPage() {
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
                 <CardDescription>
-                  {isAdmin ? (selectedBranchFilter === 'All' ? 'All Branches (Consolidated)' : selectedBranchFilter) : profileBranch}
+                  {isAdmin ? 'All Branches (Consolidated)' : profileBranch}
                 </CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isAdmin && (
-                <div className="flex items-center gap-2 border-r pr-3 mr-1">
-                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
-                      <SelectValue placeholder="Branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Branches</SelectItem>
-                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} />
