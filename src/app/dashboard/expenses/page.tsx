@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -103,7 +104,7 @@ export default function ExpensesPage() {
     if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.id?.startsWith(`EXP-B${branchNum}`)) return true;
+    if (branchNum && record.id?.includes(`-B${branchNum}-`)) return true;
     return false;
   }, []);
 
@@ -153,7 +154,8 @@ export default function ExpensesPage() {
       return;
     }
 
-    const expenseId = selectedExpense ? selectedExpense.id : `EXP-${Date.now()}`;
+    const branchNum = formData.branch.match(/\d+/)?.[0] || '1';
+    const expenseId = selectedExpense ? selectedExpense.id : `EXP-B${branchNum}-${Date.now()}`;
     const expenseRef = doc(db, 'expenses', expenseId);
 
     const expenseDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date;

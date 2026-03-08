@@ -74,19 +74,24 @@ export default function AccountingPage() {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // Exact branch name match
     if (rBranch === targetBranch) return true;
 
+    // Logic based on Branch IDs (B1, B2...)
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
-      const prefix = `B${branchNum}`;
-      if (rBranch === prefix.toLowerCase()) return true;
+      const prefix = `B${branchNum}`.toLowerCase();
+      // Match if the branch field is just the code
+      if (rBranch === prefix) return true;
       
-      const rid = record.id || '';
-      const sid = record.studentId || '';
-      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
+      const rid = (record.id || '').toLowerCase();
+      const sid = (record.studentId || '').toLowerCase();
+      
+      // Match by ID prefixes
+      if (rid.includes(`-${prefix}-`) || rid.startsWith(`${prefix}`) || rid.startsWith(`rec-${prefix}`) || rid.startsWith(`exp-${prefix}`) || rid.startsWith(`misc-${prefix}`)) return true;
       if (sid.startsWith(prefix)) return true;
     }
     return false;
