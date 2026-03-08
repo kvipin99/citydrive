@@ -93,33 +93,22 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
-  // Robust matching logic synchronized across files
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
-    
     const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
-    
-    // 1. Direct match
     if (rBranch && rBranch === targetBranch) return true;
-
-    // 2. Numeric identifier match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
-
-    // 3. ID Based Matching Fallback
     const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      // Check if ID contains branch code (e.g. EXP-B1-...)
       if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
       if (rid.startsWith(bCode)) return true;
     }
-
     return false;
   }, []);
 
@@ -131,13 +120,10 @@ export default function ExpensesPage() {
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
-
-    // Management branch filtering: Admins use filter, Managers use assigned branch
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
-
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
@@ -162,7 +148,7 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    setTimeout(() => setIsDialogOpen(true), 1);
+    setTimeout(() => setIsDialogOpen(true), 150);
   };
 
   const handleSaveExpense = () => {
@@ -170,13 +156,10 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Error", description: "Please enter a valid amount, date, and branch." });
       return;
     }
-
     const branchNum = formData.branch.match(/\d+/)?.[0] || '1';
     const expenseId = selectedExpense ? selectedExpense.id : `EXP-B${branchNum}-${Date.now()}`;
     const expenseRef = doc(db, 'expenses', expenseId);
-
     const expenseDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date;
-
     const expenseData = {
       ...formData,
       date: expenseDate,
@@ -185,14 +168,14 @@ export default function ExpensesPage() {
       updatedAt: serverTimestamp(),
       ...(selectedExpense ? {} : { createdAt: serverTimestamp() }),
     };
-
     setDocumentNonBlocking(expenseRef, expenseData, { merge: true });
-
-    setIsDialogOpen(false);
-    toast({ 
-      title: selectedExpense ? "Expense Updated" : "Expense Recorded", 
-      description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category} at ${formData.branch}.` 
-    });
+    setTimeout(() => {
+      setIsDialogOpen(false);
+      toast({ 
+        title: selectedExpense ? "Expense Updated" : "Expense Recorded", 
+        description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category} at ${formData.branch}.` 
+      });
+    }, 150);
   };
 
   const handleDeleteExpense = (id: string) => {
@@ -246,33 +229,19 @@ export default function ExpensesPage() {
               )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
-                <Input 
-                  type="date" 
-                  className="h-8 w-[130px] text-xs bg-background" 
-                  value={dateRange.from} 
-                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
-                />
+                <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} />
               </div>
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
                 <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} />
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10"
-                onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
-              >
-                Today
-              </Button>
+              <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10" onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}>Today</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isActuallyLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
               <TableHeader className="bg-muted/30">
@@ -287,44 +256,23 @@ export default function ExpensesPage() {
               </TableHeader>
               <TableBody>
                 {filteredExpenses.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
-                      <div className="flex flex-col items-center gap-2 opacity-50">
-                        <CalendarIcon className="h-10 w-10" />
-                        <p className="italic text-sm font-medium">No expenses found for the selected period.</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic"><div className="flex flex-col items-center gap-2 opacity-50"><CalendarIcon className="h-10 w-10" /><p className="italic text-sm font-medium">No expenses found.</p></div></TableCell></TableRow>
                 ) : (
                   filteredExpenses.map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-muted/20">
-                      <TableCell className="pl-6 text-muted-foreground text-xs">
-                        {exp.date ? format(new Date(exp.date), 'MMM dd, yyyy') : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-medium text-[10px] uppercase tracking-wider">{exp.category}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm">
-                        {exp.description || '--'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px] font-bold uppercase">{exp.branch}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-black text-red-600 pr-6">
-                        ₹{exp.amount?.toLocaleString()}
-                      </TableCell>
+                      <TableCell className="pl-6 text-muted-foreground text-xs">{exp.date ? format(new Date(exp.date), 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                      <TableCell><Badge variant="secondary" className="font-medium text-[10px] uppercase tracking-wider">{exp.category}</Badge></TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{exp.description || '--'}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{exp.branch}</Badge></TableCell>
+                      <TableCell className="text-right font-black text-red-600 pr-6">₹{exp.amount?.toLocaleString()}</TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenDialog(exp)}>
+                            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(exp); }}>
                               <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteExpense(exp.id)}>
+                            <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); handleDeleteExpense(exp.id); }}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete Record
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -339,84 +287,19 @@ export default function ExpensesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) setSelectedExpense(null); }}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if(!open) { setIsDialogOpen(false); setSelectedExpense(null); } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</DialogTitle>
-            <DialogDescription>
-              {selectedExpense ? 'Update the details of this expenditure.' : 'Enter the details of the expenditure.'}
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</DialogTitle><DialogDescription>{selectedExpense ? 'Update details.' : 'Enter details.'}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label>
-                <Input 
-                  type="date" 
-                  value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} 
-                  disabled={isDateLocked}
-                  onChange={(e) => setFormData({...formData, date: e.target.value})} 
-                />
-                {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Today only.</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label>Category</Label>
-                <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="grid gap-2"><Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input type="date" value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} disabled={isDateLocked} onChange={(e) => setFormData({...formData, date: e.target.value})} /></div>
+              <div className="grid gap-2"><Label>Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div>
             </div>
-            
-            <div className="grid gap-2">
-              <Label className="font-bold flex items-center gap-2">
-                Recording Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}
-              </Label>
-              {isAdmin ? (
-                <Select 
-                  value={formData.branch} 
-                  onValueChange={(v) => setFormData({...formData, branch: v})}
-                >
-                  <SelectTrigger className="h-11 font-bold border-primary/20">
-                    <SelectValue placeholder="Select Branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  {formData.branch}
-                </div>
-              )}
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Amount (₹)</Label>
-              <Input 
-                type="number" 
-                placeholder="0.00"
-                value={formData.amount || ''} 
-                onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} 
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Description (Optional)</Label>
-              <Textarea 
-                placeholder="e.g. Fuel for V01 (MH-12...)" 
-                value={formData.description} 
-                onChange={(e) => setFormData({...formData, description: e.target.value})} 
-              />
-            </div>
+            <div className="grid gap-2"><Label className="font-bold flex items-center gap-2">Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>{isAdmin ? (<Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent></Select>) : (<div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight"><MapPin className="h-4 w-4 mr-2" />{formData.branch}</div>)}</div>
+            <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div>
+            <div className="grid gap-2"><Label>Description (Optional)</Label><Textarea placeholder="Details..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleSaveExpense} className="w-full">
-              {selectedExpense ? 'Update Expense' : 'Save Expense'}
-            </Button>
-          </DialogFooter>
+          <DialogFooter><Button onClick={handleSaveExpense} className="w-full">{selectedExpense ? 'Update Expense' : 'Save Expense'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

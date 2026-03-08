@@ -106,7 +106,7 @@ export default function VehiclesPage() {
         status: 'Available'
       });
     }
-    setIsDialogOpen(true);
+    setTimeout(() => setIsDialogOpen(true), 150);
   }, [toInputDate]);
 
   const handleSaveVehicle = () => {
@@ -114,10 +114,8 @@ export default function VehiclesPage() {
       toast({ variant: "destructive", title: "Missing Data", description: "Registration Number and Brand/Model are required." });
       return;
     }
-
     const vehicleId = selectedVehicleId ? selectedVehicleId : `V-${Date.now()}`;
     const vehicleRef = doc(db, 'vehicles', vehicleId);
-
     const updateData = {
       regNumber: formData.regNumber.trim().toUpperCase(),
       type: formData.type,
@@ -129,36 +127,30 @@ export default function VehiclesPage() {
       updatedAt: serverTimestamp(),
       ...(selectedVehicleId ? {} : { createdAt: serverTimestamp(), createdBy: user?.uid })
     };
-
     setDocumentNonBlocking(vehicleRef, updateData, { merge: true });
-    setIsDialogOpen(false);
-    setSelectedVehicleId(null);
-    toast({ title: selectedVehicleId ? "Vehicle Updated" : "Vehicle Added", description: `${formData.regNumber} has been saved successfully.` });
+    setTimeout(() => {
+      setIsDialogOpen(false);
+      setSelectedVehicleId(null);
+      toast({ title: selectedVehicleId ? "Vehicle Updated" : "Vehicle Added" });
+    }, 150);
   };
 
   const handleDeleteVehicle = (id: string) => {
     const vehicleRef = doc(db, 'vehicles', id);
     deleteDocumentNonBlocking(vehicleRef);
-    toast({ variant: "destructive", title: "Vehicle Deleted", description: "The vehicle has been removed from the fleet." });
+    toast({ variant: "destructive", title: "Vehicle Deleted" });
   };
 
   const formatSafeDate = useCallback((dateVal: any) => {
     if (!dateVal) return 'N/A';
     try {
       let d: Date;
-      if (dateVal && typeof dateVal.toDate === 'function') {
-        d = dateVal.toDate();
-      } else if (dateVal && typeof dateVal.seconds === 'number') {
-        d = new Date(dateVal.seconds * 1000);
-      } else if (typeof dateVal === 'string') {
-        d = parseISO(dateVal);
-      } else {
-        d = new Date(dateVal);
-      }
+      if (dateVal && typeof dateVal.toDate === 'function') d = dateVal.toDate();
+      else if (dateVal && typeof dateVal.seconds === 'number') d = new Date(dateVal.seconds * 1000);
+      else if (typeof dateVal === 'string') d = parseISO(dateVal);
+      else d = new Date(dateVal);
       return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
-    } catch {
-      return 'N/A';
-    }
+    } catch { return 'N/A'; }
   }, []);
 
   return (
@@ -171,7 +163,7 @@ export default function VehiclesPage() {
                 <Car className="h-5 w-5 text-primary" />
                 Fleet Management
               </CardTitle>
-              <CardDescription>Track vehicle details, registration, and insurance validity.</CardDescription>
+              <CardDescription>Track vehicle details and validity.</CardDescription>
             </div>
             {canWrite && (
               <Button onClick={() => handleOpenDialog()}>
@@ -183,9 +175,7 @@ export default function VehiclesPage() {
         </CardHeader>
         <CardContent>
           {isVehiclesLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
               <TableHeader>
@@ -199,47 +189,23 @@ export default function VehiclesPage() {
               </TableHeader>
               <TableBody>
                 {!vehicles || vehicles.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      No vehicles found. Add your first vehicle to get started.
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No vehicles found.</TableCell></TableRow>
                 ) : (
                   vehicles.map((v) => (
                     <TableRow key={v.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell>
-                        <div className="grid gap-0.5">
-                          <span className="font-bold text-primary">{v.regNumber}</span>
-                          <Badge variant="outline" className="w-fit text-[10px] uppercase font-mono">{v.type}</Badge>
-                        </div>
-                      </TableCell>
+                      <TableCell><div className="grid gap-0.5"><span className="font-bold text-primary">{v.regNumber}</span><Badge variant="outline" className="w-fit text-[10px] uppercase font-mono">{v.type}</Badge></div></TableCell>
                       <TableCell className="font-medium">{v.brandModel}</TableCell>
-                      <TableCell>
-                        <div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight">
-                          <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={v.status === 'Available' ? 'default' : 'secondary'} className="text-[10px] font-bold">
-                          {v.status}
-                        </Badge>
-                      </TableCell>
+                      <TableCell><div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight"><div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span></div><div className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span></div></div></TableCell>
+                      <TableCell><Badge variant={v.status === 'Available' ? 'default' : 'secondary'} className="text-[10px] font-bold">{v.status}</Badge></TableCell>
                       <TableCell className="text-right">
                         {canWrite && (
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleOpenDialog(v)}>
+                              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(v); }}>
                                 <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteVehicle(v.id)}>
+                              <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); handleDeleteVehicle(v.id); }}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Vehicle
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -255,80 +221,24 @@ export default function VehiclesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) setSelectedVehicleId(null); }}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if(!open) { setIsDialogOpen(false); setSelectedVehicleId(null); } }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2">
-            <DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle>
-            <DialogDescription>Enter registration and validity details for the fleet vehicle.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader className="p-6 pb-2"><DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle><DialogDescription>Validity details.</DialogDescription></DialogHeader>
           <ScrollArea className="flex-1 min-h-0">
             <div className="grid gap-4 px-6 py-4 pb-32">
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="regNumber">Reg Number</Label>
-                  <Input 
-                    id="regNumber" 
-                    placeholder="e.g. MH-12-AB-1234" 
-                    value={formData.regNumber} 
-                    onChange={(e) => setFormData({...formData, regNumber: e.target.value.toUpperCase()})} 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Vehicle Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v as any})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div className="grid gap-2"><Label>Reg Number</Label><Input placeholder="MH-12..." value={formData.regNumber} onChange={(e) => setFormData({...formData, regNumber: e.target.value.toUpperCase()})} /></div>
+                <div className="grid gap-2"><Label>Type</Label><Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
               </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="brandModel">Brand & Model</Label>
-                <Input 
-                  id="brandModel" 
-                  placeholder="e.g. Maruti Suzuki Swift" 
-                  value={formData.brandModel} 
-                  onChange={(e) => setFormData({...formData, brandModel: e.target.value})} 
-                />
-              </div>
-
+              <div className="grid gap-2"><Label>Brand & Model</Label><Input value={formData.brandModel} onChange={(e) => setFormData({...formData, brandModel: e.target.value})} /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Reg Validity</Label>
-                  <Input 
-                    type="date" 
-                    value={formData.regValidity} 
-                    onChange={(e) => setFormData({...formData, regValidity: e.target.value})} 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Insurance Validity</Label>
-                  <Input 
-                    type="date" 
-                    value={formData.insuranceValidity} 
-                    onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} 
-                  />
-                </div>
+                <div className="grid gap-2"><Label>Reg Validity</Label><Input type="date" value={formData.regValidity} onChange={(e) => setFormData({...formData, regValidity: e.target.value})} /></div>
+                <div className="grid gap-2"><Label>Ins Validity</Label><Input type="date" value={formData.insuranceValidity} onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} /></div>
               </div>
-
-              <div className="grid gap-2">
-                <Label>Current Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="grid gap-2"><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
             </div>
           </ScrollArea>
-          <DialogFooter className="p-6 pt-2 border-t bg-muted/10">
-            <Button onClick={handleSaveVehicle} className="w-full">
-              {selectedVehicleId ? 'Update Vehicle' : 'Save Vehicle'}
-            </Button>
-          </DialogFooter>
+          <DialogFooter className="p-6 pt-2 border-t bg-muted/10"><Button onClick={handleSaveVehicle} className="w-full">Save Vehicle</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

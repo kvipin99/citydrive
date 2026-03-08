@@ -141,23 +141,17 @@ function StudentsContent() {
     description: ''
   });
 
-  // Synchronized robust branch matching utility
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
-    
     const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
-    
     if (rBranch && rBranch === targetBranch) return true;
-
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
-
     const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
     if (branchNum) {
       const bCode = `b${branchNum}`;
       if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
@@ -361,7 +355,7 @@ function StudentsContent() {
       setIsEditDialogOpen(false);
       setIsSubmitting(false);
       toast({ title: "Student Updated" });
-    }, 100);
+    }, 150);
   };
 
   const handleSaveReceipt = async () => {
@@ -407,7 +401,7 @@ function StudentsContent() {
       setIsReceiptDialogOpen(false);
       setIsSubmitting(false);
       toast({ title: "Receipt Generated", description: `Receipt #${receiptFormData.receiptNo} saved.` });
-    }, 100);
+    }, 150);
   };
 
   const handlePermanentDelete = async () => {
