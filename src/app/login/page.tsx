@@ -160,7 +160,7 @@ export default function LoginPage() {
                 <User className="absolute left-3 top-3 h-4 w-4 text-primary/40" />
                 <Input
                   id="userId"
-                  placeholder="e.g. master, admin or Branch1"
+                  placeholder="Enter User ID"
                   className="pl-9 h-12 font-bold border-primary/10 bg-background focus:border-primary/30"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
@@ -232,7 +232,7 @@ export default function LoginPage() {
               <div className="grid gap-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Your User ID</Label>
                 <Input 
-                  placeholder="e.g. Branch1" 
+                  placeholder="Enter User ID" 
                   className="h-11 font-bold"
                   value={resetUserId} 
                   onChange={(e) => setResetUserId(e.target.value)} 
