@@ -228,35 +228,57 @@ export default function AccountingPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
+          /* Reset layout containers to eliminate blank space */
+          html, body {
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+
+          /* Force SidebarProvider and main components to fill width */
+          [data-sidebar-wrapper],
+          .sidebar-provider,
+          [data-sidebar="inset"],
+          main {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+            left: 0 !important;
+            position: relative !important;
+            transform: none !important;
+          }
+
           /* Hide interactive and background elements */
           .print-hidden, 
           header, 
           aside, 
           [data-sidebar="sidebar"],
-          .sidebar-provider, 
-          .fixed-header, 
-          nav, 
-          button,
           [data-sidebar="trigger"],
           [data-sidebar="rail"],
-          .sidebar-wrapper { 
+          .sidebar-wrapper,
+          nav, 
+          button,
+          .tabs-list { 
             display: none !important; 
           }
           
-          /* Full width layout for print */
-          .print-area, body, main { 
+          /* Full width layout for print area */
+          .print-area { 
             width: 100% !important; 
             margin: 0 !important; 
-            padding: 0 !important; 
+            padding: 20px !important; 
             background: white !important; 
-            left: 0 !important;
-            position: relative !important;
           }
           
           .card { 
             border: 1px solid #eee !important; 
             box-shadow: none !important; 
             margin-bottom: 20px !important;
+            break-inside: avoid;
           }
 
           /* Force background colors in PDF */

@@ -180,28 +180,57 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
+          /* Reset layout containers to eliminate blank space */
+          html, body {
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+
+          /* Force SidebarProvider and main components to fill width */
+          [data-sidebar-wrapper],
+          .sidebar-provider,
+          [data-sidebar="inset"],
+          main {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+            left: 0 !important;
+            position: relative !important;
+            transform: none !important;
+          }
+
+          /* Hide interactive elements */
           .print-hidden, 
           nav, 
           header, 
           aside,
           [data-sidebar="sidebar"],
-          .sidebar-provider,
-          .sidebar-wrapper,
           [data-sidebar="trigger"],
           [data-sidebar="rail"],
+          .sidebar-wrapper,
           button, 
           .tabs-list { 
             display: none !important; 
           }
-          body, main, .print-area { 
+
+          .print-area { 
             width: 100% !important; 
-            padding: 0 !important; 
+            padding: 20px !important; 
             margin: 0 !important; 
             background: white !important; 
-            left: 0 !important;
-            position: relative !important;
           }
-          .card { border: 1px solid #eee !important; box-shadow: none !important; }
+
+          .card { 
+            border: 1px solid #eee !important; 
+            box-shadow: none !important; 
+            break-inside: avoid;
+          }
+
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .print-only-header { display: block !important; margin-bottom: 25px; border-bottom: 3px solid hsl(var(--primary)); padding-bottom: 10px; }
           .print-footer { display: block !important; position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding: 10px 0; }
@@ -328,7 +357,7 @@ export default function ReportsPage() {
                       <TableHeader className="bg-muted/50"><TableRow><TableHead>Student</TableHead><TableHead className="text-right">Agreed</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Balance</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {isActuallyLoading ? <LoadingRows cols={5} /> : (paymentDuesData.length === 0 ? <NoData colSpan={5} /> : paymentDuesData.map((s) => (
-                          <TableRow key={s.id}><TableCell><div className="grid gap-0.5"><span className="font-medium text-sm">{s.name}</span><span className="text-[10px] text-muted-foreground">{s.id}</span></div></TableCell><TableCell className="text-right">₹{s.totalAgreed.toLocaleString()}</TableCell><TableCell className="text-right text-green-600">₹{s.totalPaid.toLocaleString()}</TableCell><TableCell className={`text-right font-bold ${s.balance > 0 ? 'text-destructive' : 'text-green-700'}`}>₹{s.balance.toLocaleString()}</TableCell><TableCell><Badge variant={s.balance <= 0 ? 'outline' : 'destructive'} className="text-[10px]">{s.paymentStatus}</Badge></TableCell></TableRow>
+                          <TableRow key={s.id}><TableCell><div className="grid gap-0.5"><span className="font-medium text-sm">{s.name}</span><span className="text-[10px] text-muted-foreground">{s.id}</span></div></TableCell><TableCell className="text-right">₹{s.totalAgreed.toLocaleString()}</TableCell><TableCell className="text-right text-green-600">₹{s.totalPaid.toLocaleString()}</TableCell><TableCell className={`text-right font-black ${s.balance > 0 ? 'text-destructive' : 'text-green-700'}`}>₹{s.balance.toLocaleString()}</TableCell><TableCell><Badge variant={s.balance <= 0 ? 'outline' : 'destructive'} className="text-[10px]">{s.paymentStatus}</Badge></TableCell></TableRow>
                         )))}
                       </TableBody>
                     </Table>
