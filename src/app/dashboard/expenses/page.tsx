@@ -56,6 +56,7 @@ export default function ExpensesPage() {
 
   const isDateLocked = controls?.lockDateEntry && !isAdmin;
 
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
@@ -77,6 +78,12 @@ export default function ExpensesPage() {
     description: '',
     branch: 'Branch 1',
   });
+
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
 
   useEffect(() => {
     if (profile && !selectedExpense && isDialogOpen) {
@@ -120,15 +127,16 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
     
-    // Administrators see all consolidated logs within the date range.
+    // Admins can filter by specific branch or see "All"
     // Managers see only their assigned branch.
-    if (!isAdmin) {
-      const currentBranchContext = profileBranch || "Branch 1";
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
     
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isAdmin, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -195,7 +203,7 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">{isAdmin ? 'Full consolidated operational costs log.' : `Expenses for ${profile?.branch || 'your branch'}.`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'School-wide operational costs log.' : `Expenses for ${profile?.branch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()} className="shadow-lg">
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -211,12 +219,26 @@ export default function ExpensesPage() {
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
                 <CardDescription>
-                  {isAdmin ? 'All Branches (Consolidated)' : profileBranch}
+                  {isAdmin ? (selectedBranchFilter === 'All' ? 'All Branches (Consolidated)' : selectedBranchFilter) : profileBranch}
                 </CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isAdmin && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                      <SelectValue placeholder="Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} />
