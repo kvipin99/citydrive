@@ -77,7 +77,7 @@ export default function AccountingPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Explicit branch name match (e.g., "branch1" === "branch1")
+    // 1. Explicit branch name match
     if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
@@ -89,18 +89,9 @@ export default function AccountingPage() {
       const rid = (record.id || '').toLowerCase();
       const sid = (record.studentId || '').toLowerCase();
       
-      // 3. Robust pattern matching in IDs (covers exp-b1, rec-b1, -b1-, b1-at-start)
-      const patterns = [
-        bCode,
-        `-${bCode}-`,
-        `exp-${bCode}`,
-        `rec-${bCode}`,
-        `misc-${bCode}`,
-        `${bCode}-`
-      ];
-      
+      // 3. Robust pattern matching in IDs (covers exp-b1, rec-b1, etc)
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `-${bCode}`];
       if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
-      if (rid.startsWith(bCode) || sid.startsWith(bCode)) return true;
     }
     return false;
   }, []);

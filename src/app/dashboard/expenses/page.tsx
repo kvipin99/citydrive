@@ -61,14 +61,6 @@ export default function ExpensesPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
-
-  useEffect(() => {
-    if (profile && !isAdmin) {
-      setSelectedBranchFilter(profileBranch || "Branch 1");
-    }
-  }, [profile?.branch, isAdmin, profileBranch]);
-
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
     return collection(db, 'expenses'); 
@@ -134,13 +126,14 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    // Admin sees all branches, Branch Manager restricted to their own
+    const currentBranchContext = isAdmin ? "All" : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isAdmin, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -208,7 +201,7 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Business Expenses</h2>
-          <p className="text-muted-foreground">{isManagement ? (selectedBranchFilter === 'All' ? 'All branches overheads and operational costs.' : `Expenses for ${selectedBranchFilter}`) : `Expenses for ${profile?.branch || 'your branch'}.`}</p>
+          <p className="text-muted-foreground">{isAdmin ? 'Aggregated operational costs across all branches.' : `Expenses for ${profile?.branch || 'your branch'}.`}</p>
         </div>
         <Button size="lg" onClick={() => handleOpenDialog()} className="shadow-lg">
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -223,25 +216,11 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
+                <CardDescription>Records for {isAdmin ? 'all branches' : profileBranch}.</CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
-              {isManagement && (
-                <div className="flex items-center gap-2 border-r pr-3 mr-1">
-                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
-                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
-                      <SelectValue placeholder="All Branches" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Branches</SelectItem>
-                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
