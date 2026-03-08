@@ -68,11 +68,11 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Precise matching logic
+  // Precise matching logic synchronized with Expenses module
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
@@ -84,12 +84,11 @@ export default function AccountingPage() {
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise)
+    // 3. ID Based Matching (Regex boundary matching)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      // Regex matches start of ID or standard prefixes followed by exact branch code
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     

@@ -85,11 +85,11 @@ export default function ExpensesPage() {
     }
   }, [profile, isAdmin, profileBranch]);
 
-  // Robust matching logic
+  // Robust matching logic for branch isolation
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
@@ -104,7 +104,8 @@ export default function ExpensesPage() {
     // 3. ID Based Matching (Precise Regex)
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      // Matches 'b1' or 'B1' surrounded by non-alphanumeric chars or boundaries
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
     
@@ -150,7 +151,7 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    // Delay to prevent Radix dropdown conflict
+    // Micro-delay to prevent UI "stuck" state
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 

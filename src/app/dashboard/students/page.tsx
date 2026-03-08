@@ -141,11 +141,11 @@ function StudentsContent() {
     description: ''
   });
 
-  // Synchronized precise matching logic
+  // Robust matching logic using boundaries
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
@@ -157,10 +157,10 @@ function StudentsContent() {
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise Regex)
+    // 3. ID Based Matching
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
     
@@ -564,7 +564,7 @@ function StudentsContent() {
                       <TableCell><span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDue(student).toLocaleString()}</span></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
+                          <Button size="icon" variant="ghost" onClick={(e) => { e.preventDefault(); setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
                           {!isStudent && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
