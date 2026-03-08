@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -17,8 +16,6 @@ import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, F
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -41,21 +38,12 @@ export default function AccountingPage() {
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
   
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
-  const isBranchManager = profile?.role === 'BranchManager';
-  const isManagement = isAdmin || isBranchManager;
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
-  const [selectedBranch, setSelectedBranch] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
-
-  useEffect(() => {
-    if (profile && !isAdmin) {
-      setSelectedBranch(profile.branch || "Branch 1");
-    }
-  }, [profile, isAdmin]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -130,12 +118,15 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
-    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
-    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
+    
+    // For Non-Admins, restrict to their branch
+    if (!isAdmin) {
+      const currentBranchContext = profile?.branch || "Branch 1";
       result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
+    
     return result;
-  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
+  }, [allTransactions, dateRange, isAdmin, profile?.branch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -185,8 +176,9 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
-    const sourceData = (currentBranchContext === "All" || currentBranchContext === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, currentBranchContext));
+    
+    // For Admin, show all. For others, filter by branch.
+    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => isFromBranch(t, profile?.branch || "Branch 1"));
     
     sourceData.forEach(t => {
       const monthKey = format(t.date, 'yyyy-MM');
@@ -195,12 +187,12 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch, isAdmin, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
-    const sourceData = (currentBranchContext === "All" || currentBranchContext === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, currentBranchContext));
+    
+    const sourceData = isAdmin ? allTransactions : allTransactions.filter(t => isFromBranch(t, profile?.branch || "Branch 1"));
     
     sourceData.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
@@ -209,7 +201,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, selectedBranch, isAdmin, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -240,7 +232,7 @@ export default function AccountingPage() {
         <div className="grid gap-1">
           <h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2>
           <p className="text-muted-foreground text-sm">
-            Daily intake and expenditure accounts for {isAdmin && selectedBranch === 'All' ? 'all branches' : (isAdmin ? selectedBranch : profile?.branch)}.
+            {isAdmin ? "Consolidated school-wide intake and expenditure accounts." : `Daily intake and expenditure accounts for ${profile?.branch}.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -264,7 +256,7 @@ export default function AccountingPage() {
         <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Filter className="h-4 w-4" /> Filters
+              <Filter className="h-4 w-4" /> Date Filter
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -298,22 +290,6 @@ export default function AccountingPage() {
                   Today
                 </Button>
               </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Branch View</label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">Full School (All)</SelectItem>
-                  {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {!isAdmin && <p className="text-[10px] text-muted-foreground italic">Restricted to your assigned branch.</p>}
             </div>
           </CardContent>
         </Card>
@@ -411,7 +387,9 @@ export default function AccountingPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Monthly Summaries</CardTitle>
-                  <CardDescription>Aggregated performance by month for {isAdmin && selectedBranch === 'All' ? 'Full School' : (isAdmin ? selectedBranch : profile?.branch)}.</CardDescription>
+                  <CardDescription>
+                    Aggregated performance by month for {isAdmin ? "Full School" : profile?.branch}.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoading ? <LoadingSpinner /> : (
@@ -479,6 +457,7 @@ function ItemizedTable({ transactions, colorClass }: { transactions: Transaction
                 <div className="grid gap-0.5">
                   <span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span>
                   <div className="flex items-center gap-2 text-[9px] text-muted-foreground uppercase font-mono">
+                    {t.branch && <span className="text-primary font-bold">{t.branch}</span>}
                     {t.receiptNo && <span>#REC:{t.receiptNo}</span>}
                     {t.category && <span>CAT:{t.category}</span>}
                     {t.studentId && <span>ID:{t.studentId}</span>}
