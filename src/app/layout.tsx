@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { PWAManager } from '@/components/pwa-manager';
 
 export const metadata: Metadata = {
   title: 'Citydrive - Driving School Management',
@@ -39,6 +40,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>
+          <PWAManager />
           {children}
           <Toaster />
         </FirebaseClientProvider>
