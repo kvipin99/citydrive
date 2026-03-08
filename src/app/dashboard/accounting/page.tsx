@@ -145,7 +145,7 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
-    if (selectedBranch !== "All") {
+    if (selectedBranch !== "All" && selectedBranch !== "Full") {
       result = result.filter(t => isFromBranch(t, selectedBranch));
     }
     return result;
@@ -199,7 +199,7 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = selectedBranch === "All" ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
+    const sourceData = (selectedBranch === "All" || selectedBranch === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
     
     sourceData.forEach(t => {
       const monthKey = format(t.date, 'yyyy-MM');
@@ -212,7 +212,7 @@ export default function AccountingPage() {
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const sourceData = selectedBranch === "All" ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
+    const sourceData = (selectedBranch === "All" || selectedBranch === "Full") ? allTransactions : allTransactions.filter(t => isFromBranch(t, selectedBranch));
     
     sourceData.forEach(t => {
       const yearKey = format(t.date, 'yyyy');
@@ -408,7 +408,7 @@ export default function AccountingPage() {
                     <CardContent className="p-0">
                       <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
                       {expenseTransactions.length > 0 && (
-                        <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
+                        <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
                           <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
                           <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
                         </div>

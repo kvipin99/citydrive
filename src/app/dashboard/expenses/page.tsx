@@ -51,7 +51,6 @@ export default function ExpensesPage() {
   const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
 
-  // Only fetch controls if staff to avoid permission error for students
   const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
   const { data: controls } = useDoc(controlsRef);
 
@@ -95,16 +94,34 @@ export default function ExpensesPage() {
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
-    if (!branchName || branchName === "All") return true;
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // 1. Explicit branch name match
     if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
-    if (branchNum && record.id?.includes(`-B${branchNum}-`)) return true;
+    if (branchNum) {
+      const bCode = `b${branchNum}`;
+      // 2. Check if the branch field is just the code
+      if (rBranch === bCode) return true;
+      
+      const rid = (record.id || '').toLowerCase();
+      
+      // 3. Robust pattern matching in IDs
+      const patterns = [
+        `-${bCode}-`,
+        `exp-${bCode}`,
+        `-${bCode}`,
+        bCode
+      ];
+      
+      if (patterns.some(p => rid.includes(p))) return true;
+      if (rid.startsWith(bCode)) return true;
+    }
     return false;
   }, []);
 
@@ -118,7 +135,7 @@ export default function ExpensesPage() {
     let result = expenses.filter(e => isWithinRange(e.date));
 
     const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All") {
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 

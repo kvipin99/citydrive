@@ -78,7 +78,6 @@ function StudentsContent() {
   const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
 
-  // Only fetch controls if staff to avoid permission error for students
   const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
   const { data: controls } = useDoc(controlsRef);
   
@@ -232,7 +231,7 @@ function StudentsContent() {
     let result = students;
 
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
-    if (currentBranchContext !== "All") {
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
 
@@ -656,7 +655,7 @@ function StudentsContent() {
                           <div className="grid gap-0.5">
                             <span className="font-bold text-primary">{student.id}</span>
                             <span className="text-sm">{student.name}</span>
-                            {student.registerNo && <span className="text-[10px] text-muted-foreground">Reg: {student.registerNo}</span>}
+                            {student.registerNo && <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>}
                           </div>
                         </div>
                       </TableCell>
@@ -1119,7 +1118,6 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
   const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student?.userId) return null;
-    // Students must satisfy the studentUid == auth.uid rule
     return query(collection(db, 'attendance'), where('studentUid', '==', student.userId));
   }, [db, student?.userId]);
 
