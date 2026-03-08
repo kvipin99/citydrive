@@ -144,7 +144,7 @@ function StudentsContent() {
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
@@ -670,6 +670,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
+            {student.registerNo && <ProfileItem icon={<FileText />} label="Register Number" value={student.registerNo} />}
             <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
             <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />

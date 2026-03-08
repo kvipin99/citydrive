@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter, Lock } from 'lucide-react';
+import { PlusCircle, Wallet, MoreHorizontal, Edit2, Trash2, RefreshCw, Calendar as CalendarIcon, Filter, Lock, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 
@@ -93,7 +93,7 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
-  // Enhanced robust branch matching logic
+  // Sychronized robust branch matching utility
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -104,18 +104,17 @@ export default function ExpensesPage() {
     // 1. Direct match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric identifier match (e.g. "1" from "Branch 1" and "B1")
+    // 2. Numeric identifier match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID Prefix checks (Robust fallback)
+    // 3. ID Based Matching
     const rid = normalize(record.id || '');
     const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
     
     if (searchNum) {
       const bCode = `b${searchNum}`;
-      // Common ID patterns: "exp-b1", "b1...", "-b1-"
       const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
       if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
@@ -133,7 +132,6 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    // Fix: For Managers, always use their profile branch. For Admins, use the filter.
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
@@ -155,12 +153,13 @@ export default function ExpensesPage() {
       });
     } else {
       setSelectedExpense(null);
+      const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
       setFormData({
         date: new Date().toISOString().split('T')[0],
         category: 'Fuel',
         amount: 0,
         description: '',
-        branch: profileBranch || 'Branch 1',
+        branch: defaultBranch,
       });
     }
     setIsDialogOpen(true);
@@ -368,19 +367,31 @@ export default function ExpensesPage() {
                 </Select>
               </div>
             </div>
+            
             <div className="grid gap-2">
-              <Label>Branch</Label>
-              <Select 
-                value={formData.branch} 
-                onValueChange={(v) => setFormData({...formData, branch: v})}
-                disabled={!isAdmin}
-              >
-                <SelectTrigger><SelectValue placeholder="Select Branch" /></SelectTrigger>
-                <SelectContent>
-                  {BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="font-bold flex items-center gap-2">
+                Recording Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}
+              </Label>
+              {isAdmin ? (
+                <Select 
+                  value={formData.branch} 
+                  onValueChange={(v) => setFormData({...formData, branch: v})}
+                >
+                  <SelectTrigger className="h-11 font-bold border-primary/20">
+                    <SelectValue placeholder="Select Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {formData.branch}
+                </div>
+              )}
             </div>
+
             <div className="grid gap-2">
               <Label>Amount (₹)</Label>
               <Input 

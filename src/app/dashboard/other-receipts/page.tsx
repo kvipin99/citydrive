@@ -59,7 +59,6 @@ export default function OtherReceiptsPage() {
   const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
 
-  // Only fetch controls if staff to avoid permission error for students
   const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
   const { data: controls } = useDoc(controlsRef);
 
@@ -107,29 +106,30 @@ export default function OtherReceiptsPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
-  const isFromBranch = useCallback((record: ReceiptRecord, branchName: string) => {
+  // Synchronized robust branch matching utility
+  const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: string) => s?.replace(/\s+/g, '').toLowerCase() || '';
+    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Direct normalized match
-    if (rBranch === targetBranch) return true;
+    if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric match (e.g. "b1" matches "branch1")
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID-based identification (fallback)
-    const branchNum = tNum;
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
-      const rid = (record.id || '').toLowerCase();
-      const patterns = [bCode, `-${bCode}-`, `misc-${bCode}`, `rec-${bCode}`, `-${bCode}`];
+    const rid = normalize(record.id || '');
+    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    
+    if (searchNum) {
+      const bCode = `b${searchNum}`;
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
       if (patterns.some(p => rid.includes(p))) return true;
+      if (rid.startsWith(bCode)) return true;
     }
+
     return false;
   }, []);
 
@@ -294,7 +294,24 @@ export default function OtherReceiptsPage() {
           <div className="flex-1 overflow-y-auto p-6">
             <div className="grid gap-6 pb-32">
               <div className="space-y-4">
-                <div className="grid gap-2"><Label className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-primary" />Target Branch {!isAdmin && <Lock className="h-3 w-3" />}</Label><Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})} disabled={!isAdmin}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2">
+                    Target Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}
+                  </Label>
+                  {isAdmin ? (
+                    <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}>
+                      <SelectTrigger className="h-11 font-bold border-primary/20">
+                        <SelectValue placeholder="Select Branch" />
+                      </SelectTrigger>
+                      <SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {formData.branch}
+                    </div>
+                  )}
+                </div>
                 <div className="grid gap-2"><Label>Income Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{RECEIPT_CATEGORIES.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}</SelectContent></Select></div>
                 <div className="grid gap-2"><Label>Received From (Name)</Label><div className="relative"><User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Walk-in Customer" value={formData.payerName} onChange={(e) => setFormData({...formData, payerName: e.target.value})} /></div></div>
                 <div className="grid gap-4 pt-4 border-t">
