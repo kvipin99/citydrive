@@ -33,7 +33,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const BACKUP_COLLECTIONS = ["users", "students", "instructors", "vehicles", "courses", "payments", "expenses", "classes"];
+const BACKUP_COLLECTIONS = [
+  "users", 
+  "students", 
+  "instructors", 
+  "vehicles", 
+  "courses", 
+  "payments", 
+  "expenses", 
+  "classes",
+  "attendance",
+  "resources",
+  "quizLinks"
+];
+
+const DEFAULT_BACKUP_EMAIL = "ezydriveapp@gmail.com";
 
 function SettingsContent() {
   const { toast } = useToast();
@@ -153,28 +167,32 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Processing Backup" });
+    toast({ title: "Processing Backup", description: "Aggregating full school database..." });
 
     try {
       const backupData: Record<string, any[]> = {};
       let total = 0;
       for (const colName of BACKUP_COLLECTIONS) {
-        const snapshot = await getDocs(collection(db, colName));
-        const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-        backupData[colName] = docs;
-        total += docs.length;
+        try {
+          const snapshot = await getDocs(collection(db, colName));
+          const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+          backupData[colName] = docs;
+          total += docs.length;
+        } catch (e) {}
       }
-      const recipient = autoSettings?.email || "ezydriveapp@gmail.com";
+      const recipient = autoSettings?.email || DEFAULT_BACKUP_EMAIL;
       const result = await sendBackupEmail({
         email: recipient,
-        backupSummary: `Manual Export: ${total} records.`,
-        timestamp: new Date().toLocaleString(),
+        backupSummary: `Manual On-Demand Export: ${total} records across all modules.`,
+        timestamp: new Date().toLocaleString('en-IN'),
         backupDataJson: JSON.stringify(backupData, null, 2),
       });
       if (result.success) {
         const metadataRef = doc(db, "backupMetadata", `MANUAL-${Date.now()}`);
         setDocumentNonBlocking(metadataRef, { id: metadataRef.id, timestamp: serverTimestamp(), performedBy: user.email, status: "Successful", type: "Manual Email Backup" }, { merge: true });
-        toast({ title: "Backup Sent" });
+        toast({ title: "Backup Sent", description: `Database snapshot emailed to ${recipient}.` });
+      } else {
+        toast({ variant: "destructive", title: "Email Failed", description: result.message });
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Internal Error" });
@@ -194,7 +212,6 @@ function SettingsContent() {
         snapshot.docs.forEach(d => {
           if (colName === 'users') {
             const userData = d.data();
-            // Protect Admins and Master account
             if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) {
               return;
             }
@@ -261,26 +278,14 @@ function SettingsContent() {
                         <TableCell className="text-xs text-muted-foreground">{u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 text-[10px] font-bold" 
-                              onClick={() => handleResetUserPassword(u.email)}
-                            >
+                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold" onClick={() => handleResetUserPassword(u.email)}>
                               <Key className="h-3 w-3 mr-1" /> Reset Pwd
                             </Button>
-                            
                             {isMaster && u.id !== user?.uid && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-destructive h-8 text-[10px] font-bold" 
-                                onClick={() => { if(window.confirm('Delete this user profile permanently?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}
-                              >
+                              <Button variant="ghost" size="sm" className="text-destructive h-8 text-[10px] font-bold" onClick={() => { if(window.confirm('Delete this user profile permanently?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}>
                                 <Trash2 className="h-3 w-3 mr-1" /> Delete
                               </Button>
                             )}
-                            
                             {(!isMaster && u.id !== user?.uid && u.role === 'Admin') && (
                               <Badge variant="secondary" className="text-[9px]">Protected</Badge>
                             )}
@@ -371,17 +376,39 @@ function SettingsContent() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><DatabaseBackup className="h-5 w-5 text-primary" />Backup Automation</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DatabaseBackup className="h-5 w-5 text-primary" />
+                  Daily Backup Automation
+                </CardTitle>
+                <CardDescription>Automated school records snapshots sent via email.</CardDescription>
+              </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
-                  <div className="space-y-0.5"><Label className="text-base">Enable Auto-Backup</Label><p className="text-sm text-muted-foreground">Daily database snapshots at 12:00 AM.</p></div>
-                  <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef, { enabled: checked }, { merge: true })} />
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Enable Daily Auto-Backup</Label>
+                    <p className="text-sm text-muted-foreground">Sends a full system archive every 24 hours.</p>
+                  </div>
+                  <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
                 </div>
-                <div className="grid gap-2"><Label>Destination Email</Label><Input value={autoSettings?.email || "ezydriveapp@gmail.com"} onChange={(e) => setDocumentNonBlocking(settingsRef, { email: e.target.value }, { merge: true })} /></div>
+                <div className="grid gap-2">
+                  <Label>Destination Email (Default: ezydriveapp@gmail.com)</Label>
+                  <Input 
+                    placeholder={DEFAULT_BACKUP_EMAIL}
+                    value={autoSettings?.email || ""} 
+                    onChange={(e) => setDocumentNonBlocking(settingsRef!, { email: e.target.value }, { merge: true })} 
+                  />
+                </div>
                 <Separator />
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
-                  <div className="grid gap-1"><p className="text-sm font-bold">Manual Email Backup</p><p className="text-xs text-muted-foreground">Trigger a report manually.</p></div>
-                  <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>{isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Send Now</Button>
+                  <div className="grid gap-1">
+                    <p className="text-sm font-bold">Trigger Manual Email Report</p>
+                    <p className="text-xs text-muted-foreground">Force-send a database snapshot immediately to the address above.</p>
+                  </div>
+                  <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
+                    {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    Send Report Now
+                  </Button>
                 </div>
               </CardContent>
             </Card>
