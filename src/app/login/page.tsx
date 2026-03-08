@@ -4,14 +4,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, AlertCircle, Car } from 'lucide-react';
+import { Lock, User, AlertCircle, Car, ShieldCheck, Mail, KeyRound, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const STAFF_IDS = ['admin', 'master', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
@@ -36,6 +37,7 @@ export default function LoginPage() {
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetUserId, setResetUserId] = useState('');
   const [inputSecret, setInputSecret] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
 
   const auth = useAuth();
   const db = useFirestore();
@@ -55,8 +57,8 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch (error: any) {
       // Auto-provisioning logic for default staff accounts
-      const isStandardStaff = STAFF_IDS.includes(userId) && password === DEFAULT_PASSWORD;
-      const isMasterAccount = userId === 'master' && password === MASTER_USER_PASSWORD;
+      const isStandardStaff = STAFF_IDS.some(id => id.toLowerCase() === userId.toLowerCase()) && password === DEFAULT_PASSWORD;
+      const isMasterAccount = userId.toLowerCase() === 'master' && password === MASTER_USER_PASSWORD;
 
       if (isStandardStaff || isMasterAccount) {
         try {
@@ -70,7 +72,7 @@ export default function LoginPage() {
             id: uid,
             email: email,
             name: userId.charAt(0).toUpperCase() + userId.slice(1),
-            role: (userId === 'admin' || userId === 'master') ? 'Admin' : 'BranchManager',
+            role: (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'master') ? 'Admin' : 'BranchManager',
             branch: formattedBranch,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -92,73 +94,96 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: 'Invalid User ID or Password. Please try again.',
+        description: 'Invalid User ID or Password. If you are a new branch, use the default credentials.',
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleResetPassword = () => {
+  const handleVerifySecret = () => {
     if (!resetUserId || !inputSecret) {
-      toast({ variant: 'destructive', title: 'Missing Info', description: 'Username and secret code are required.' });
+      toast({ variant: 'destructive', title: 'Missing Info', description: 'Username and Secret Code are required.' });
       return;
     }
 
     if (inputSecret === MASTER_SECRET) {
-      toast({
-        title: 'Identity Verified',
-        description: `Identity confirmed for ${resetUserId}. Your password has been set to the default.`,
-      });
-      const targetPassword = resetUserId === 'master' ? MASTER_USER_PASSWORD : DEFAULT_PASSWORD;
+      const uIdLower = resetUserId.toLowerCase();
+      const targetPassword = uIdLower === 'master' ? MASTER_USER_PASSWORD : DEFAULT_PASSWORD;
+      
       setUserId(resetUserId);
       setPassword(targetPassword);
       setIsResetOpen(false);
+      
+      toast({
+        title: 'Identity Verified',
+        description: `System credentials for ${resetUserId} have been restored. You can now log in using the pre-filled fields.`,
+      });
+      
       setResetUserId('');
       setInputSecret('');
     } else {
       toast({
         variant: 'destructive',
         title: 'Verification Failed',
-        description: 'Incorrect master secret code. Access denied.',
+        description: 'Incorrect Master Secret Code. Please contact Head Office.',
+      });
+    }
+  };
+
+  const handleSendResetEmail = async () => {
+    if (!resetEmail) return;
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      toast({
+        title: 'Email Sent',
+        description: 'A password reset link has been sent to your registered email.',
+      });
+      setIsResetOpen(false);
+      setResetEmail('');
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Request Failed',
+        description: error.message || 'Check if the email address is correct.',
       });
     }
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary overflow-hidden">
+      <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-primary overflow-hidden">
         <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 pt-10">
           <div className="flex justify-center mb-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-xl border-4 border-background transform -rotate-6">
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-xl border-4 border-background transform -rotate-6 animate-in fade-in zoom-in duration-500">
               <Car className="h-10 w-10" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-black tracking-tighter text-primary">CITYDRIVE</CardTitle>
-          <CardDescription className="font-medium text-muted-foreground">
+          <CardTitle className="text-3xl font-black tracking-tighter text-primary uppercase">CITYDRIVE</CardTitle>
+          <CardDescription className="font-bold text-muted-foreground uppercase tracking-widest text-[10px]">
             Driving School Management Portal
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4 pt-6">
             {setupError && (
-              <Alert variant="destructive" className="bg-destructive/10">
+              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Configuration Required</AlertTitle>
-                <AlertDescription className="text-xs">
-                  Please enable Email/Password login in the Firebase Console.
+                <AlertTitle>System Alert</AlertTitle>
+                <AlertDescription className="text-[10px] font-medium">
+                  Authentication service is currently restricted. Please enable Email/Password provider in the Firebase Console.
                 </AlertDescription>
               </Alert>
             )}
             
             <div className="space-y-2">
-              <Label htmlFor="userId">User ID</Label>
+              <Label htmlFor="userId" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">User ID / Username</Label>
               <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <User className="absolute left-3 top-3 h-4 w-4 text-primary/40" />
                 <Input
                   id="userId"
-                  placeholder="e.g. admin or B10001"
-                  className="pl-9 h-11"
+                  placeholder="e.g. master, admin or Branch1"
+                  className="pl-9 h-12 font-bold border-primary/10 bg-background focus:border-primary/30"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
                   required
@@ -167,22 +192,23 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" title="Enter your secure password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Security Password</Label>
                 <Button 
                   type="button" 
                   variant="link" 
-                  className="px-0 font-bold text-primary h-auto text-xs"
+                  className="px-0 font-bold text-primary h-auto text-[10px] uppercase tracking-tighter hover:no-underline"
                   onClick={() => setIsResetOpen(true)}
                 >
                   Forgot Password?
                 </Button>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-primary/40" />
                 <Input
                   id="password"
                   type="password"
-                  className="pl-9 h-11"
+                  placeholder="••••••••"
+                  className="pl-9 h-12 font-bold border-primary/10 bg-background focus:border-primary/30"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -190,47 +216,103 @@ export default function LoginPage() {
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4 pb-10">
-            <Button className="w-full h-12 text-base font-bold shadow-lg" type="submit" disabled={isLoading}>
-              {isLoading ? 'Verifying...' : 'Sign In to Portal'}
+          <CardFooter className="flex flex-col gap-4 pb-10 pt-2">
+            <Button className="w-full h-14 text-base font-black shadow-lg uppercase tracking-widest" type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+                  Verifying Identity...
+                </>
+              ) : 'Sign In to Portal'}
             </Button>
-            <div className="text-[10px] text-center text-muted-foreground uppercase tracking-widest font-bold opacity-50">
-              &copy; {new Date().getFullYear()} Citydrive Systems
+            <div className="text-[9px] text-center text-muted-foreground uppercase tracking-[0.2em] font-black opacity-30 mt-4">
+              &copy; {new Date().getFullYear()} Citydrive Management Systems
             </div>
           </CardFooter>
         </form>
       </Card>
 
       <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Restore Account Access</DialogTitle>
-            <DialogDescription>
-              Enter your User ID and the Master Secret Code to verify your identity.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>User ID / Username</Label>
-              <Input 
-                placeholder="e.g. B10001 or SID01" 
-                value={resetUserId} 
-                onChange={(e) => setResetUserId(e.target.value)} 
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Master Secret Code</Label>
-              <Input 
-                type="password" 
-                placeholder="Enter secret code" 
-                value={inputSecret} 
-                onChange={(e) => setInputSecret(e.target.value)} 
-              />
-            </div>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-primary p-6 text-primary-foreground">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                <ShieldCheck className="h-6 w-6" />
+                Account Recovery
+              </DialogTitle>
+              <DialogDescription className="text-primary-foreground/80 font-medium">
+                Choose a method to restore your access to the portal.
+              </DialogDescription>
+            </DialogHeader>
           </div>
-          <DialogFooter>
-            <Button onClick={handleResetPassword} className="w-full">Verify & Restore</Button>
-          </DialogFooter>
+          
+          <Tabs defaultValue="secret" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 rounded-none bg-muted/50 h-12">
+              <TabsTrigger value="secret" className="text-[10px] font-black uppercase tracking-wider gap-2">
+                <KeyRound className="h-3.5 w-3.5" /> Master Secret
+              </TabsTrigger>
+              <TabsTrigger value="email" className="text-[10px] font-black uppercase tracking-wider gap-2">
+                <Mail className="h-3.5 w-3.5" /> Email Link
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="secret" className="p-6 space-y-4 m-0">
+              <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/10">
+                If you are a staff member, enter your User ID and the <span className="font-bold text-primary">Master Secret Code</span> provided by the Head Office to restore default login credentials.
+              </p>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Your User ID</Label>
+                  <Input 
+                    placeholder="e.g. Branch1" 
+                    className="h-11 font-bold"
+                    value={resetUserId} 
+                    onChange={(e) => setResetUserId(e.target.value)} 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Master Secret Code</Label>
+                  <Input 
+                    type="password" 
+                    placeholder="Enter Secret Key" 
+                    className="h-11 font-bold"
+                    value={inputSecret} 
+                    onChange={(e) => setInputSecret(e.target.value)} 
+                  />
+                </div>
+                <Button onClick={handleVerifySecret} className="w-full h-11 font-bold uppercase text-xs tracking-widest mt-2 shadow-md">
+                  Verify & Populate
+                </Button>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="email" className="p-6 space-y-4 m-0">
+              <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-muted/50 p-3 rounded-lg border">
+                If you have previously registered a valid email address with your profile, enter it below to receive a standard password reset link.
+              </p>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Registered Email</Label>
+                  <Input 
+                    type="email"
+                    placeholder="name@citydriving.in" 
+                    className="h-11 font-bold"
+                    value={resetEmail} 
+                    onChange={(e) => setResetEmail(e.target.value)} 
+                  />
+                </div>
+                <Button onClick={handleSendResetEmail} variant="outline" className="w-full h-11 font-bold uppercase text-xs tracking-widest mt-2 border-primary/20 text-primary hover:bg-primary/5">
+                  Send Recovery Link
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+          
+          <div className="p-4 bg-muted/30 border-t flex justify-center">
+            <Button variant="ghost" size="sm" onClick={() => setIsResetOpen(false)} className="text-[10px] font-bold uppercase text-muted-foreground">
+              Back to Login
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
