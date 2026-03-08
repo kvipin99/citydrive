@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, Car } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
@@ -68,27 +68,27 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Robust Precise Branch Matching
+  // Precise Matching Logic (Regex Boundary System)
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
     // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
+    // 2. Numeric Extraction Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Regex with boundaries)
+    // 3. ID Based Match (EXP-B1 / REC-B1)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
@@ -233,15 +233,91 @@ export default function AccountingPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
-          .print-hidden { display: none !important; }
-          .print-area { width: 100% !important; padding: 0 !important; margin: 0 !important; }
-          body { background: white !important; }
-          header, aside, .sidebar-provider, .fixed-header { display: none !important; }
-          main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
-          .card { border: none !important; box-shadow: none !important; }
-          .tabs-list { display: none !important; }
+          /* Hide interactive and background elements */
+          .print-hidden, header, aside, .sidebar-provider, .fixed-header, nav, button { 
+            display: none !important; 
+          }
+          
+          /* Full width layout for print */
+          .print-area, body, main { 
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background: white !important; 
+          }
+          
+          .card { 
+            border: 1px solid #eee !important; 
+            box-shadow: none !important; 
+            margin-bottom: 20px !important;
+          }
+
+          /* Force background colors in PDF */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* Show the hidden header */
+          .print-only-header {
+            display: block !important;
+            margin-bottom: 30px;
+            border-bottom: 4px solid hsl(var(--primary));
+            padding-bottom: 15px;
+          }
+
+          .print-footer {
+            display: block !important;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            padding: 10px 0;
+            border-top: 1px solid #eee;
+          }
+
+          /* Grid adjustments for standard A4 */
+          .print-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 15px !important;
+          }
+          
+          .print-dual-table {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 20px !important;
+          }
+
+          h2, h3 { color: black !important; }
+        }
+
+        .print-only-header, .print-footer {
+          display: none;
         }
       `}</style>
+
+      {/* PRINT-ONLY HEADER */}
+      <div className="print-only-header">
+        <div className="flex justify-between items-end">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 bg-primary flex items-center justify-center rounded-lg text-white">
+              <Car className="h-8 w-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter text-primary uppercase">Citydrive Systems</h1>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Driving School Management Portal</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <h2 className="text-lg font-bold uppercase">Financial Daybook Report</h2>
+            <p className="text-xs font-medium">Branch: <span className="font-bold">{isAdmin ? selectedBranch : profile?.branch}</span></p>
+            <p className="text-xs font-medium">Period: <span className="font-bold">{dateRange.from} to {dateRange.to}</span></p>
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print-hidden">
         <div className="grid gap-1">
@@ -328,7 +404,7 @@ export default function AccountingPage() {
         </Card>
 
         <div className="md:col-span-3 space-y-6 print:col-span-4">
-          <div className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3 print-grid">
             <Card className="border-l-4 border-l-green-500 shadow-sm bg-green-50/10">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Income</CardTitle>
@@ -372,7 +448,7 @@ export default function AccountingPage() {
             
             <TabsContent value="daybook" className="mt-4">
               {isLoading ? <LoadingSpinner /> : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print:grid-cols-2">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print-dual-table">
                   <Card className="border-green-100 shadow-sm overflow-hidden">
                     <CardHeader className="bg-green-50/50 py-3 border-b border-green-100">
                       <div className="flex items-center justify-between">
@@ -447,6 +523,10 @@ export default function AccountingPage() {
             </TabsContent>
           </Tabs>
         </div>
+      </div>
+
+      <div className="print-footer">
+        Generated by Citydrive Management Portal on {format(new Date(), 'MMM dd, yyyy HH:mm')}
       </div>
     </div>
   );
