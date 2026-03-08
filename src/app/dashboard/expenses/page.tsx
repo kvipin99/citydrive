@@ -93,6 +93,7 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
+  // Robust branch matching logic synchronized with Student Receipts
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -100,7 +101,7 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Exact normalized match
+    // 1. Direct normalized match
     if (rBranch === targetBranch) return true;
 
     // 2. Numeric match (e.g. "b1" matches "branch1")
@@ -113,7 +114,7 @@ export default function ExpensesPage() {
     if (branchNum) {
       const bCode = `b${branchNum}`;
       const rid = (record.id || '').toLowerCase();
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `-${bCode}`];
+      const patterns = [bCode, `-${bCode}-`, `exp-b${branchNum}`, `exp-${bCode}`, `-${bCode}`];
       if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
