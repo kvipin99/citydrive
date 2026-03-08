@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react";
@@ -181,8 +180,27 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
-          .print-hidden, nav, header, button, .tabs-list { display: none !important; }
-          body, main, .print-area { width: 100% !important; padding: 0 !important; margin: 0 !important; background: white !important; }
+          .print-hidden, 
+          nav, 
+          header, 
+          aside,
+          [data-sidebar="sidebar"],
+          .sidebar-provider,
+          .sidebar-wrapper,
+          [data-sidebar="trigger"],
+          [data-sidebar="rail"],
+          button, 
+          .tabs-list { 
+            display: none !important; 
+          }
+          body, main, .print-area { 
+            width: 100% !important; 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            background: white !important; 
+            left: 0 !important;
+            position: relative !important;
+          }
           .card { border: 1px solid #eee !important; box-shadow: none !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .print-only-header { display: block !important; margin-bottom: 25px; border-bottom: 3px solid hsl(var(--primary)); padding-bottom: 10px; }

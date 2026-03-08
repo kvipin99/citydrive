@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -68,27 +67,23 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Precise Matching Logic (Regex Boundary System)
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
-    if (rBranch && rBranch === targetBranch) return true;
+    if (rBranch === targetBranch) return true;
 
-    // 2. Numeric Extraction Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Match (EXP-B1 / REC-B1)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
@@ -234,7 +229,17 @@ export default function AccountingPage() {
       <style jsx global>{`
         @media print {
           /* Hide interactive and background elements */
-          .print-hidden, header, aside, .sidebar-provider, .fixed-header, nav, button { 
+          .print-hidden, 
+          header, 
+          aside, 
+          [data-sidebar="sidebar"],
+          .sidebar-provider, 
+          .fixed-header, 
+          nav, 
+          button,
+          [data-sidebar="trigger"],
+          [data-sidebar="rail"],
+          .sidebar-wrapper { 
             display: none !important; 
           }
           
@@ -244,6 +249,8 @@ export default function AccountingPage() {
             margin: 0 !important; 
             padding: 0 !important; 
             background: white !important; 
+            left: 0 !important;
+            position: relative !important;
           }
           
           .card { 
