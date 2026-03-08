@@ -141,6 +141,7 @@ function StudentsContent() {
     description: ''
   });
 
+  // Synchronized robust branch matching utility
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -148,14 +149,14 @@ function StudentsContent() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    if (rBranch === targetBranch) return true;
+    if (rBranch && rBranch === targetBranch) return true;
 
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    const branchNum = tNum;
-    if (branchNum && record.id?.startsWith(`B${branchNum}`)) return true;
+    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    if (branchNum && (record.id?.toLowerCase().startsWith(`b${branchNum}`) || record.studentId?.toLowerCase().startsWith(`b${branchNum}`))) return true;
     return false;
   }, []);
 
@@ -561,8 +562,21 @@ function StudentsContent() {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); const { payments, ...formDataRest } = student; setSelectedStudent(student); setFormData({ ...formDataRest, registrationDate: toInputDate(student.registrationDate), learnersDate: toInputDate(student.learnersDate), testDate: toInputDate(student.testDate), dob: toInputDate(student.dob) }); setIsEditDialogOpen(true); }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSelectedStudent(student); setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' }); setIsReceiptDialogOpen(true); }}><ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => { 
+                                  e.preventDefault(); 
+                                  const { payments, ...formDataRest } = student; 
+                                  setSelectedStudent(student); 
+                                  setFormData({ ...formDataRest, registrationDate: toInputDate(student.registrationDate), learnersDate: toInputDate(student.learnersDate), testDate: toInputDate(student.testDate), dob: toInputDate(student.dob) }); 
+                                  // Small delay to prevent Radix state conflict (freezing)
+                                  setTimeout(() => setIsEditDialogOpen(true), 1);
+                                }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => { 
+                                  e.preventDefault(); 
+                                  setSelectedStudent(student); 
+                                  setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' }); 
+                                  // Small delay to prevent Radix state conflict (freezing)
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 1);
+                                }}><ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (<DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); setSelectedStudent(student); setIsDeleteAlertOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Permanent Delete</DropdownMenuItem>)}
                               </DropdownMenuContent>

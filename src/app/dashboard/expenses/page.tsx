@@ -98,27 +98,17 @@ export default function ExpensesPage() {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
     const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch);
+    const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Direct match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric identifier match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID Based Matching
-    const rid = normalize(record.id || '');
-    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
-    if (searchNum) {
-      const bCode = `b${searchNum}`;
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
-      if (patterns.some(p => rid.includes(p))) return true;
-      if (rid.startsWith(bCode)) return true;
-    }
+    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    if (branchNum && (record.id?.toLowerCase().startsWith(`exp-b${branchNum}`) || record.id?.toLowerCase().startsWith(`rec-b${branchNum}`) || record.studentId?.toLowerCase().startsWith(`b${branchNum}`))) return true;
 
     return false;
   }, []);
@@ -162,7 +152,8 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    setIsDialogOpen(true);
+    // Small delay to prevent Radix UI animations from overlapping (freezing)
+    setTimeout(() => setIsDialogOpen(true), 1);
   };
 
   const handleSaveExpense = () => {
