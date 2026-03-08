@@ -1,17 +1,16 @@
-
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, AlertCircle, Car, ShieldCheck, Mail, KeyRound, RefreshCw } from 'lucide-react';
+import { Lock, User, AlertCircle, Car, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -21,12 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const STAFF_IDS = ['admin', 'master', 'Branch1', 'Branch2', 'Branch3', 'Branch4', 'Branch5'];
 const DEFAULT_PASSWORD = 'City123';
 const MASTER_USER_PASSWORD = '9744001735';
-const MASTER_SECRET = 'Citydrive123';
+const MASTER_SECRET = '9744001735';
 
 export default function LoginPage() {
   const [userId, setUserId] = useState('');
@@ -37,7 +35,6 @@ export default function LoginPage() {
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetUserId, setResetUserId] = useState('');
   const [inputSecret, setInputSecret] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
 
   const auth = useAuth();
   const db = useFirestore();
@@ -127,25 +124,6 @@ export default function LoginPage() {
         variant: 'destructive',
         title: 'Verification Failed',
         description: 'Incorrect Master Secret Code. Please contact Head Office.',
-      });
-    }
-  };
-
-  const handleSendResetEmail = async () => {
-    if (!resetEmail) return;
-    try {
-      await sendPasswordResetEmail(auth, resetEmail);
-      toast({
-        title: 'Email Sent',
-        description: 'A password reset link has been sent to your registered email.',
-      });
-      setIsResetOpen(false);
-      setResetEmail('');
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Request Failed',
-        description: error.message || 'Check if the email address is correct.',
       });
     }
   };
@@ -241,72 +219,43 @@ export default function LoginPage() {
                 Account Recovery
               </DialogTitle>
               <DialogDescription className="text-primary-foreground/80 font-medium">
-                Choose a method to restore your access to the portal.
+                Verify identity via Master Secret to restore default credentials.
               </DialogDescription>
             </DialogHeader>
           </div>
           
-          <Tabs defaultValue="secret" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-none bg-muted/50 h-12">
-              <TabsTrigger value="secret" className="text-[10px] font-black uppercase tracking-wider gap-2">
-                <KeyRound className="h-3.5 w-3.5" /> Master Secret
-              </TabsTrigger>
-              <TabsTrigger value="email" className="text-[10px] font-black uppercase tracking-wider gap-2">
-                <Mail className="h-3.5 w-3.5" /> Email Link
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="secret" className="p-6 space-y-4 m-0">
-              <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/10">
-                If you are a staff member, enter your User ID and the <span className="font-bold text-primary">Master Secret Code</span> provided by the Head Office to restore default login credentials.
-              </p>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Your User ID</Label>
-                  <Input 
-                    placeholder="e.g. Branch1" 
-                    className="h-11 font-bold"
-                    value={resetUserId} 
-                    onChange={(e) => setResetUserId(e.target.value)} 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Master Secret Code</Label>
+          <div className="p-6 space-y-4 m-0">
+            <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/10">
+              Enter your User ID and the <span className="font-bold text-primary">Master Secret Code</span> provided by the Head Office to restore default login credentials.
+            </p>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Your User ID</Label>
+                <Input 
+                  placeholder="e.g. Branch1" 
+                  className="h-11 font-bold"
+                  value={resetUserId} 
+                  onChange={(e) => setResetUserId(e.target.value)} 
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Master Secret Code</Label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground opacity-50" />
                   <Input 
                     type="password" 
                     placeholder="Enter Secret Key" 
-                    className="h-11 font-bold"
+                    className="h-11 font-bold pl-9"
                     value={inputSecret} 
                     onChange={(e) => setInputSecret(e.target.value)} 
                   />
                 </div>
-                <Button onClick={handleVerifySecret} className="w-full h-11 font-bold uppercase text-xs tracking-widest mt-2 shadow-md">
-                  Verify & Populate
-                </Button>
               </div>
-            </TabsContent>
-            
-            <TabsContent value="email" className="p-6 space-y-4 m-0">
-              <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-muted/50 p-3 rounded-lg border">
-                If you have previously registered a valid email address with your profile, enter it below to receive a standard password reset link.
-              </p>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Registered Email</Label>
-                  <Input 
-                    type="email"
-                    placeholder="name@citydriving.in" 
-                    className="h-11 font-bold"
-                    value={resetEmail} 
-                    onChange={(e) => setResetEmail(e.target.value)} 
-                  />
-                </div>
-                <Button onClick={handleSendResetEmail} variant="outline" className="w-full h-11 font-bold uppercase text-xs tracking-widest mt-2 border-primary/20 text-primary hover:bg-primary/5">
-                  Send Recovery Link
-                </Button>
-              </div>
-            </TabsContent>
-          </Tabs>
+              <Button onClick={handleVerifySecret} className="w-full h-11 font-bold uppercase text-xs tracking-widest mt-2 shadow-md">
+                Verify & Restore Defaults
+              </Button>
+            </div>
+          </div>
           
           <div className="p-4 bg-muted/30 border-t flex justify-center">
             <Button variant="ghost" size="sm" onClick={() => setIsResetOpen(false)} className="text-[10px] font-bold uppercase text-muted-foreground">
