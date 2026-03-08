@@ -499,7 +499,7 @@ function StudentsContent() {
                 )}
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search ID, Name or Mobile..." className="pl-8 w-[200px] lg:w-[250px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  <Input placeholder="Search ID, Name or Register..." className="pl-8 w-[200px] lg:w-[250px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                 </div>
                 {isBranchManager && (
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
@@ -567,15 +567,13 @@ function StudentsContent() {
                                   const { payments, ...formDataRest } = student; 
                                   setSelectedStudent(student); 
                                   setFormData({ ...formDataRest, registrationDate: toInputDate(student.registrationDate), learnersDate: toInputDate(student.learnersDate), testDate: toInputDate(student.testDate), dob: toInputDate(student.dob) }); 
-                                  // Small delay to prevent Radix state conflict (freezing)
-                                  setTimeout(() => setIsEditDialogOpen(true), 1);
+                                  setTimeout(() => setIsEditDialogOpen(true), 150);
                                 }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault(); 
                                   setSelectedStudent(student); 
                                   setReceiptFormData({ amount: 0, receiptNo: '', method: 'Cash', date: format(new Date(), 'yyyy-MM-dd'), description: '' }); 
-                                  // Small delay to prevent Radix state conflict (freezing)
-                                  setTimeout(() => setIsReceiptDialogOpen(true), 1);
+                                  setTimeout(() => setIsReceiptDialogOpen(true), 150);
                                 }}><ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isAdmin && (<DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); setSelectedStudent(student); setIsDeleteAlertOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Permanent Delete</DropdownMenuItem>)}
@@ -615,7 +613,7 @@ function StudentsContent() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if(!open) setSelectedStudent(null); }}>
+      <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if (!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b shrink-0"><DialogTitle>Issue Student Receipt</DialogTitle><DialogDescription>Record a course fee collection for <b>{selectedStudent?.name}</b>.</DialogDescription></DialogHeader>
           <div className="flex-1 overflow-y-auto p-6"><div className="grid gap-6 pb-20">{selectedStudent && (<div className="space-y-4 animate-in fade-in zoom-in-95 duration-200"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p></div></div><div className="grid gap-4 pt-4 border-t"><div className="grid gap-2"><Label className="flex items-center gap-2">Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input type="date" value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} disabled={isDateLocked} onChange={(e) => setReceiptFormData({...receiptFormData, date: e.target.value})} />{isDateLocked && <p className="text-[10px] text-muted-foreground italic">Today only.</p>}</div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div><div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div><div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div></div></div>)}</div></div>

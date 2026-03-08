@@ -61,6 +61,8 @@ export default function ExpensesPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
   
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
+
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
     return collection(db, 'expenses'); 
@@ -77,6 +79,12 @@ export default function ExpensesPage() {
     description: '',
     branch: 'Branch 1',
   });
+
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile, isAdmin, profileBranch]);
 
   useEffect(() => {
     if (profile && !selectedExpense && isDialogOpen) {
@@ -114,14 +122,14 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    // For non-admins, force filtering by their branch
-    if (!isAdmin) {
-      const currentBranchContext = profileBranch || "Branch 1";
+    // Management branch filtering
+    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
+    if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -144,7 +152,6 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    // Small delay to prevent Radix UI animations from overlapping (freezing)
     setTimeout(() => setIsDialogOpen(true), 1);
   };
 
@@ -206,11 +213,27 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>{isAdmin ? "All Branches (Consolidated)" : profileBranch}</CardDescription>
+                <CardDescription>
+                  {isAdmin ? (selectedBranchFilter === 'All' ? 'All Branches (Consolidated)' : selectedBranchFilter) : profileBranch}
+                </CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isAdmin && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                      <SelectValue placeholder="Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
