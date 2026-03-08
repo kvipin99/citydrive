@@ -141,21 +141,27 @@ function StudentsContent() {
     description: ''
   });
 
+  // Synchronized robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
+    
+    // Direct match
     if (rBranch && rBranch === targetBranch) return true;
+
+    // Numeric match
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
+
+    // ID based matching
     const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
-      if (rid.startsWith(bCode)) return true;
+      if (rid.startsWith(bCode) || rid.includes(`-${bCode}-`)) return true;
     }
     return false;
   }, []);
@@ -567,6 +573,7 @@ function StudentsContent() {
                                   const { payments, ...formDataRest } = student; 
                                   setSelectedStudent(student); 
                                   setFormData({ ...formDataRest, registrationDate: toInputDate(student.registrationDate), learnersDate: toInputDate(student.learnersDate), testDate: toInputDate(student.testDate), dob: toInputDate(student.dob) }); 
+                                  // Micro-delay to prevent Radix focus conflicts (resolves "stuck" UI)
                                   setTimeout(() => setIsEditDialogOpen(true), 150);
                                 }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 

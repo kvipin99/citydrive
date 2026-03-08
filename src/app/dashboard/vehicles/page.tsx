@@ -106,6 +106,7 @@ export default function VehiclesPage() {
         status: 'Available'
       });
     }
+    // Micro-delay to prevent UI "stuck" state
     setTimeout(() => setIsDialogOpen(true), 150);
   }, [toInputDate]);
 
@@ -128,6 +129,7 @@ export default function VehiclesPage() {
       ...(selectedVehicleId ? {} : { createdAt: serverTimestamp(), createdBy: user?.uid })
     };
     setDocumentNonBlocking(vehicleRef, updateData, { merge: true });
+    
     setTimeout(() => {
       setIsDialogOpen(false);
       setSelectedVehicleId(null);
@@ -200,7 +202,7 @@ export default function VehiclesPage() {
                       <TableCell className="text-right">
                         {canWrite && (
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(v); }}>
                                 <Edit2 className="mr-2 h-4 w-4" /> Edit Details

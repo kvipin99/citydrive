@@ -93,22 +93,29 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
+  // Robust matching logic synchronized across files
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
     const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
+    
     if (rBranch && rBranch === targetBranch) return true;
+
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
+
     const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
+    
     if (branchNum) {
       const bCode = `b${branchNum}`;
       if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
       if (rid.startsWith(bCode)) return true;
     }
+    
     return false;
   }, []);
 
@@ -148,6 +155,7 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
+    // Micro-delay to prevent Radix UI focus conflicts
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 
@@ -169,6 +177,8 @@ export default function ExpensesPage() {
       ...(selectedExpense ? {} : { createdAt: serverTimestamp() }),
     };
     setDocumentNonBlocking(expenseRef, expenseData, { merge: true });
+    
+    // Smooth transition
     setTimeout(() => {
       setIsDialogOpen(false);
       toast({ 
@@ -295,7 +305,20 @@ export default function ExpensesPage() {
               <div className="grid gap-2"><Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input type="date" value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} disabled={isDateLocked} onChange={(e) => setFormData({...formData, date: e.target.value})} /></div>
               <div className="grid gap-2"><Label>Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div>
             </div>
-            <div className="grid gap-2"><Label className="font-bold flex items-center gap-2">Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>{isAdmin ? (<Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent></Select>) : (<div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight"><MapPin className="h-4 w-4 mr-2" />{formData.branch}</div>)}</div>
+            <div className="grid gap-2">
+              <Label className="font-bold flex items-center gap-2">Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>
+              {isAdmin ? (
+                <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}>
+                  <SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger>
+                  <SelectContent>{BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent>
+                </Select>
+              ) : (
+                <div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {formData.branch}
+                </div>
+              )}
+            </div>
             <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div>
             <div className="grid gap-2"><Label>Description (Optional)</Label><Textarea placeholder="Details..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
           </div>

@@ -58,7 +58,7 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Robust matching logic synchronized across files
+  // Synchronized robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -66,18 +66,21 @@ export default function AccountingPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
+    // Direct match
     if (rBranch && rBranch === targetBranch) return true;
 
+    // Numeric match (matches "B1" to "Branch 1")
     const rNum = rBranch.match(/\d+/)?.[0];
     const tNum = targetBranch.match(/\d+/)?.[0];
     if (rNum && tNum && rNum === tNum) return true;
 
+    // ID prefix match
     const rid = normalize(record.id || '');
     const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
+      if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
     
