@@ -144,23 +144,20 @@ function StudentsContent() {
   // Synchronized robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
-    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch || '');
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // Direct match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // Numeric match
-    const rNum = rBranch.match(/\d+/)?.[0];
-    const tNum = targetBranch.match(/\d+/)?.[0];
+    const getNum = (s: string) => s.match(/\d+/)?.[0] || '';
+    const rNum = getNum(rBranch);
+    const tNum = getNum(targetBranch);
     if (rNum && tNum && rNum === tNum) return true;
 
-    // ID based matching
     const rid = normalize(record.id || '');
-    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
+    const bCode = tNum ? `b${tNum}` : '';
+    if (bCode) {
       if (rid.startsWith(bCode) || rid.includes(`-${bCode}-`)) return true;
     }
     return false;
@@ -563,7 +560,7 @@ function StudentsContent() {
                       <TableCell><span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDue(student).toLocaleString()}</span></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setIsProfileSheetOpen(true); }}><Eye className="h-4 w-4 text-primary" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => { setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
                           {!isStudent && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -573,7 +570,6 @@ function StudentsContent() {
                                   const { payments, ...formDataRest } = student; 
                                   setSelectedStudent(student); 
                                   setFormData({ ...formDataRest, registrationDate: toInputDate(student.registrationDate), learnersDate: toInputDate(student.learnersDate), testDate: toInputDate(student.testDate), dob: toInputDate(student.dob) }); 
-                                  // Micro-delay to prevent Radix focus conflicts (resolves "stuck" UI)
                                   setTimeout(() => setIsEditDialogOpen(true), 150);
                                 }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 

@@ -97,22 +97,25 @@ export default function ExpensesPage() {
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch || '');
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
+    // 1. Direct normalized match
     if (rBranch && rBranch === targetBranch) return true;
 
-    const rNum = rBranch.match(/\d+/)?.[0];
-    const tNum = targetBranch.match(/\d+/)?.[0];
+    // 2. Numeric identifier match (e.g. "Branch 1" vs "B1" vs "1")
+    const getNum = (s: string) => s.match(/\d+/)?.[0] || '';
+    const rNum = getNum(rBranch);
+    const tNum = getNum(targetBranch);
     if (rNum && tNum && rNum === tNum) return true;
 
+    // 3. ID Based Matching Fallback
     const rid = normalize(record.id || '');
-    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
-      if (rid.includes(`-${bCode}-`) || rid.startsWith(`exp-${bCode}`) || rid.startsWith(`rec-${bCode}`) || rid.startsWith(`misc-${bCode}`)) return true;
+    const bCode = tNum ? `b${tNum}` : '';
+    if (bCode) {
+      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
+      if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
     
