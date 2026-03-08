@@ -72,7 +72,7 @@ export default function ExpensesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRecord | null>(null);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: format(new Date(), 'yyyy-MM-dd'),
     category: 'Fuel' as typeof EXPENSE_CATEGORIES[number],
     amount: 0,
     description: '',
@@ -85,7 +85,7 @@ export default function ExpensesPage() {
     }
   }, [profile, isAdmin, profileBranch]);
 
-  // Robust matching logic for branch isolation
+  // Robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -93,18 +93,14 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise Regex)
     if (tNum) {
       const rid = normalize(record.id || '');
-      // Matches 'b1' or 'B1' surrounded by non-alphanumeric chars or boundaries
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
@@ -144,14 +140,13 @@ export default function ExpensesPage() {
       setSelectedExpense(null);
       const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: format(new Date(), 'yyyy-MM-dd'),
         category: 'Fuel',
         amount: 0,
         description: '',
         branch: defaultBranch,
       });
     }
-    // Micro-delay to prevent UI "stuck" state
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 
@@ -164,6 +159,7 @@ export default function ExpensesPage() {
     const expenseId = selectedExpense ? selectedExpense.id : `EXP-B${branchNum}-${Date.now()}`;
     const expenseRef = doc(db, 'expenses', expenseId);
     const expenseDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date;
+    
     const expenseData = {
       ...formData,
       date: expenseDate,
@@ -172,13 +168,14 @@ export default function ExpensesPage() {
       updatedAt: serverTimestamp(),
       ...(selectedExpense ? {} : { createdAt: serverTimestamp() }),
     };
+    
     setDocumentNonBlocking(expenseRef, expenseData, { merge: true });
     
     setTimeout(() => {
       setIsDialogOpen(false);
       toast({ 
         title: selectedExpense ? "Expense Updated" : "Expense Recorded", 
-        description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category} at ${formData.branch}.` 
+        description: `${selectedExpense ? 'Updated' : 'Added'} ₹${formData.amount} for ${formData.category}.` 
       });
     }, 150);
   };

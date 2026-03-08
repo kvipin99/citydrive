@@ -68,7 +68,7 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Precise matching logic synchronized with Expenses module
+  // Unified robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -76,15 +76,15 @@ export default function AccountingPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
+    // Direct Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
+    // Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Regex boundary matching)
+    // ID Match (Regex boundaries)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
