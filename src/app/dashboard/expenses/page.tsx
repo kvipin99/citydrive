@@ -101,7 +101,7 @@ export default function ExpensesPage() {
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise)
+    // 3. ID Based Matching (Precise Regex)
     if (tNum) {
       const rid = normalize(record.id || '');
       const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
@@ -150,7 +150,7 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
-    // Delay to prevent UI stuck state
+    // Delay to prevent Radix dropdown conflict
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 

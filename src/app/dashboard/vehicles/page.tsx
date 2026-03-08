@@ -106,7 +106,7 @@ export default function VehiclesPage() {
         status: 'Available'
       });
     }
-    // Micro-delay to prevent UI "stuck" state
+    // Micro-delay to prevent Radix dropdown conflict
     setTimeout(() => setIsDialogOpen(true), 150);
   }, [toInputDate]);
 
@@ -204,10 +204,16 @@ export default function VehiclesPage() {
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDialog(v); }}>
+                              <DropdownMenuItem onSelect={(e) => { 
+                                e.preventDefault();
+                                handleOpenDialog(v); 
+                              }}>
                                 <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); handleDeleteVehicle(v.id); }}>
+                              <DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { 
+                                e.preventDefault();
+                                handleDeleteVehicle(v.id); 
+                              }}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Vehicle
                               </DropdownMenuItem>
                             </DropdownMenuContent>

@@ -157,7 +157,7 @@ function StudentsContent() {
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise)
+    // 3. ID Based Matching (Precise Regex)
     if (tNum) {
       const rid = normalize(record.id || '');
       const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');

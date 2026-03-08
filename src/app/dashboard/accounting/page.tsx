@@ -68,7 +68,7 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Synchronized precise matching logic
+  // Precise matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -88,6 +88,7 @@ export default function AccountingPage() {
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
+      // Regex matches start of ID or standard prefixes followed by exact branch code
       const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
@@ -271,7 +272,7 @@ export default function AccountingPage() {
         <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4" /> Filter Period
+              <CalendarIcon className="h-4 w-4" /> Filter Records
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -406,8 +407,8 @@ export default function AccountingPage() {
                       <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
                       {expenseTransactions.length > 0 && (
                         <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
-                          <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
+                          <span className="text-[10px] font-bold uppercase text-green-700">Total Debit</span>
+                          <span className="text-lg font-black text-green-700">₹{totalExpenses.toLocaleString()}</span>
                         </div>
                       )}
                     </CardContent>
