@@ -249,14 +249,6 @@ function StudentsContent() {
     return result;
   }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
 
-  const closeAllModals = useCallback(() => {
-    setIsEditDialogOpen(false);
-    setIsAddDialogOpen(false);
-    setIsReceiptDialogOpen(false);
-    setIsDeleteAlertOpen(false);
-    setIsProfileSheetOpen(false);
-  }, []);
-
   const toInputDate = useCallback((val: any) => {
     if (!val) return '';
     if (typeof val === 'string') return val;
@@ -285,10 +277,6 @@ function StudentsContent() {
     if (!file) return;
     if (file.type !== 'image/jpeg') {
       toast({ variant: "destructive", title: "Invalid File Type", description: "Please upload a JPEG image." });
-      return;
-    }
-    if (file.size > 200 * 1024) {
-      toast({ variant: "destructive", title: "File Too Large", description: "Image must be less than 200 KB." });
       return;
     }
     const reader = new FileReader();
@@ -692,7 +680,6 @@ function StudentsContent() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
-                                  closeAllModals();
                                   const { payments, ...formDataRest } = student;
                                   setSelectedStudent(student); 
                                   setFormData({ 
@@ -702,13 +689,12 @@ function StudentsContent() {
                                     testDate: toInputDate(student.testDate),
                                     dob: toInputDate(student.dob)
                                   }); 
-                                  setTimeout(() => setIsEditDialogOpen(true), 200);
+                                  setIsEditDialogOpen(true);
                                 }}>
                                   <Edit2 className="mr-2 h-4 w-4" /> Edit Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault();
-                                  closeAllModals();
                                   setSelectedStudent(student); 
                                   setReceiptFormData({ 
                                     amount: 0, 
@@ -717,7 +703,7 @@ function StudentsContent() {
                                     date: format(new Date(), 'yyyy-MM-dd'), 
                                     description: '' 
                                   });
-                                  setTimeout(() => setIsReceiptDialogOpen(true), 200); 
+                                  setIsReceiptDialogOpen(true); 
                                 }}>
                                   <ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt
                                 </DropdownMenuItem>
@@ -727,9 +713,8 @@ function StudentsContent() {
                                     className="text-destructive font-bold" 
                                     onSelect={(e) => { 
                                       e.preventDefault();
-                                      closeAllModals();
                                       setSelectedStudent(student); 
-                                      setTimeout(() => setIsDeleteAlertOpen(true), 200); 
+                                      setIsDeleteAlertOpen(true); 
                                     }}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Permanent Delete
@@ -1271,7 +1256,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
               <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
               <TableBody>
                 {student.payments?.map((p: any) => (
-                  <TableRow key={p.id} className="hover:bg-muted/30">
+                  <TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30">
                     <TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell>
                     <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
                     <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>

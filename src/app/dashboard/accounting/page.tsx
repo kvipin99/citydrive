@@ -77,22 +77,30 @@ export default function AccountingPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // Exact branch name match
+    // 1. Explicit branch name match (e.g., "branch1" === "branch1")
     if (rBranch === targetBranch) return true;
 
-    // Logic based on Branch IDs (B1, B2...)
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
-      const prefix = `B${branchNum}`.toLowerCase();
-      // Match if the branch field is just the code
-      if (rBranch === prefix) return true;
+      const bCode = `b${branchNum}`;
+      // 2. Check if the branch field is just the code
+      if (rBranch === bCode) return true;
       
       const rid = (record.id || '').toLowerCase();
       const sid = (record.studentId || '').toLowerCase();
       
-      // Match by ID prefixes
-      if (rid.includes(`-${prefix}-`) || rid.startsWith(`${prefix}`) || rid.startsWith(`rec-${prefix}`) || rid.startsWith(`exp-${prefix}`) || rid.startsWith(`misc-${prefix}`)) return true;
-      if (sid.startsWith(prefix)) return true;
+      // 3. Robust pattern matching in IDs (covers exp-b1, rec-b1, -b1-, b1-at-start)
+      const patterns = [
+        bCode,
+        `-${bCode}-`,
+        `exp-${bCode}`,
+        `rec-${bCode}`,
+        `misc-${bCode}`,
+        `${bCode}-`
+      ];
+      
+      if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
+      if (rid.startsWith(bCode) || sid.startsWith(bCode)) return true;
     }
     return false;
   }, []);
