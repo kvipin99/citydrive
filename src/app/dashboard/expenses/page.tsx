@@ -60,6 +60,8 @@ export default function ExpensesPage() {
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
+  
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
@@ -85,6 +87,12 @@ export default function ExpensesPage() {
     }
   }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
 
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranchFilter(profileBranch || "Branch 1");
+    }
+  }, [profile?.branch, isAdmin, profileBranch]);
+
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -92,25 +100,14 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch || '');
     const targetBranch = normalize(branchName);
     
-    // 1. Explicit branch name match
     if (rBranch === targetBranch) return true;
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
       const bCode = `b${branchNum}`;
-      // 2. Check if the branch field is just the code
       if (rBranch === bCode) return true;
-      
       const rid = (record.id || '').toLowerCase();
-      
-      // 3. Robust pattern matching in IDs
-      const patterns = [
-        `-${bCode}-`,
-        `exp-${bCode}`,
-        `-${bCode}`,
-        bCode
-      ];
-      
+      const patterns = [`-${bCode}-`, `exp-${bCode}`, `-${bCode}`, bCode];
       if (patterns.some(p => rid.includes(p))) return true;
       if (rid.startsWith(bCode)) return true;
     }
@@ -126,14 +123,13 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
 
-    // Admin sees all branches, Branch Manager restricted to their own
-    const currentBranchContext = isAdmin ? "All" : (profileBranch || "Branch 1");
+    const currentBranchContext = isManagement ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(e => isFromBranch(e, currentBranchContext));
     }
 
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, dateRange, isAdmin, profileBranch, isFromBranch]);
+  }, [expenses, dateRange, isManagement, selectedBranchFilter, profileBranch, isFromBranch]);
 
   const handleOpenDialog = (expense: ExpenseRecord | null = null) => {
     if (expense) {
@@ -216,11 +212,25 @@ export default function ExpensesPage() {
               <Wallet className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-lg">Expenditure Log</CardTitle>
-                <CardDescription>Records for {isAdmin ? 'all branches' : profileBranch}.</CardDescription>
+                <CardDescription>Records for {isManagement ? (selectedBranchFilter === 'All' ? 'all branches' : selectedBranchFilter) : (profileBranch)}.</CardDescription>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
+              {isManagement && (
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                  <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter} disabled={!isAdmin}>
+                    <SelectTrigger className="h-8 w-[130px] text-[10px] font-bold border-none shadow-none bg-transparent">
+                      <SelectValue placeholder="Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Branches</SelectItem>
+                      {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
                 <Input 
