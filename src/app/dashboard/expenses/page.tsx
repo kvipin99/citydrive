@@ -85,13 +85,6 @@ export default function ExpensesPage() {
     }
   }, [profile, isAdmin, profileBranch]);
 
-  useEffect(() => {
-    if (profile && !selectedExpense && isDialogOpen) {
-      const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
-      setFormData(prev => ({ ...prev, branch: defaultBranch }));
-    }
-  }, [profile?.branch, selectedExpense, isDialogOpen, isAdmin, profileBranch]);
-
   // Robust matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
@@ -100,19 +93,19 @@ export default function ExpensesPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    const getNum = (s: string) => s.match(/\d+/)?.[0] || '';
-    const rNum = getNum(rBranch);
-    const tNum = getNum(targetBranch);
-    if (rNum && tNum && rNum === tNum) return true;
+    // 2. Numeric Match
+    const tNum = branchName.match(/\d+/)?.[0];
+    const rNum = record.branch?.match(/\d+/)?.[0];
+    if (tNum && rNum && tNum === rNum) return true;
 
-    const rid = normalize(record.id || '');
-    const bCode = tNum ? `b${tNum}` : '';
-    if (bCode) {
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
-      if (patterns.some(p => rid.includes(p))) return true;
-      if (rid.startsWith(bCode)) return true;
+    // 3. ID Based Matching (Precise)
+    if (tNum) {
+      const rid = normalize(record.id || '');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      if (bPattern.test(rid)) return true;
     }
     
     return false;
@@ -127,8 +120,6 @@ export default function ExpensesPage() {
     if (!expenses) return [];
     let result = expenses.filter(e => isWithinRange(e.date));
     
-    // Admins can filter by specific branch or see "All"
-    // Managers see only their assigned branch.
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
@@ -159,6 +150,7 @@ export default function ExpensesPage() {
         branch: defaultBranch,
       });
     }
+    // Delay to prevent UI stuck state
     setTimeout(() => setIsDialogOpen(true), 150);
   };
 
@@ -193,7 +185,7 @@ export default function ExpensesPage() {
   const handleDeleteExpense = (id: string) => {
     const expenseRef = doc(db, 'expenses', id);
     deleteDocumentNonBlocking(expenseRef);
-    toast({ variant: "destructive", title: "Expense Deleted", description: "The record has been permanently removed." });
+    toast({ variant: "destructive", title: "Expense Deleted" });
   };
 
   const isActuallyLoading = isProfileLoading || isExpensesLoading;

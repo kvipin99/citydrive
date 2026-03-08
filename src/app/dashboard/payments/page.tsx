@@ -63,7 +63,6 @@ export default function StudentReceiptsPage() {
   const isStaff = isManagement || profile?.role === 'Instructor';
   const profileBranch = profile?.branch;
 
-  // Only fetch controls if staff to avoid permission error for students
   const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
   const { data: controls } = useDoc(controlsRef);
 
@@ -89,31 +88,28 @@ export default function StudentReceiptsPage() {
     description: ''
   });
 
+  // Robust Precise Branch Matching
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct match
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // 2. Numeric identifier match
-    const rNum = rBranch.match(/\d+/)?.[0];
-    const tNum = targetBranch.match(/\d+/)?.[0];
-    if (rNum && tNum && rNum === tNum) return true;
+    // 2. Numeric Match
+    const tNum = branchName.match(/\d+/)?.[0];
+    const rNum = record.branch?.match(/\d+/)?.[0];
+    if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching
-    const rid = normalize(record.id || '');
-    const sid = normalize(record.studentId || '');
-    const searchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    
-    if (searchNum) {
-      const bCode = `b${searchNum}`;
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
-      if (patterns.some(p => rid.includes(p) || sid.includes(p))) return true;
-      if (rid.startsWith(bCode)) return true;
+    // 3. ID Based Matching (Precise)
+    if (tNum) {
+      const rid = normalize(record.id || '');
+      const sid = normalize(record.studentId || '');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
 
     return false;
@@ -318,7 +314,7 @@ export default function StudentReceiptsPage() {
               onChange={(e) => setListSearchTerm(e.target.value)} 
             />
           </div>
-          <Button onClick={() => { resetForm(); setIsReceiptDialogOpen(true); }} className="shadow-lg">
+          <Button onClick={() => { resetForm(); setTimeout(() => setIsReceiptDialogOpen(true), 150); }} className="shadow-lg">
             <PlusCircle className="mr-2 h-4 w-4" />
             Collect Fee
           </Button>
@@ -389,7 +385,7 @@ export default function StudentReceiptsPage() {
                       <TableCell><Badge variant="outline" className="text-[10px] uppercase font-bold">{r.branch}</Badge></TableCell>
                       <TableCell><div className="flex items-center gap-2 text-xs font-medium"><CreditCard className="h-3.5 w-3.5 text-muted-foreground" />{r.method}</div></TableCell>
                       <TableCell className="text-right font-black text-green-600 pr-6">₹{r.amount?.toLocaleString()}</TableCell>
-                      <TableCell>{isAdmin && (<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem className="text-destructive font-bold" onClick={() => handleDeleteReceipt(r)}><Trash2 className="mr-2 h-4 w-4" /> Delete Receipt</DropdownMenuItem></DropdownMenuContent></DropdownMenu>)}</TableCell>
+                      <TableCell>{isAdmin && (<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem className="text-destructive font-bold" onClick={(e) => { e.preventDefault(); handleDeleteReceipt(r); }}><Trash2 className="mr-2 h-4 w-4" /> Delete Receipt</DropdownMenuItem></DropdownMenuContent></DropdownMenu>)}</TableCell>
                     </TableRow>
                   ))
                 )}

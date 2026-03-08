@@ -141,25 +141,29 @@ function StudentsContent() {
     description: ''
   });
 
-  // Synchronized robust matching logic
+  // Synchronized precise matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
     const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    const getNum = (s: string) => s.match(/\d+/)?.[0] || '';
-    const rNum = getNum(rBranch);
-    const tNum = getNum(targetBranch);
-    if (rNum && tNum && rNum === tNum) return true;
+    // 2. Numeric Match
+    const tNum = branchName.match(/\d+/)?.[0];
+    const rNum = record.branch?.match(/\d+/)?.[0];
+    if (tNum && rNum && tNum === rNum) return true;
 
-    const rid = normalize(record.id || '');
-    const bCode = tNum ? `b${tNum}` : '';
-    if (bCode) {
-      if (rid.startsWith(bCode) || rid.includes(`-${bCode}-`)) return true;
+    // 3. ID Based Matching (Precise)
+    if (tNum) {
+      const rid = normalize(record.id || '');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      if (bPattern.test(rid)) return true;
     }
+    
     return false;
   }, []);
 

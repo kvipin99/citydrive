@@ -10,12 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+
+const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -40,10 +43,17 @@ export default function AccountingPage() {
   const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
+  const [selectedBranch, setSelectedBranch] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
   });
+
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      setSelectedBranch(profile.branch || "Branch 1");
+    }
+  }, [profile, isAdmin]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -58,30 +68,28 @@ export default function AccountingPage() {
   const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
-  // Synchronized robust matching logic
+  // Synchronized precise matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().replace(/\s+/g, '').toLowerCase() || '';
-    const rBranch = normalize(record.branch || '');
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // Direct match
+    // 1. Direct Name Match
     if (rBranch && rBranch === targetBranch) return true;
 
-    // Numeric match (matches "B1" to "Branch 1")
-    const rNum = rBranch.match(/\d+/)?.[0];
-    const tNum = targetBranch.match(/\d+/)?.[0];
-    if (rNum && tNum && rNum === tNum) return true;
+    // 2. Numeric Match
+    const tNum = branchName.match(/\d+/)?.[0];
+    const rNum = record.branch?.match(/\d+/)?.[0];
+    if (tNum && rNum && tNum === rNum) return true;
 
-    // ID prefix match
-    const rid = normalize(record.id || '');
-    const branchNum = tNum || targetBranch.replace(/[^0-9]/g, '');
-    if (branchNum) {
-      const bCode = `b${branchNum}`;
-      const patterns = [bCode, `-${bCode}-`, `exp-${bCode}`, `rec-${bCode}`, `misc-${bCode}`];
-      if (patterns.some(p => rid.includes(p))) return true;
-      if (rid.startsWith(bCode)) return true;
+    // 3. ID Based Matching (Precise)
+    if (tNum) {
+      const rid = normalize(record.id || '');
+      const sid = normalize(record.studentId || '');
+      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
     return false;
@@ -128,14 +136,13 @@ export default function AccountingPage() {
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => isWithinRange(t.date));
     
-    // Admins see all consolidated, Managers see branch only
-    const currentBranchContext = isAdmin ? "All" : (profile?.branch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
     
     return result;
-  }, [allTransactions, dateRange, isAdmin, profile?.branch, isFromBranch]);
+  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -185,7 +192,7 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? "All" : (profile?.branch || "Branch 1");
+    const context = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
     const sourceData = allTransactions.filter(t => isFromBranch(t, context));
     
     sourceData.forEach(t => {
@@ -195,11 +202,11 @@ export default function AccountingPage() {
       else summary[monthKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const summary: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? "All" : (profile?.branch || "Branch 1");
+    const context = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
     const sourceData = allTransactions.filter(t => isFromBranch(t, context));
     
     sourceData.forEach(t => {
@@ -209,7 +216,7 @@ export default function AccountingPage() {
       else summary[yearKey].expense += t.amount;
     });
     return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [allTransactions, isAdmin, profile?.branch, isFromBranch]);
+  }, [allTransactions, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
@@ -264,16 +271,27 @@ export default function AccountingPage() {
         <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4" /> Period Filter
+              <CalendarIcon className="h-4 w-4" /> Filter Period
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {!isAdmin && (
-              <div className="p-3 rounded-lg bg-muted/50 border border-primary/10">
-                <p className="text-[10px] font-black uppercase text-primary mb-1">Current Branch</p>
-                <p className="text-sm font-bold flex items-center gap-2"><MapPin className="h-3 w-3" /> {profile?.branch}</p>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Branch View</Label>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
+                <SelectTrigger className="h-9 font-bold">
+                  <SelectValue placeholder="Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Branches</SelectItem>
+                  {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {!isAdmin && (
+                <div className="mt-2 p-2 rounded-md bg-muted/50 border flex items-center gap-2 text-xs font-medium">
+                  <MapPin className="h-3 w-3 text-primary" /> {profile?.branch}
+                </div>
+              )}
+            </div>
 
             <div className="space-y-3">
               <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
@@ -403,7 +421,7 @@ export default function AccountingPage() {
                 <CardHeader>
                   <CardTitle>Monthly Summaries</CardTitle>
                   <CardDescription>
-                    Aggregated performance by month for {isAdmin ? 'Full School' : profile?.branch}.
+                    Aggregated performance by month for {isAdmin ? (selectedBranch === 'All' ? 'Full School' : selectedBranch) : profile?.branch}.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
