@@ -3,10 +3,10 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { DollarSign, Wallet, ArrowUpRight, ArrowDownRight, Users } from "lucide-react";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, query, where, doc } from "firebase/firestore";
-import { format, isValid, parseISO, startOfMonth, startOfDay } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 export default function StatsCards() {
     const db = useFirestore();
@@ -30,11 +30,19 @@ export default function StatsCards() {
         return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
+    const studentsQuery = useMemoFirebase(() => {
+        if (!db || !user || !profile) return null;
+        if (isAdmin) return collection(db, 'students');
+        if (!profile.branch) return null;
+        return query(collection(db, 'students'), where('branch', '==', profile.branch));
+    }, [db, user, profile, isAdmin]);
+
     const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
     const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
+    const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
 
     const stats = useMemo(() => {
-        if (!profile || !payments || !expenses) return [];
+        if (!profile || !payments || !expenses || !students) return [];
 
         const today = new Date();
         const todayStr = format(today, 'yyyy-MM-dd');
@@ -69,10 +77,19 @@ export default function StatsCards() {
             return d && format(d, 'yyyy-MM') === thisMonthKey;
         }).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
+        const activeStudentsCount = students.filter(s => s.status === 'Active').length;
+
         const todayProfit = todayRevenue - todayExpense;
         const monthlyProfit = monthlyRevenue - monthlyExpense;
 
         return [
+            { 
+                title: "Active Students", 
+                value: activeStudentsCount.toString(), 
+                icon: <Users className="h-4 w-4 text-primary" />, 
+                description: "Currently enrolled",
+                trend: "neutral"
+            },
             { 
                 title: "Today's Revenue", 
                 value: `₹${todayRevenue.toLocaleString()}`, 
@@ -84,7 +101,7 @@ export default function StatsCards() {
                 title: "Today's Net Profit", 
                 value: `₹${todayProfit.toLocaleString()}`, 
                 icon: <Wallet className="h-4 w-4 text-primary" />, 
-                description: "Net intake after expenses",
+                description: "Net intake today",
                 trend: todayProfit >= 0 ? "positive" : "negative"
             },
             { 
@@ -98,16 +115,16 @@ export default function StatsCards() {
                 title: "Monthly Net Profit", 
                 value: `₹${monthlyProfit.toLocaleString()}`, 
                 icon: <Wallet className="h-4 w-4 text-primary" />, 
-                description: "Cumulative for this month",
+                description: "This month's net",
                 trend: monthlyProfit >= 0 ? "positive" : "negative"
             }
         ];
-    }, [payments, expenses, profile]);
+    }, [payments, expenses, students, profile]);
 
-    if (isPaymentsLoading || isExpensesLoading || !profile) {
+    if (isPaymentsLoading || isExpensesLoading || isStudentsLoading || !profile) {
         return (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[1, 2, 3, 4].map((i) => (
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+                {[1, 2, 3, 4, 5].map((i) => (
                     <Card key={i} className="animate-pulse">
                         <CardHeader className="h-10 bg-muted/50 rounded-t-lg" />
                         <CardContent className="h-20 bg-muted/30" />
@@ -118,7 +135,7 @@ export default function StatsCards() {
     }
 
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
             {stats.map((stat) => (
                 <Card key={stat.title} className="shadow-sm border-primary/10 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
