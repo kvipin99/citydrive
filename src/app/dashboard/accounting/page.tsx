@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, Tag } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, ListTree, PieChart } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -63,7 +63,7 @@ export default function AccountingPage() {
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [viewMode, setViewMode] = useState<'detailed' | 'summary'>('detailed');
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
@@ -157,13 +157,9 @@ export default function AccountingPage() {
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
-
-    if (selectedCategory !== "All") {
-      result = result.filter(t => t.category === selectedCategory);
-    }
     
     return result;
-  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch, selectedCategory]);
+  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -171,6 +167,29 @@ export default function AccountingPage() {
   const totalIncome = incomeTransactions.reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
+
+  // Category Summaries
+  const incomeCategorySummary = useMemo(() => {
+    const summary: Record<string, { count: number, total: number }> = {};
+    incomeTransactions.forEach(t => {
+      const cat = t.category || "Other Income";
+      if (!summary[cat]) summary[cat] = { count: 0, total: 0 };
+      summary[cat].count++;
+      summary[cat].total += t.amount;
+    });
+    return Object.entries(summary).sort((a, b) => b[1].total - a[1].total);
+  }, [incomeTransactions]);
+
+  const expenseCategorySummary = useMemo(() => {
+    const summary: Record<string, { count: number, total: number }> = {};
+    expenseTransactions.forEach(t => {
+      const cat = t.category || "Others";
+      if (!summary[cat]) summary[cat] = { count: 0, total: 0 };
+      summary[cat].count++;
+      summary[cat].total += t.amount;
+    });
+    return Object.entries(summary).sort((a, b) => b[1].total - a[1].total);
+  }, [expenseTransactions]);
 
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) {
@@ -424,27 +443,6 @@ export default function AccountingPage() {
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Item Wise Filter</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="h-9 font-bold">
-                  <div className="flex items-center gap-2">
-                    <Tag className="h-3 w-3" />
-                    <SelectValue placeholder="All Categories" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  <SelectItem value="All">All Items</SelectItem>
-                  <Separator className="my-1" />
-                  <div className="px-2 py-1.5 text-[10px] font-black text-green-600 uppercase tracking-wider">Income Items</div>
-                  {INCOME_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                  <Separator className="my-1" />
-                  <div className="px-2 py-1.5 text-[10px] font-black text-red-600 uppercase tracking-wider">Expense Items</div>
-                  {EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-3">
               <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
               <div className="space-y-2">
@@ -516,13 +514,38 @@ export default function AccountingPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/50 border print-hidden">
-              <TabsTrigger value="daybook">Daybook Log</TabsTrigger>
-              <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              <TabsTrigger value="yearly">Yearly</TabsTrigger>
-            </TabsList>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <TabsList className="grid w-full grid-cols-3 max-w-md bg-muted/50 border print-hidden">
+                <TabsTrigger value="daybook">Daybook Log</TabsTrigger>
+                <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                <TabsTrigger value="yearly">Yearly</TabsTrigger>
+              </TabsList>
+
+              {activeTab === 'daybook' && (
+                <div className="flex items-center gap-2 print-hidden">
+                  <Button 
+                    size="sm" 
+                    variant={viewMode === 'detailed' ? 'default' : 'outline'} 
+                    onClick={() => setViewMode('detailed')}
+                    className="h-8 text-[10px] font-bold uppercase"
+                  >
+                    <ListTree className="h-3 w-3 mr-1.5" />
+                    Itemized Log
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant={viewMode === 'summary' ? 'default' : 'outline'} 
+                    onClick={() => setViewMode('summary')}
+                    className="h-8 text-[10px] font-bold uppercase"
+                  >
+                    <PieChart className="h-3 w-3 mr-1.5" />
+                    Category Summary
+                  </Button>
+                </div>
+              )}
+            </div>
             
-            <TabsContent value="daybook" className="mt-4">
+            <TabsContent value="daybook" className="mt-0">
               {isLoading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 print-dual-table">
                   <Card className="border-green-100 shadow-sm overflow-hidden">
@@ -531,11 +554,17 @@ export default function AccountingPage() {
                         <CardTitle className="text-sm font-black text-green-700 uppercase tracking-widest flex items-center gap-2">
                           <DollarSign className="h-4 w-4" /> Income / Credit
                         </CardTitle>
-                        <Badge variant="outline" className="bg-white text-green-700 border-green-200 print-hidden">{incomeTransactions.length} Items</Badge>
+                        <Badge variant="outline" className="bg-white text-green-700 border-green-200 print-hidden">
+                          {viewMode === 'detailed' ? `${incomeTransactions.length} Items` : 'By Category'}
+                        </Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <ItemizedTable transactions={incomeTransactions} colorClass="text-green-600" />
+                      {viewMode === 'detailed' ? (
+                        <ItemizedTable transactions={incomeTransactions} colorClass="text-green-600" />
+                      ) : (
+                        <CategorySummaryTable data={incomeCategorySummary} colorClass="text-green-600" />
+                      )}
                       {incomeTransactions.length > 0 && (
                         <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
                           <span className="text-[10px] font-bold uppercase text-green-700">Total Credit</span>
@@ -551,11 +580,17 @@ export default function AccountingPage() {
                         <CardTitle className="text-sm font-black text-red-700 uppercase tracking-widest flex items-center gap-2">
                           <Receipt className="h-4 w-4" /> Expenses / Debit
                         </CardTitle>
-                        <Badge variant="outline" className="bg-white text-red-700 border-red-200 print-hidden">{expenseTransactions.length} Items</Badge>
+                        <Badge variant="outline" className="bg-white text-red-700 border-red-200 print-hidden">
+                          {viewMode === 'detailed' ? `${expenseTransactions.length} Items` : 'By Category'}
+                        </Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
+                      {viewMode === 'detailed' ? (
+                        <ItemizedTable transactions={expenseTransactions} colorClass="text-red-600" />
+                      ) : (
+                        <CategorySummaryTable data={expenseCategorySummary} colorClass="text-red-600" />
+                      )}
                       {expenseTransactions.length > 0 && (
                         <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
                           <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
@@ -655,6 +690,46 @@ function ItemizedTable({ transactions, colorClass }: { transactions: Transaction
               </TableCell>
               <TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>
                 ₹{t.amount.toLocaleString()}
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function CategorySummaryTable({ data, colorClass }: { data: [string, { count: number, total: number }][], colorClass: string }) {
+  return (
+    <Table>
+      <TableHeader className="bg-muted/20">
+        <TableRow>
+          <TableHead className="pl-4">Category Item</TableHead>
+          <TableHead className="text-center">Entries</TableHead>
+          <TableHead className="text-right pr-4">Total Amount</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {data.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center py-16 text-muted-foreground italic">
+              <div className="flex flex-col items-center gap-2 opacity-40">
+                <Layers className="h-8 w-8" />
+                <p className="text-xs">No entries for this period.</p>
+              </div>
+            </TableCell>
+          </TableRow>
+        ) : (
+          data.map(([cat, vals]) => (
+            <TableRow key={cat} className="hover:bg-muted/10 group">
+              <TableCell className="pl-4">
+                <span className="font-bold text-xs text-foreground uppercase tracking-tight">{cat}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="secondary" className="text-[10px] py-0">{vals.count}</Badge>
+              </TableCell>
+              <TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>
+                ₹{vals.total.toLocaleString()}
               </TableCell>
             </TableRow>
           ))
