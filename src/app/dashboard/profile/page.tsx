@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from "@/firebase";
@@ -11,6 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint, FileText, Receipt as ReceiptIcon } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { useMemo } from "react";
+
+const typeLabelMap: Record<string, string> = {
+  '2wlr': '2W',
+  '3wlr': '3W',
+  '4wlr': '4W',
+  'Heavy': 'HV',
+  'Other': 'OT',
+  'N/A': 'N/A'
+};
 
 export default function StudentProfilePage() {
   const { user } = useUser();
@@ -33,6 +41,9 @@ export default function StudentProfilePage() {
   }, [db, user?.uid]);
   const { data: attendance } = useCollection(attendanceQuery);
 
+  const vehiclesQuery = useMemoFirebase(() => (db ? collection(db, "vehicles") : null), [db]);
+  const { data: vehicles } = useCollection(vehiclesQuery);
+
   const paidAmount = useMemo(() => {
     return student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
   }, [student?.payments]);
@@ -40,15 +51,26 @@ export default function StudentProfilePage() {
   const balance = (student?.amount || 0) - paidAmount;
   
   const hourStats = useMemo(() => {
-    if (!attendance) return { practical: 0, theory: 0, total: 0 };
+    if (!attendance) return { practical: 0, theory: 0, total: 0, byType: {} as Record<string, number> };
+    
+    const vMap: Record<string, string> = {};
+    vehicles?.forEach(v => { vMap[v.id] = v.type; });
+
     return attendance.reduce((acc, curr) => {
       const h = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') acc.theory += h;
-      else acc.practical += h;
+      if (curr.type === 'Theory') {
+        acc.theory += h;
+      } else {
+        acc.practical += h;
+        const type = curr.vehicleType || vMap[curr.vehicleId] || 'Other';
+        if (type !== 'N/A') {
+          acc.byType[type] = (acc.byType[type] || 0) + h;
+        }
+      }
       acc.total += h;
       return acc;
-    }, { practical: 0, theory: 0, total: 0 });
-  }, [attendance]);
+    }, { practical: 0, theory: 0, total: 0, byType: {} as Record<string, number> });
+  }, [attendance, vehicles]);
 
   if (isStudentLoading) {
     return (
@@ -61,7 +83,7 @@ export default function StudentProfilePage() {
   if (!student) {
     return (
       <div className="text-center py-12">
-        <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+        < GraduationCap className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
         <h2 className="text-xl font-bold">Profile Not Found</h2>
         <p className="text-muted-foreground">Your student record could not be located.</p>
       </div>
@@ -97,7 +119,12 @@ export default function StudentProfilePage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Practical Log" value={`${hourStats.practical.toFixed(1)}h`} icon={<Car className="text-blue-600" />} />
+        <StatCard 
+          label="Practical Log" 
+          value={`${hourStats.practical.toFixed(1)}h`} 
+          icon={<Car className="text-blue-600" />} 
+          breakdown={hourStats.byType}
+        />
         <StatCard label="Theory Log" value={`${hourStats.theory.toFixed(1)}h`} icon={<BookOpen className="text-orange-600" />} />
         <StatCard label="Fees Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="text-green-600" />} />
         <StatCard label="Balance Due" value={`₹${balance.toLocaleString()}`} icon={<Clock className="text-destructive" />} />
@@ -254,15 +281,26 @@ export default function StudentProfilePage() {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) {
+function StatCard({ label, value, icon, breakdown }: { label: string, value: string, icon: React.ReactNode, breakdown?: Record<string, number> }) {
   return (
     <Card className="shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xs font-bold uppercase text-muted-foreground tracking-wider">{label}</CardTitle>
+        <CardTitle className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">{label}</CardTitle>
         <div className="h-4 w-4">{icon}</div>
       </CardHeader>
       <CardContent>
         <div className="text-xl font-black">{value}</div>
+        {breakdown && Object.keys(breakdown).length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {Object.entries(breakdown).map(([type, hours]) => (
+              hours > 0 && (
+                <Badge key={type} variant="outline" className="text-[8px] px-1 py-0 h-4 font-mono font-bold bg-muted/30 border-primary/10">
+                  {typeLabelMap[type] || type}: {hours.toFixed(1)}h
+                </Badge>
+              )
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

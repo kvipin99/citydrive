@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -19,6 +18,15 @@ import { Search, Calendar, GraduationCap, Car, Filter, RefreshCw, ArrowRight, Us
 import { format, addDays, isValid, parseISO } from "date-fns";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
+const typeLabelMap: Record<string, string> = {
+  '2wlr': '2W',
+  '3wlr': '3W',
+  '4wlr': '4W',
+  'Heavy': 'HV',
+  'Other': 'OT',
+  'N/A': 'N/A'
+};
 
 export default function TestSearchPage() {
   const db = useFirestore();
@@ -271,7 +279,6 @@ export default function TestSearchPage() {
 }
 
 function StudentProfileViewContent({ student, db }: any) {
-  const studentId = student?.id;
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student?.userId) return null;
     // CRITICAL: Must satisfies the studentUid == auth.uid rule
@@ -280,19 +287,34 @@ function StudentProfileViewContent({ student, db }: any) {
 
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
 
+  const vehiclesQuery = useMemoFirebase(() => (db ? collection(db, 'vehicles') : null), [db]);
+  const { data: vehicles } = useCollection(vehiclesQuery);
+
   const stats = useMemo(() => {
+    if (!attendance) return { practical: 0, theory: 0, paid: 0, balance: 0, byType: {} as Record<string, number> };
+    
+    const vMap: Record<string, string> = {};
+    vehicles?.forEach(v => { vMap[v.id] = v.type; });
+
     const hours = (attendance || []).reduce((acc, curr) => {
       const h = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') acc.theory += h;
-      else acc.practical += h;
+      if (curr.type === 'Theory') {
+        acc.theory += h;
+      } else {
+        acc.practical += h;
+        const type = curr.vehicleType || vMap[curr.vehicleId] || 'Other';
+        if (type !== 'N/A') {
+          acc.byType[type] = (acc.byType[type] || 0) + h;
+        }
+      }
       return acc;
-    }, { practical: 0, theory: 0 });
+    }, { practical: 0, theory: 0, byType: {} as Record<string, number> });
 
     const paid = student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0;
     const balance = Math.max(0, (student.amount || 0) - paid);
 
     return { ...hours, paid, balance };
-  }, [attendance, student]);
+  }, [attendance, student, vehicles]);
 
   const formatSafeDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
@@ -323,7 +345,7 @@ function StudentProfileViewContent({ student, db }: any) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatSummary label="Practical Hr" value={`${stats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" />
+        <StatSummary label="Practical Hr" value={`${stats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" breakdown={stats.byType} />
         <StatSummary label="Theory Hr" value={`${stats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
         <StatSummary label="Paid" value={`₹${stats.paid.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
         <StatSummary label="Balance" value={`₹${stats.balance.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
@@ -417,7 +439,7 @@ function StudentProfileViewContent({ student, db }: any) {
   );
 }
 
-function StatSummary({ label, value, icon, color }: any) {
+function StatSummary({ label, value, icon, color, breakdown }: any) {
   const colorMap: Record<string, string> = {
     primary: "bg-primary/5 border-primary/10 text-primary",
     green: "bg-green-50/50 border-green-100 text-green-700",
@@ -432,6 +454,17 @@ function StatSummary({ label, value, icon, color }: any) {
       </CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="text-xl font-black">{value}</div>
+        {breakdown && Object.keys(breakdown).length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {Object.entries(breakdown).map(([type, hours]: [string, any]) => (
+              hours > 0 && (
+                <Badge key={type} variant="outline" className="text-[8px] px-1 py-0 h-4 font-mono font-bold bg-muted/30 border-primary/10">
+                  {typeLabelMap[type] || type}: {hours.toFixed(1)}h
+                </Badge>
+              )
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

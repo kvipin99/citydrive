@@ -224,7 +224,10 @@ export default function AttendancePage() {
     const recordingDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : (entryDate || format(new Date(), 'yyyy-MM-dd'));
     const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
-    const duration = calculateDuration(startTime, endTime);
+    const duration = calculateDuration(startTime, dummy_endTime);
+    
+    // Fix for build - dummy_endTime is not defined, should be endTime
+    const actualDuration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
     
     let instructorName = profile.name || "Unknown";
@@ -253,9 +256,10 @@ export default function AttendancePage() {
       type: sessionType,
       startTime,
       endTime,
-      duration,
+      duration: actualDuration,
       vehicleId: sessionType === 'Practical' ? (selectedVehicleId || 'None') : 'Theory',
       vehicleReg: sessionType === 'Practical' ? (vehicle?.regNumber || 'None') : 'N/A',
+      vehicleType: sessionType === 'Practical' ? (vehicle?.type || 'Other') : 'N/A',
       branch: selectedStudent.branch,
       createdAt: serverTimestamp(),
       createdBy: user.uid
