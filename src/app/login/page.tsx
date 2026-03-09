@@ -138,7 +138,7 @@ export default function LoginPage() {
             <div className="relative h-20 w-20 rounded-3xl bg-white p-1 shadow-xl border-4 border-primary transform -rotate-6 animate-in fade-in zoom-in duration-500 overflow-hidden">
               <Image 
                 src="/logo.png" 
-                alt="CDS Logo" 
+                alt="CDS logo" 
                 fill 
                 className="object-contain p-1" 
                 priority
