@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
@@ -17,7 +17,7 @@ export default function TomorrowTestAlerts() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   
   const studentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -28,36 +28,50 @@ export default function TomorrowTestAlerts() {
 
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
+  // Robust Branch Isolation Logic (Same as Accounting/Expenses)
+  const isFromBranch = useCallback((record: any, branchName: string) => {
+    if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
+    const rBranch = normalize(record.branch);
+    const targetBranch = normalize(branchName);
+    
+    if (rBranch === targetBranch) return true;
+
+    const tNum = branchName.match(/\d+/)?.[0];
+    const rNum = record.branch?.match(/\d+/)?.[0];
+    if (tNum && rNum && tNum === rNum) return true;
+
+    if (tNum) {
+      const rid = normalize(record.id || '');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
+      if (bPattern.test(rid)) return true;
+    }
+    
+    return false;
+  }, []);
+
   const upcomingTests = useMemo(() => {
     if (!students || !profile) return [];
 
-    const currentBranch = profile.branch;
+    const currentBranchContext = profile.branch || "Branch 1";
 
     return students.filter(s => {
-      // Test Date Check
+      // 1. Test Date Check
       const isTomorrow = s.learnersDate === tomorrowStr || s.testDate === tomorrowStr;
       if (!isTomorrow) return false;
 
-      // Branch Isolation Logic
+      // 2. Branch Isolation Logic
       if (isAdmin) return true;
-      
-      const normalize = (str: string) => str?.replace(/\s+/g, '').toLowerCase() || '';
-      const sBranch = normalize(s.branch);
-      const pBranch = normalize(currentBranch);
-      
-      if (sBranch === pBranch) return true;
-
-      const branchNum = currentBranch?.match(/\d+/)?.[0];
-      if (branchNum && s.id?.startsWith(`B${branchNum}`)) return true;
-
-      return false;
+      return isFromBranch(s, currentBranchContext);
     }).map(s => ({
       id: s.id,
       name: s.name,
       type: s.learnersDate === tomorrowStr ? 'Learners' : 'Driving',
-      date: s.learnersDate === tomorrowStr ? s.learnersDate : s.testDate
+      date: s.learnersDate === tomorrowStr ? s.learnersDate : s.testDate,
+      branch: s.branch
     }));
-  }, [students, profile, isAdmin, tomorrowStr]);
+  }, [students, profile, isAdmin, tomorrowStr, isFromBranch]);
 
   if (isLoading || upcomingTests.length === 0) return null;
 
@@ -67,7 +81,7 @@ export default function TomorrowTestAlerts() {
         <div className="grid gap-1">
           <CardTitle className="text-base flex items-center gap-2 text-orange-700 dark:text-orange-400 font-bold uppercase tracking-tight">
             <BellRing className="h-4 w-4 animate-pulse" />
-            License Tests Scheduled Tomorrow
+            Branch License Tests Tomorrow
           </CardTitle>
           <CardDescription className="text-[10px] sm:text-xs font-medium">
             {upcomingTests.length} student{upcomingTests.length > 1 ? 's' : ''} booked for exams on {format(addDays(new Date(), 1), 'EEEE, MMMM do')}.
@@ -84,14 +98,14 @@ export default function TomorrowTestAlerts() {
           {upcomingTests.map((s) => (
             <div key={s.id} className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-orange-100 dark:border-orange-900/20 group hover:shadow-md transition-all">
               <div className="flex items-center gap-2.5">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${s.type === 'Learners' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${s.type === 'Learners' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
                   {s.type === 'Learners' ? <GraduationCap className="h-4 w-4" /> : <Car className="h-4 w-4" />}
                 </div>
                 <div className="grid">
                   <span className="font-bold text-xs truncate max-w-[140px] group-hover:text-primary transition-colors">{s.name}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[9px] text-muted-foreground uppercase font-mono">{s.id}</span>
-                    <span className={`text-[8px] font-black px-1 rounded uppercase ${s.type === 'Learners' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                    <span className={`text-[8px] font-black px-1 rounded uppercase ${s.type === 'Learners' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
                       {s.type}
                     </span>
                   </div>

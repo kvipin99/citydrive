@@ -66,6 +66,9 @@ export default function DashboardPage() {
           </div>
         </div>
         
+        {/* Branch Alerts for Tomorrow's Tests */}
+        <TomorrowTestAlerts />
+
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <UpcomingClasses />
           <div className="space-y-6">
