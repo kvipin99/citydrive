@@ -1,11 +1,10 @@
-
 import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Citydrive Management System',
     short_name: 'Citydrive',
-    description: 'Comprehensive management system for driving schools.',
+    description: 'Comprehensive management system for CDS Driving School.',
     start_url: '/',
     display: 'standalone',
     background_color: '#f8fafc',
