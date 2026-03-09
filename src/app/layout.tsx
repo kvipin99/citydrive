@@ -8,6 +8,10 @@ import { PWAManager } from '@/components/pwa-manager';
 export const metadata: Metadata = {
   title: 'Citydrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
+  icons: {
+    icon: 'https://picsum.photos/seed/cds-driving-logo/32/32',
+    apple: 'https://picsum.photos/seed/cds-driving-logo/180/180',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -37,7 +41,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <link rel="apple-touch-icon" href="https://picsum.photos/seed/cds-driving-logo/180/180" />
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo, useEffect } from "react";
@@ -15,6 +16,8 @@ import { collection, doc, query, where } from "firebase/firestore";
 import { FileDown, Printer, Filter, DollarSign, Users, Receipt, RefreshCw, Calendar as CalendarIcon, Car } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import Image from "next/image";
+import placeholderData from "@/app/lib/placeholder-images.json";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -22,6 +25,8 @@ export default function ReportsPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+
+  const appLogo = placeholderData.placeholderImages.find(img => img.id === 'app-logo');
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
@@ -180,7 +185,6 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
-          /* Reset layout containers to eliminate blank space */
           html, body {
             width: 100% !important;
             height: auto !important;
@@ -189,7 +193,6 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
 
-          /* Force SidebarProvider and main components to fill width */
           [data-sidebar-wrapper],
           .sidebar-provider,
           [data-sidebar="inset"],
@@ -204,7 +207,6 @@ export default function ReportsPage() {
             transform: none !important;
           }
 
-          /* Hide interactive elements */
           .print-hidden, 
           nav, 
           header, 
@@ -242,8 +244,16 @@ export default function ReportsPage() {
       <div className="print-only-header">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-primary flex items-center justify-center rounded-lg text-white">
-              <Car className="h-6 w-6" />
+            <div className="relative h-10 w-10 bg-white flex items-center justify-center rounded-lg border-2 border-primary overflow-hidden">
+              {appLogo && (
+                <Image 
+                  src={appLogo.imageUrl} 
+                  alt="Logo" 
+                  fill 
+                  className="object-contain p-1" 
+                  data-ai-hint={appLogo.imageHint}
+                />
+              )}
             </div>
             <div>
               <h1 className="text-xl font-black text-primary uppercase">Citydrive Systems</h1>

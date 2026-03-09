@@ -2,6 +2,8 @@
 import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
+  const logoUrl = 'https://picsum.photos/seed/cds-driving-logo/512/512';
+  
   return {
     name: 'Citydrive Management System',
     short_name: 'Citydrive',
@@ -25,7 +27,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable',
       },
       {
-        src: 'https://picsum.photos/seed/cds-driving-logo/512/512',
+        src: logoUrl,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
