@@ -13,13 +13,31 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, Tag } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
+const INCOME_CATEGORIES = [
+  "Course Fee",
+  "Photostate / Printing",
+  "Admission Charge",
+  "Late Fee / Fine",
+  "Convenience Fee",
+  "Other Income"
+];
+
+const EXPENSE_CATEGORIES = [
+  "Fuel",
+  "Salaries",
+  "Maintenance",
+  "Rent",
+  "Utility",
+  "Others"
+];
 
 interface Transaction {
   id: string;
@@ -28,7 +46,7 @@ interface Transaction {
   amount: number;
   type: 'Income' | 'Expense';
   branch: string;
-  category?: string;
+  category: string;
   receiptNo?: string;
   studentId?: string;
 }
@@ -45,6 +63,7 @@ export default function AccountingPage() {
   
   const [activeTab, setActiveTab] = useState<string>("daybook");
   const [selectedBranch, setSelectedBranch] = useState<string>("All");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [dateRange, setDateRange] = useState({
     from: format(new Date(), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd')
@@ -112,6 +131,7 @@ export default function AccountingPage() {
       amount: Number(p.amount) || 0,
       type: 'Income',
       branch: p.branch || 'Unknown',
+      category: p.category || 'Other Income',
       receiptNo: p.receiptNo,
       studentId: p.studentId
     }));
@@ -123,7 +143,7 @@ export default function AccountingPage() {
       amount: Number(e.amount) || 0,
       type: 'Expense',
       branch: e.branch || 'Unknown',
-      category: e.category
+      category: e.category || 'Others'
     }));
 
     const combined = [...income, ...outgo];
@@ -137,9 +157,13 @@ export default function AccountingPage() {
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(t => isFromBranch(t, currentBranchContext));
     }
+
+    if (selectedCategory !== "All") {
+      result = result.filter(t => t.category === selectedCategory);
+    }
     
     return result;
-  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
+  }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch, selectedCategory]);
 
   const incomeTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Income'), [filteredTransactions]);
   const expenseTransactions = useMemo(() => filteredTransactions.filter(t => t.type === 'Expense'), [filteredTransactions]);
@@ -154,12 +178,13 @@ export default function AccountingPage() {
       return;
     }
 
-    const headers = ["Date", "Type", "Description", "Details", "Branch", "Amount (INR)"];
+    const headers = ["Date", "Type", "Category", "Description", "Details", "Branch", "Amount (INR)"];
     const rows = filteredTransactions.map(t => {
-      const details = t.receiptNo ? `REC:${t.receiptNo}` : (t.studentId ? `ID:${t.studentId}` : (t.category ? `CAT:${t.category}` : ''));
+      const details = t.receiptNo ? `REC:${t.receiptNo}` : (t.studentId ? `ID:${t.studentId}` : '');
       return [
         format(t.date, 'yyyy-MM-dd'),
         t.type,
+        t.category,
         t.description,
         details,
         t.branch,
@@ -176,6 +201,7 @@ export default function AccountingPage() {
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", `citydrive_accounting_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -376,7 +402,7 @@ export default function AccountingPage() {
         <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit print-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4" /> Filter Records
+              <Filter className="h-4 w-4" /> Filter Records
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -396,6 +422,27 @@ export default function AccountingPage() {
                   <MapPin className="h-3 w-3 text-primary" /> {profile?.branch}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Item Wise Filter</Label>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="h-9 font-bold">
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-3 w-3" />
+                    <SelectValue placeholder="All Categories" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="All">All Items</SelectItem>
+                  <Separator className="my-1" />
+                  <div className="px-2 py-1.5 text-[10px] font-black text-green-600 uppercase tracking-wider">Income Items</div>
+                  {INCOME_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  <Separator className="my-1" />
+                  <div className="px-2 py-1.5 text-[10px] font-black text-red-600 uppercase tracking-wider">Expense Items</div>
+                  {EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-3">
@@ -600,8 +647,8 @@ function ItemizedTable({ transactions, colorClass }: { transactions: Transaction
                   <span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span>
                   <div className="flex items-center gap-2 text-[9px] text-muted-foreground uppercase font-mono">
                     {t.branch && <span className="text-primary font-bold">{t.branch}</span>}
+                    {t.category && <span className="bg-muted px-1 rounded-sm text-[8px] font-black">{t.category}</span>}
                     {t.receiptNo && <span>#REC:{t.receiptNo}</span>}
-                    {t.category && <span>CAT:{t.category}</span>}
                     {t.studentId && <span>ID:{t.studentId}</span>}
                   </div>
                 </div>
