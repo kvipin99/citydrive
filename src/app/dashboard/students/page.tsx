@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,8 @@ function StudentsContent() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const editPhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,6 +142,18 @@ function StudentsContent() {
     date: format(new Date(), 'yyyy-MM-dd'),
     description: ''
   });
+
+  // Handle deep-link to student profile from dashboard
+  useEffect(() => {
+    const viewId = searchParams.get('id');
+    if (viewId && students && !isStudentsLoading) {
+      const student = students.find(s => s.id === viewId);
+      if (student) {
+        setSelectedStudent(student);
+        setIsProfileSheetOpen(true);
+      }
+    }
+  }, [searchParams, students, isStudentsLoading]);
 
   // Robust matching logic using boundaries
   const isFromBranch = useCallback((record: any, branchName: string) => {
@@ -598,7 +612,14 @@ function StudentsContent() {
         </CardContent>
       </Card>
 
-      <Sheet open={isProfileSheetOpen} onOpenChange={(open) => { setIsProfileSheetOpen(open); if(!open && !isStudent) setSelectedStudent(null); }}>
+      <Sheet open={isProfileSheetOpen} onOpenChange={(open) => { 
+        setIsProfileSheetOpen(open); 
+        if(!open) {
+          if (!isStudent) setSelectedStudent(null);
+          // Clear query params when closing if they were present
+          if (searchParams.get('id')) router.replace('/dashboard/students', { scroll: false });
+        }
+      }}>
         <SheetContent className="sm:max-w-3xl overflow-y-auto">
           <SheetHeader className="pb-6"><SheetTitle>Student Profile Dashboard</SheetTitle></SheetHeader>
           {selectedStudent && (<StudentProfileView student={selectedStudent} db={db} isAdmin={isAdmin} calculateBalanceDue={calculateBalanceDue} />)}

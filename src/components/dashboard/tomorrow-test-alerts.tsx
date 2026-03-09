@@ -96,7 +96,11 @@ export default function TomorrowTestAlerts() {
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {upcomingTests.map((s) => (
-            <div key={s.id} className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-orange-100 dark:border-orange-900/20 group hover:shadow-md transition-all">
+            <Link 
+              key={s.id} 
+              href={`/dashboard/students?id=${s.id}`}
+              className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-orange-100 dark:border-orange-900/20 group hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+            >
               <div className="flex items-center gap-2.5">
                 <div className={`h-8 w-8 rounded-full flex items-center justify-center ${s.type === 'Learners' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
                   {s.type === 'Learners' ? <GraduationCap className="h-4 w-4" /> : <Car className="h-4 w-4" />}
@@ -111,7 +115,8 @@ export default function TomorrowTestAlerts() {
                   </div>
                 </div>
               </div>
-            </div>
+              <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
           ))}
         </div>
       </CardContent>
