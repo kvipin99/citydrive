@@ -1,4 +1,3 @@
-
 "use client";
 
 import AiSummary from "@/components/dashboard/ai-summary";
@@ -8,6 +7,7 @@ import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alert
 import UpcomingClasses from "@/components/dashboard/upcoming-classes";
 import FleetStatus from "@/components/dashboard/fleet-status";
 import TomorrowTestAlerts from "@/components/dashboard/tomorrow-test-alerts";
+import { DashboardClock } from "@/components/dashboard/dashboard-clock";
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, where } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,21 +48,24 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
+          <div className="space-y-1">
             <h2 className="text-2xl font-bold tracking-tight">Hello, {welcomeName}!</h2>
             <p className="text-muted-foreground text-sm">Here is your agenda and fleet status for today.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="px-3 py-1 font-bold">
-              {profile?.branchName || profile?.branch || 'Operational'}
-            </Badge>
-            <Button asChild className="shadow-sm">
-              <Link href="/dashboard/attendance">
-                <CalendarCheck className="mr-2 h-4 w-4" />
-                Record Attendance
-                <ArrowRight className="ml-2 h-4 w-4 opacity-50" />
-              </Link>
-            </Button>
+          <div className="flex flex-col items-end gap-3">
+            <DashboardClock />
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="px-3 py-1 font-bold">
+                {profile?.branchName || profile?.branch || 'Operational'}
+              </Badge>
+              <Button asChild className="shadow-sm">
+                <Link href="/dashboard/attendance">
+                  <CalendarCheck className="mr-2 h-4 w-4" />
+                  Record Attendance
+                  <ArrowRight className="ml-2 h-4 w-4 opacity-50" />
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -93,13 +96,16 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold tracking-tight">{greeting}</h2>
-        <p className="text-muted-foreground text-sm">
-          {isAdmin 
-            ? "Here is the school's overview across all branches." 
-            : `Here is the performance status for ${currentBranchDisplay}.`}
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-bold tracking-tight">{greeting}</h2>
+          <p className="text-muted-foreground text-sm">
+            {isAdmin 
+              ? "Here is the school's overview across all branches." 
+              : `Here is the performance status for ${currentBranchDisplay}.`}
+          </p>
+        </div>
+        <DashboardClock />
       </div>
 
       <TomorrowTestAlerts />
@@ -148,9 +154,12 @@ function StudentDashboard({ uid, welcomeName }: { uid: string, welcomeName: stri
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold tracking-tight">Hello, {displayName}!</h2>
-        <p className="text-muted-foreground text-sm">Track your training progress and upcoming lessons.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-bold tracking-tight">Hello, {displayName}!</h2>
+          <p className="text-muted-foreground text-sm">Track your training progress and upcoming lessons.</p>
+        </div>
+        <DashboardClock />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
