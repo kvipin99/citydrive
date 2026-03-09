@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -426,7 +425,7 @@ export default function AccountingPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Branch View</Label>
+              <Label className="text-xs font-black uppercase text-primary tracking-widest">Branch View</Label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
                 <SelectTrigger className="h-9 font-bold">
                   <SelectValue placeholder="Branch" />
@@ -444,29 +443,29 @@ export default function AccountingPage() {
             </div>
 
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
+              <Label className="text-xs font-black uppercase text-primary tracking-widest">Date Range</Label>
               <div className="space-y-2">
                 <div className="grid gap-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
-                  <Input 
+                  <span className="text-xs font-medium text-muted-foreground uppercase">From</span>
+                  <input 
                     type="date" 
-                    className="h-9 text-xs" 
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" 
                     value={dateRange.from} 
                     onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
                   />
                 </div>
                 <div className="grid gap-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase">To</span>
-                  <Input 
+                  <span className="text-xs font-medium text-muted-foreground uppercase">To</span>
+                  <input 
                     type="date" 
-                    className="h-9 text-xs" 
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" 
                     value={dateRange.to} 
                     onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
                   />
                 </div>
                 <Button 
                   variant="outline" 
-                  className="w-full h-8 text-[10px] font-bold border-primary/20 text-primary hover:bg-primary/5"
+                  className="w-full h-8 text-[11px] font-bold border-primary/20 text-primary hover:bg-primary/5"
                   onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}
                 >
                   <CalendarIcon className="h-3 w-3 mr-1.5" />
@@ -481,34 +480,34 @@ export default function AccountingPage() {
           <div className="grid gap-4 md:grid-cols-3 print-grid">
             <Card className="border-l-4 border-l-green-500 shadow-sm bg-green-50/10">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Income</CardTitle>
+                <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Income</CardTitle>
                 <DollarSign className="h-4 w-4 text-green-500 print-hidden" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-black text-green-600">₹{totalIncome.toLocaleString()}</div>
-                <p className="text-[9px] text-muted-foreground font-medium">Selected period collections</p>
+                <p className="text-xs text-muted-foreground font-medium">Selected period collections</p>
               </CardContent>
             </Card>
             <Card className="border-l-4 border-l-red-500 shadow-sm bg-red-50/10">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Expenses</CardTitle>
+                <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Expenses</CardTitle>
                 <Receipt className="h-4 w-4 text-red-500 print-hidden" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-black text-red-600">₹{totalExpenses.toLocaleString()}</div>
-                <p className="text-[9px] text-muted-foreground font-medium">Selected period outgoings</p>
+                <p className="text-xs text-muted-foreground font-medium">Selected period outgoings</p>
               </CardContent>
             </Card>
             <Card className={`border-l-4 shadow-sm bg-primary/5 ${netProfit >= 0 ? 'border-l-primary' : 'border-l-orange-500'}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Net Balance</CardTitle>
+                <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Net Balance</CardTitle>
                 <TrendingUp className={`h-4 w-4 print-hidden ${netProfit >= 0 ? 'text-primary' : 'text-orange-500'}`} />
               </CardHeader>
               <CardContent>
                 <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-primary' : 'text-orange-600'}`}>
                   ₹{netProfit.toLocaleString()}
                 </div>
-                <p className="text-[9px] text-muted-foreground font-medium">Closing balance for period</p>
+                <p className="text-xs text-muted-foreground font-medium">Closing balance for period</p>
               </CardContent>
             </Card>
           </div>
@@ -527,7 +526,7 @@ export default function AccountingPage() {
                     size="sm" 
                     variant={viewMode === 'detailed' ? 'default' : 'outline'} 
                     onClick={() => setViewMode('detailed')}
-                    className="h-8 text-[10px] font-bold uppercase"
+                    className="h-8 text-[11px] font-bold uppercase"
                   >
                     <ListTree className="h-3 w-3 mr-1.5" />
                     Itemized Log
@@ -536,7 +535,7 @@ export default function AccountingPage() {
                     size="sm" 
                     variant={viewMode === 'summary' ? 'default' : 'outline'} 
                     onClick={() => setViewMode('summary')}
-                    className="h-8 text-[10px] font-bold uppercase"
+                    className="h-8 text-[11px] font-bold uppercase"
                   >
                     <PieChart className="h-3 w-3 mr-1.5" />
                     Category Summary
@@ -567,7 +566,7 @@ export default function AccountingPage() {
                       )}
                       {incomeTransactions.length > 0 && (
                         <div className="p-4 bg-green-50/30 border-t flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-green-700">Total Credit</span>
+                          <span className="text-xs font-bold uppercase text-green-700">Total Credit</span>
                           <span className="text-lg font-black text-green-700">₹{totalIncome.toLocaleString()}</span>
                         </div>
                       )}
@@ -593,7 +592,7 @@ export default function AccountingPage() {
                       )}
                       {expenseTransactions.length > 0 && (
                         <div className="p-4 bg-red-50/30 border-t flex justify-between items-center">
-                          <span className="text-[10px] font-bold uppercase text-red-700">Total Debit</span>
+                          <span className="text-xs font-bold uppercase text-red-700">Total Debit</span>
                           <span className="text-lg font-black text-red-700">₹{totalExpenses.toLocaleString()}</span>
                         </div>
                       )}
@@ -674,15 +673,15 @@ function ItemizedTable({ transactions, colorClass }: { transactions: Transaction
         ) : (
           transactions.map((t) => (
             <TableRow key={t.id} className="hover:bg-muted/10 group">
-              <TableCell className="pl-4 text-[10px] font-medium text-muted-foreground">
+              <TableCell className="pl-4 text-xs font-medium text-muted-foreground">
                 {format(t.date, 'MMM dd')}
               </TableCell>
               <TableCell>
                 <div className="grid gap-0.5">
                   <span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span>
-                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground uppercase font-mono">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase font-mono">
                     {t.branch && <span className="text-primary font-bold">{t.branch}</span>}
-                    {t.category && <span className="bg-muted px-1 rounded-sm text-[8px] font-black">{t.category}</span>}
+                    {t.category && <span className="bg-muted px-1 rounded-sm text-[10px] font-black">{t.category}</span>}
                     {t.receiptNo && <span>#REC:{t.receiptNo}</span>}
                     {t.studentId && <span>ID:{t.studentId}</span>}
                   </div>
@@ -726,7 +725,7 @@ function CategorySummaryTable({ data, colorClass }: { data: [string, { count: nu
                 <span className="font-bold text-xs text-foreground uppercase tracking-tight">{cat}</span>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="secondary" className="text-[10px] py-0">{vals.count}</Badge>
+                <Badge variant="secondary" className="text-xs py-0">{vals.count}</Badge>
               </TableCell>
               <TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>
                 ₹{vals.total.toLocaleString()}

@@ -76,8 +76,8 @@
 
 @layer base {
   html {
-    /* Set base font size to 110% of default (approx 17.6px) */
-    font-size: 110%;
+    /* Set base font size to 120% of default (approx 19.2px) for high visibility */
+    font-size: 120%;
   }
   * {
     @apply border-border;

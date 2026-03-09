@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -139,7 +138,7 @@ export default function StatsCards() {
             {stats.map((stat) => (
                 <Card key={stat.title} className="shadow-sm border-primary/10 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                             {stat.title}
                         </CardTitle>
                         {stat.icon}
@@ -151,7 +150,7 @@ export default function StatsCards() {
                         <div className="flex items-center gap-1 mt-1">
                             {stat.trend === 'positive' && <ArrowUpRight className="h-3 w-3 text-green-500" />}
                             {stat.trend === 'negative' && <ArrowDownRight className="h-3 w-3 text-red-500" />}
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-tight">
                                 {stat.description}
                             </p>
                         </div>

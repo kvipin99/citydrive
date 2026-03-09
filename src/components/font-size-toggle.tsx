@@ -17,8 +17,8 @@ import {
  * of the application for better accessibility and readability.
  */
 export function FontSizeToggle() {
-  // Default matches the global CSS 110%
-  const [size, setSize] = useState(110)
+  // Default matches the global CSS 120%
+  const [size, setSize] = useState(120)
 
   // Load saved preference on mount
   useEffect(() => {
@@ -60,7 +60,7 @@ export function FontSizeToggle() {
           <span>Decrease</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => updateSize(110)} className="gap-2 cursor-pointer text-primary">
+        <DropdownMenuItem onClick={() => updateSize(120)} className="gap-2 cursor-pointer text-primary">
           <RotateCcw className="h-4 w-4" />
           <span>Reset (Default)</span>
         </DropdownMenuItem>
