@@ -3,9 +3,10 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, Activity, Wallet } from "lucide-react";
+import { DollarSign, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, query, where, doc } from "firebase/firestore";
+import { format, isValid, parseISO, startOfMonth, startOfDay } from 'date-fns';
 
 export default function StatsCards() {
     const db = useFirestore();
@@ -13,14 +14,7 @@ export default function StatsCards() {
 
     const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
     const { data: profile } = useDoc(userProfileRef);
-    const isAdmin = profile?.role === 'Admin';
-
-    const studentsQuery = useMemoFirebase(() => {
-        if (!db || !user || !profile) return null;
-        if (isAdmin) return collection(db, 'students');
-        if (!profile.branch) return null;
-        return query(collection(db, 'students'), where('branch', '==', profile.branch));
-    }, [db, user, profile, isAdmin]);
+    const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
     const paymentsQuery = useMemoFirebase(() => {
         if (!db || !user || !profile) return null;
@@ -36,27 +30,81 @@ export default function StatsCards() {
         return query(collection(db, 'expenses'), where('branch', '==', profile.branch));
     }, [db, user, profile, isAdmin]);
 
-    const { data: students, isLoading: isStudentsLoading } = useCollection(studentsQuery);
     const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
     const { data: expenses, isLoading: isExpensesLoading } = useCollection(expensesQuery);
 
     const stats = useMemo(() => {
-        if (!profile) return [];
-        const totalStudents = students?.length || 0;
-        const activeStudents = students?.filter(s => s.status === 'Active').length || 0;
-        const totalRevenue = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
-        const totalExpenses = expenses?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0;
-        const netProfit = totalRevenue - totalExpenses;
+        if (!profile || !payments || !expenses) return [];
+
+        const today = new Date();
+        const todayStr = format(today, 'yyyy-MM-dd');
+        const thisMonthKey = format(today, 'yyyy-MM');
+
+        const parseSafeDate = (d: any) => {
+            if (!d) return null;
+            if (d.seconds) return new Date(d.seconds * 1000);
+            const parsed = typeof d === 'string' ? parseISO(d) : new Date(d);
+            return isValid(parsed) ? parsed : null;
+        };
+
+        // Calculations for Today
+        const todayRevenue = payments.filter(p => {
+            const d = parseSafeDate(p.date);
+            return d && format(d, 'yyyy-MM-dd') === todayStr;
+        }).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        const todayExpense = expenses.filter(e => {
+            const d = parseSafeDate(e.date);
+            return d && format(d, 'yyyy-MM-dd') === todayStr;
+        }).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+        // Calculations for This Month
+        const monthlyRevenue = payments.filter(p => {
+            const d = parseSafeDate(p.date);
+            return d && format(d, 'yyyy-MM') === thisMonthKey;
+        }).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        const monthlyExpense = expenses.filter(e => {
+            const d = parseSafeDate(e.date);
+            return d && format(d, 'yyyy-MM') === thisMonthKey;
+        }).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+        const todayProfit = todayRevenue - todayExpense;
+        const monthlyProfit = monthlyRevenue - monthlyExpense;
 
         return [
-            { title: "Total Students", value: totalStudents.toLocaleString(), icon: <Users className="h-4 w-4 text-muted-foreground" />, change: isAdmin ? "All records" : `At ${profile?.branch}` },
-            { title: "Active Students", value: activeStudents.toLocaleString(), icon: <Activity className="h-4 w-4 text-muted-foreground" />, change: "In training" },
-            { title: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-muted-foreground" />, change: "Fees collected" },
-            { title: "Net Profit", value: `₹${netProfit.toLocaleString()}`, icon: <Wallet className="h-4 w-4 text-muted-foreground" />, change: "Rev - Exp" }
+            { 
+                title: "Today's Revenue", 
+                value: `₹${todayRevenue.toLocaleString()}`, 
+                icon: <DollarSign className="h-4 w-4 text-green-500" />, 
+                description: format(today, 'EEE, MMM dd'),
+                trend: todayRevenue > 0 ? "positive" : "neutral"
+            },
+            { 
+                title: "Today's Net Profit", 
+                value: `₹${todayProfit.toLocaleString()}`, 
+                icon: <Wallet className="h-4 w-4 text-primary" />, 
+                description: "Net intake after expenses",
+                trend: todayProfit >= 0 ? "positive" : "negative"
+            },
+            { 
+                title: "Monthly Revenue", 
+                value: `₹${monthlyRevenue.toLocaleString()}`, 
+                icon: <DollarSign className="h-4 w-4 text-green-600" />, 
+                description: format(today, 'MMMM yyyy'),
+                trend: "neutral"
+            },
+            { 
+                title: "Monthly Net Profit", 
+                value: `₹${monthlyProfit.toLocaleString()}`, 
+                icon: <Wallet className="h-4 w-4 text-primary" />, 
+                description: "Cumulative for this month",
+                trend: monthlyProfit >= 0 ? "positive" : "negative"
+            }
         ];
-    }, [students, payments, expenses, isAdmin, profile]);
+    }, [payments, expenses, profile]);
 
-    if (isStudentsLoading || isPaymentsLoading || isExpensesLoading || !profile) {
+    if (isPaymentsLoading || isExpensesLoading || !profile) {
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (
@@ -72,18 +120,24 @@ export default function StatsCards() {
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {stats.map((stat) => (
-                <Card key={stat.title}>
+                <Card key={stat.title} className="shadow-sm border-primary/10 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">
+                        <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                             {stat.title}
                         </CardTitle>
                         {stat.icon}
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stat.value}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {stat.change}
-                        </p>
+                        <div className={`text-2xl font-black ${stat.trend === 'negative' ? 'text-red-600' : 'text-foreground'}`}>
+                            {stat.value}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                            {stat.trend === 'positive' && <ArrowUpRight className="h-3 w-3 text-green-500" />}
+                            {stat.trend === 'negative' && <ArrowDownRight className="h-3 w-3 text-red-500" />}
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                                {stat.description}
+                            </p>
+                        </div>
                     </CardContent>
                 </Card>
             ))}
