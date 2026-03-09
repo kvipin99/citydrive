@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -10,8 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, AlertCircle, Car, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
+import { Lock, User, AlertCircle, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Image from "next/image";
+import placeholderData from "@/app/lib/placeholder-images.json";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +43,8 @@ export default function LoginPage() {
   const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+
+  const appLogo = placeholderData.placeholderImages.find(img => img.id === 'app-logo');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,8 +138,16 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-primary overflow-hidden">
         <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 pt-10">
           <div className="flex justify-center mb-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-xl border-4 border-background transform -rotate-6 animate-in fade-in zoom-in duration-500">
-              <Car className="h-10 w-10" />
+            <div className="relative h-20 w-20 rounded-3xl bg-white p-1 shadow-xl border-4 border-primary transform -rotate-6 animate-in fade-in zoom-in duration-500 overflow-hidden">
+              {appLogo && (
+                <Image 
+                  src={appLogo.imageUrl} 
+                  alt="CDS Logo" 
+                  fill 
+                  className="object-contain p-1" 
+                  data-ai-hint={appLogo.imageHint}
+                />
+              )}
             </div>
           </div>
           <CardTitle className="text-3xl font-black tracking-tighter text-primary uppercase">CITYDRIVE</CardTitle>

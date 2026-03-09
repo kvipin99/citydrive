@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -12,9 +13,11 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, Car } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, Calendar as CalendarIcon, RefreshCw, Layers, FileDown, Printer, MapPin, Filter } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
+import Image from "next/image";
+import placeholderData from "@/app/lib/placeholder-images.json";
 import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
@@ -35,6 +38,8 @@ export default function AccountingPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+
+  const appLogo = placeholderData.placeholderImages.find(img => img.id === 'app-logo');
   
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
@@ -228,7 +233,6 @@ export default function AccountingPage() {
     <div className="space-y-6">
       <style jsx global>{`
         @media print {
-          /* Reset layout containers to eliminate blank space */
           html, body {
             width: 100% !important;
             height: auto !important;
@@ -237,7 +241,6 @@ export default function AccountingPage() {
             overflow: visible !important;
           }
 
-          /* Force SidebarProvider and main components to fill width */
           [data-sidebar-wrapper],
           .sidebar-provider,
           [data-sidebar="inset"],
@@ -252,7 +255,6 @@ export default function AccountingPage() {
             transform: none !important;
           }
 
-          /* Hide interactive and background elements */
           .print-hidden, 
           header, 
           aside, 
@@ -266,7 +268,6 @@ export default function AccountingPage() {
             display: none !important; 
           }
           
-          /* Full width layout for print area */
           .print-area { 
             width: 100% !important; 
             margin: 0 !important; 
@@ -281,13 +282,11 @@ export default function AccountingPage() {
             break-inside: avoid;
           }
 
-          /* Force background colors in PDF */
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
 
-          /* Show the hidden header */
           .print-only-header {
             display: block !important;
             margin-bottom: 30px;
@@ -307,7 +306,6 @@ export default function AccountingPage() {
             border-top: 1px solid #eee;
           }
 
-          /* Grid adjustments for standard A4 */
           .print-grid {
             display: grid !important;
             grid-template-columns: repeat(3, 1fr) !important;
@@ -332,8 +330,16 @@ export default function AccountingPage() {
       <div className="print-only-header">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 bg-primary flex items-center justify-center rounded-lg text-white">
-              <Car className="h-8 w-8" />
+            <div className="relative h-12 w-12 bg-white flex items-center justify-center rounded-lg border-2 border-primary overflow-hidden">
+              {appLogo && (
+                <Image 
+                  src={appLogo.imageUrl} 
+                  alt="Logo" 
+                  fill 
+                  className="object-contain p-1" 
+                  data-ai-hint={appLogo.imageHint}
+                />
+              )}
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-tighter text-primary uppercase">Citydrive Systems</h1>
