@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Lock, User, AlertCircle, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from "next/image";
-import placeholderData from "@/app/lib/placeholder-images.json";
 import {
   Dialog,
   DialogContent,
@@ -43,8 +42,6 @@ export default function LoginPage() {
   const db = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
-
-  const appLogo = placeholderData.placeholderImages.find(img => img.id === 'app-logo');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,15 +136,13 @@ export default function LoginPage() {
         <CardHeader className="space-y-1 text-center bg-primary/5 pb-8 pt-10">
           <div className="flex justify-center mb-4">
             <div className="relative h-20 w-20 rounded-3xl bg-white p-1 shadow-xl border-4 border-primary transform -rotate-6 animate-in fade-in zoom-in duration-500 overflow-hidden">
-              {appLogo && (
-                <Image 
-                  src={appLogo.imageUrl} 
-                  alt="CDS Logo" 
-                  fill 
-                  className="object-contain p-1" 
-                  data-ai-hint={appLogo.imageHint}
-                />
-              )}
+              <Image 
+                src="/logo.png" 
+                alt="CDS Logo" 
+                fill 
+                className="object-contain p-1" 
+                priority
+              />
             </div>
           </div>
           <CardTitle className="text-3xl font-black tracking-tighter text-primary uppercase">CITYDRIVE</CardTitle>
@@ -239,7 +234,7 @@ export default function LoginPage() {
           
           <div className="p-6 space-y-4 m-0">
             <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/10">
-              Enter your User ID and the <span className="font-bold text-primary">Master Secret Code</span> provided by the Head Office to restore default login credentials.
+              Enter your User ID and the <span className="font-bold text-primary">Master Secret Code</span> to restore default login credentials.
             </p>
             <div className="grid gap-4">
               <div className="grid gap-2">
