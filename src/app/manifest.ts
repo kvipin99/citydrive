@@ -2,8 +2,6 @@
 import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
-  const logoUrl = 'https://picsum.photos/seed/cds-driving-logo/512/512';
-  
   return {
     name: 'Citydrive Management System',
     short_name: 'Citydrive',
@@ -15,19 +13,19 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     icons: [
       {
-        src: 'https://picsum.photos/seed/cds-driving-logo/192/192',
+        src: '/icons/icon-192.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: 'https://picsum.photos/seed/cds-driving-logo/192/192',
+        src: '/icons/icon-192.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: logoUrl,
+        src: '/icons/icon-512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',

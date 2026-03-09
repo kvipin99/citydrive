@@ -9,8 +9,8 @@
     },
     {
       "id": "app-logo",
-      "description": "CDS Driving School Logo - Steering wheel with thumbs up and CDS text",
-      "imageUrl": "https://picsum.photos/seed/cds-driving-logo/512/512",
+      "description": "CDS Driving School Logo",
+      "imageUrl": "/logo.png",
       "imageHint": "driving logo"
     }
   ]

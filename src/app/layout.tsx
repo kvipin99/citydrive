@@ -9,8 +9,8 @@ export const metadata: Metadata = {
   title: 'Citydrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
   icons: {
-    icon: 'https://picsum.photos/seed/cds-driving-logo/32/32',
-    apple: 'https://picsum.photos/seed/cds-driving-logo/180/180',
+    icon: '/favicon.ico',
+    apple: '/logo.png',
   },
   appleWebApp: {
     capable: true,
