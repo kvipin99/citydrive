@@ -807,7 +807,7 @@ function StatSummary({ label, value, icon, color, breakdown }: any) {
           <div className="mt-2 flex flex-wrap gap-1">
             {Object.entries(breakdown).map(([type, hours]: [string, any]) => (
               hours > 0 && (
-                <Badge key={type} variant="outline" className="text-[8px] px-1 py-0 h-4 font-mono font-bold bg-muted/30 border-primary/10">
+                <Badge key={type} variant="outline" className="text-[11px] px-2 py-0.5 h-6 font-mono font-bold bg-muted/30 border-primary/10">
                   {typeLabelMap[type] || type}: {hours.toFixed(1)}h
                 </Badge>
               )
