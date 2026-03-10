@@ -1,13 +1,17 @@
+/**
+ * Citydrive PWA Service Worker
+ * Handles basic caching for offline availability and installability.
+ */
 
-const CACHE_NAME = 'citydrive-cache-v1';
+const CACHE_NAME = 'citydrive-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/login',
   '/logo.png',
-  '/favicon.ico'
+  '/manifest.json'
 ];
 
-// Install Event - Caching basic assets
+// Install event - cache core assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -17,41 +21,42 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate Event - Clean up old caches
+// Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
           }
         })
       );
     })
   );
-  return self.clients.claim();
+  self.clients.claim();
 });
 
-// Fetch Event - Stale-while-revalidate strategy
+// Fetch event - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests or non-GET requests
-  if (!event.request.url.startsWith(self.location.origin) || event.request.method !== 'GET') {
-    return;
-  }
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // Cache the updated version
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, networkResponse.clone());
-        });
-        return networkResponse;
-      });
-
-      // Return cached version immediately if available, otherwise wait for network
-      return cachedResponse || fetchPromise;
-    })
+    fetch(event.request)
+      .then((response) => {
+        // If successful, return and cache it
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // If network fails, try the cache
+        return caches.match(event.request);
+      })
   );
 });
