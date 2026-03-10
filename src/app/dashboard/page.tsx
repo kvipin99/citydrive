@@ -1,7 +1,8 @@
+
 "use client";
 
 import AiSummary from "@/components/dashboard/ai-summary";
-import { RevenueChart, ProfitChart, ExpensesChart } from "@/components/dashboard/charts";
+import { RevenueChart, ProfitChart, ExpensesChart, AdmissionsBarChart, AdmissionsLineChart } from "@/components/dashboard/charts";
 import StatsCards from "@/components/dashboard/stats-cards";
 import VehicleValidityAlerts from "@/components/dashboard/vehicle-validity-alerts";
 import UpcomingClasses from "@/components/dashboard/upcoming-classes";
@@ -84,7 +85,7 @@ export default function DashboardPage() {
   }
 
   // --- Management View (Admin & Branch Manager) ---
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
   const isBranchManager = profile?.role === 'BranchManager';
   
   // Use custom branch name if set in settings, fallback to branch ID
@@ -114,10 +115,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <RevenueChart />
+          {isAdmin ? <RevenueChart /> : <AdmissionsBarChart />}
         </div>
         <div className="lg:col-span-2">
-          <ProfitChart />
+          {isAdmin ? <ProfitChart /> : <AdmissionsLineChart />}
         </div>
       </div>
 

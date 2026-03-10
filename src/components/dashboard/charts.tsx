@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase"
 import { collection, query, where, doc } from "firebase/firestore"
-import { format, subMonths, startOfMonth, isWithinInterval, endOfMonth } from 'date-fns'
+import { format, subMonths, startOfMonth, isWithinInterval, endOfMonth, subDays } from 'date-fns'
 
 export function RevenueChart() {
   const db = useFirestore();
@@ -15,7 +15,7 @@ export function RevenueChart() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -84,7 +84,7 @@ export function ProfitChart() {
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
@@ -157,13 +157,143 @@ export function ProfitChart() {
   )
 }
 
+export function AdmissionsBarChart() {
+  const db = useFirestore();
+  const { user } = useUser();
+
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'students');
+    if (!profile.branch) return null;
+    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
+  const { data: students } = useCollection(studentsQuery);
+
+  const admissionsData = useMemo(() => {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const date = subDays(today, 6 - i);
+      return {
+        day: format(date, 'EEE'),
+        fullDate: format(date, 'yyyy-MM-dd'),
+        admissions: 0
+      };
+    });
+
+    students?.forEach(s => {
+      const regDate = s.registrationDate; 
+      days.forEach(d => {
+        if (regDate === d.fullDate) {
+          d.admissions++;
+        }
+      });
+    });
+
+    return days;
+  }, [students]);
+
+  const config = {
+    admissions: { label: "Admissions", color: "hsl(var(--chart-1))" },
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Daily Admissions</CardTitle>
+        <CardDescription>New students enrolled this week</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ChartContainer config={config} className="h-[250px] w-full">
+          <BarChart accessibilityLayer data={admissionsData}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickLine={false} tickMargin={10} axisLine={false} />
+            <YAxis allowDecimals={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="admissions" fill="var(--color-admissions)" radius={4} />
+          </BarChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function AdmissionsLineChart() {
+  const db = useFirestore();
+  const { user } = useUser();
+
+  const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
+  const { data: profile } = useDoc(userProfileRef);
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+
+  const studentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile) return null;
+    if (isAdmin) return collection(db, 'students');
+    if (!profile.branch) return null;
+    return query(collection(db, 'students'), where('branch', '==', profile.branch));
+  }, [db, user, profile, isAdmin]);
+
+  const { data: students } = useCollection(studentsQuery);
+
+  const admissionsData = useMemo(() => {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const date = subDays(today, 6 - i);
+      return {
+        day: format(date, 'EEE'),
+        fullDate: format(date, 'yyyy-MM-dd'),
+        admissions: 0
+      };
+    });
+
+    students?.forEach(s => {
+      const regDate = s.registrationDate; 
+      days.forEach(d => {
+        if (regDate === d.fullDate) {
+          d.admissions++;
+        }
+      });
+    });
+
+    return days;
+  }, [students]);
+
+  const config = {
+    admissions: { label: "Trend", color: "hsl(var(--chart-2))" },
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Enrollment Trend</CardTitle>
+        <CardDescription>Last 7 days performance</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ChartContainer config={config} className="h-[250px] w-full">
+          <LineChart accessibilityLayer data={admissionsData} margin={{ left: 12, right: 12 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis allowDecimals={false} />
+            <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
+            <Line dataKey="admissions" type="monotone" stroke="var(--color-admissions)" strokeWidth={2} dot={true} />
+          </LineChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ExpensesChart() {
   const db = useFirestore();
   const { user } = useUser();
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin';
+  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
   const expensesQuery = useMemoFirebase(() => {
     if (!db || !user || !profile) return null;
