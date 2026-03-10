@@ -13,6 +13,8 @@ export default function StatsCards() {
 
     const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user]);
     const { data: profile } = useDoc(userProfileRef);
+    
+    // Explicit Admin/Master check
     const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
 
     const paymentsQuery = useMemoFirebase(() => {
@@ -81,7 +83,7 @@ export default function StatsCards() {
         const todayProfit = todayRevenue - todayExpense;
         const monthlyProfit = monthlyRevenue - monthlyExpense;
 
-        return [
+        const baseStats = [
             { 
                 title: "Active Students", 
                 value: activeStudentsCount.toString(), 
@@ -102,29 +104,37 @@ export default function StatsCards() {
                 icon: <Wallet className="h-4 w-4 text-primary" />, 
                 description: "Net intake today",
                 trend: todayProfit >= 0 ? "positive" : "negative"
-            },
-            { 
-                title: "Monthly Revenue", 
-                value: `₹${monthlyRevenue.toLocaleString()}`, 
-                icon: <DollarSign className="h-4 w-4 text-green-600" />, 
-                description: format(today, 'MMMM yyyy'),
-                trend: "neutral"
-            },
-            { 
-                title: "Monthly Net Profit", 
-                value: `₹${monthlyProfit.toLocaleString()}`, 
-                icon: <Wallet className="h-4 w-4 text-primary" />, 
-                description: "This month's net",
-                trend: monthlyProfit >= 0 ? "positive" : "negative"
             }
         ];
-    }, [payments, expenses, students, profile]);
+
+        // ADD MONTHLY STATS ONLY FOR ADMINS
+        if (isAdmin) {
+            baseStats.push(
+                { 
+                    title: "Monthly Revenue", 
+                    value: `₹${monthlyRevenue.toLocaleString()}`, 
+                    icon: <DollarSign className="h-4 w-4 text-green-600" />, 
+                    description: format(today, 'MMMM yyyy'),
+                    trend: "neutral"
+                },
+                { 
+                    title: "Monthly Net Profit", 
+                    value: `₹${monthlyProfit.toLocaleString()}`, 
+                    icon: <Wallet className="h-4 w-4 text-primary" />, 
+                    description: "This month's net",
+                    trend: monthlyProfit >= 0 ? "positive" : "negative"
+                }
+            );
+        }
+
+        return baseStats;
+    }, [payments, expenses, students, profile, isAdmin]);
 
     if (isPaymentsLoading || isExpensesLoading || isStudentsLoading || !profile) {
         return (
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-                {[1, 2, 3, 4, 5].map((i) => (
-                    <Card key={i} className="animate-pulse">
+            <div className={`grid gap-4 md:grid-cols-3 ${isAdmin ? 'lg:grid-cols-5' : ''}`}>
+                {[1, 2, 3, ...(isAdmin ? [4, 5] : [])].map((i) => (
+                    <Card key={i} className="animate-pulse shadow-sm border-primary/10">
                         <CardHeader className="h-10 bg-muted/50 rounded-t-lg" />
                         <CardContent className="h-20 bg-muted/30" />
                     </Card>
@@ -134,7 +144,7 @@ export default function StatsCards() {
     }
 
     return (
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <div className={`grid gap-4 md:grid-cols-3 ${isAdmin ? 'lg:grid-cols-5' : ''}`}>
             {stats.map((stat) => (
                 <Card key={stat.title} className="shadow-sm border-primary/10 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
