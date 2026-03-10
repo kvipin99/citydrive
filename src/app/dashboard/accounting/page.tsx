@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -19,24 +20,6 @@ import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
-
-const INCOME_CATEGORIES = [
-  "Course Fee",
-  "Photostate / Printing",
-  "Admission Charge",
-  "Late Fee / Fine",
-  "Convenience Fee",
-  "Other Income"
-];
-
-const EXPENSE_CATEGORIES = [
-  "Fuel",
-  "Salaries",
-  "Maintenance",
-  "Rent",
-  "Utility",
-  "Others"
-];
 
 interface Transaction {
   id: string;
@@ -103,7 +86,7 @@ export default function AccountingPage() {
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
@@ -167,7 +150,6 @@ export default function AccountingPage() {
   const totalExpenses = expenseTransactions.reduce((acc, t) => acc + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
-  // Category Summaries
   const incomeCategorySummary = useMemo(() => {
     const summary: Record<string, { count: number, total: number }> = {};
     incomeTransactions.forEach(t => {

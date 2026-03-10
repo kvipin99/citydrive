@@ -28,7 +28,6 @@ export default function TomorrowTestAlerts() {
 
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
-  // Robust Branch Isolation Logic (Same as Accounting/Expenses)
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -44,7 +43,7 @@ export default function TomorrowTestAlerts() {
 
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
       if (bPattern.test(rid)) return true;
     }
     
@@ -57,11 +56,9 @@ export default function TomorrowTestAlerts() {
     const currentBranchContext = profile.branch || "Branch 1";
 
     return students.filter(s => {
-      // 1. Test Date Check
       const isTomorrow = s.learnersDate === tomorrowStr || s.testDate === tomorrowStr;
       if (!isTomorrow) return false;
 
-      // 2. Branch Isolation Logic
       if (isAdmin) return true;
       return isFromBranch(s, currentBranchContext);
     }).map(s => ({

@@ -106,7 +106,6 @@ export default function OtherReceiptsPage() {
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
-  // Precise matching logic
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -114,18 +113,16 @@ export default function OtherReceiptsPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
-    if (rBranch && rBranch === targetBranch) return true;
+    if (rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise)
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      // Robust pattern for IDs
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
       if (bPattern.test(rid)) return true;
     }
     

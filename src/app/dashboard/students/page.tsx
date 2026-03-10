@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from "react";
@@ -151,7 +152,6 @@ function StudentsContent() {
     description: ''
   });
 
-  // Handle deep-link to student profile from dashboard
   useEffect(() => {
     const viewId = searchParams.get('id');
     if (viewId && students && !isStudentsLoading) {
@@ -163,27 +163,25 @@ function StudentsContent() {
     }
   }, [searchParams, students, isStudentsLoading]);
 
-  // Robust matching logic using boundaries
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
-    const normalize = (s: any) => s?.toString().toLowerCase().trim() || '';
+    const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
-    if (rBranch && rBranch === targetBranch) return true;
+    if (rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^a-z0-9]|$)`, 'i');
-      if (bPattern.test(rid)) return true;
+      const sid = normalize(record.studentId || '');
+      // Robust pattern for both prefixed IDs (REC-B1) and compact IDs (B110001)
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
+      if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
     
     return false;
@@ -624,7 +622,6 @@ function StudentsContent() {
         setIsProfileSheetOpen(open); 
         if(!open) {
           if (!isStudent) setSelectedStudent(null);
-          // Clear query params when closing if they were present
           if (searchParams.get('id')) router.replace('/dashboard/students', { scroll: false });
         }
       }}>

@@ -88,7 +88,6 @@ export default function StudentReceiptsPage() {
     description: ''
   });
 
-  // Robust Precise Branch Matching
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
     
@@ -96,19 +95,16 @@ export default function StudentReceiptsPage() {
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
     
-    // 1. Direct Name Match
-    if (rBranch && rBranch === targetBranch) return true;
+    if (rBranch === targetBranch) return true;
 
-    // 2. Numeric Match
     const tNum = branchName.match(/\d+/)?.[0];
     const rNum = record.branch?.match(/\d+/)?.[0];
     if (tNum && rNum && tNum === rNum) return true;
 
-    // 3. ID Based Matching (Precise)
     if (tNum) {
       const rid = normalize(record.id || '');
       const sid = normalize(record.studentId || '');
-      const bPattern = new RegExp(`(^|\\-|exp\\-|rec\\-|misc\\-)b${tNum}(\\-|$)`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
       if (bPattern.test(rid) || bPattern.test(sid)) return true;
     }
 

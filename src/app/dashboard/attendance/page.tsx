@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -58,7 +59,6 @@ export default function AttendancePage() {
   const isManagement = isAdmin || isBranchManager;
   const isStaff = isManagement || isInstructor;
 
-  // Only fetch controls if staff to avoid permission error for students
   const controlsRef = useMemoFirebase(() => (db && isStaff ? doc(db, 'settings', 'controls') : null), [db, isStaff]);
   const { data: controls } = useDoc(controlsRef);
 
@@ -96,12 +96,10 @@ export default function AttendancePage() {
     if (!db || !user || !profile?.role) return null;
     const base = collection(db, 'attendance');
     
-    // Students query by studentUid for security rules compliance
     if (profile.role === 'Student') {
       return query(base, where('studentUid', '==', user.uid));
     }
     
-    // Staff query by date range
     if (isStaff) {
       return query(
         base, 
@@ -125,13 +123,10 @@ export default function AttendancePage() {
 
     const branchNum = branchName.match(/\d+/)?.[0];
     if (branchNum) {
-      const prefix = `B${branchNum}`;
-      if (rBranch === prefix.toLowerCase()) return true;
-      
       const rid = record.id || '';
       const sid = record.studentId || '';
-      if (rid.startsWith(prefix) || rid.startsWith(`REC-${prefix}`) || rid.startsWith(`EXP-${prefix}`) || rid.startsWith(`MISC-${prefix}`)) return true;
-      if (sid.startsWith(prefix)) return true;
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${branchNum}`, 'i');
+      if (bPattern.test(rid) || bPattern.test(sid) || bPattern.test(rBranch)) return true;
     }
     return false;
   }, []);
@@ -190,7 +185,6 @@ export default function AttendancePage() {
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
     
-    // Instructors see all, Managers see branch only
     const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
     
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
@@ -224,9 +218,6 @@ export default function AttendancePage() {
     const recordingDate = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : (entryDate || format(new Date(), 'yyyy-MM-dd'));
     const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const attendanceRef = doc(db, 'attendance', attendanceId);
-    const duration = calculateDuration(startTime, dummy_endTime);
-    
-    // Fix for build - dummy_endTime is not defined, should be endTime
     const actualDuration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
     
