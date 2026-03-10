@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -11,7 +12,7 @@ export function PWAManager() {
     if (
       typeof window !== 'undefined' &&
       'serviceWorker' in navigator &&
-      window.location.protocol === 'https:' || window.location.hostname === 'localhost'
+      (window.location.protocol === 'https:' || window.location.hostname === 'localhost')
     ) {
       window.addEventListener('load', () => {
         navigator.serviceWorker

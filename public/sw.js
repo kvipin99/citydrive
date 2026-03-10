@@ -1,16 +1,13 @@
-/**
- * Citydrive Service Worker
- * Provides basic caching for PWA compliance and offline identity.
- */
 
-const CACHE_NAME = 'citydrive-v1';
+const CACHE_NAME = 'citydrive-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
+  '/login',
   '/logo.png',
   '/favicon.ico'
 ];
 
-// Install Event
+// Install Event - Caching basic assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -20,7 +17,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate Event
+// Activate Event - Clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -36,19 +33,25 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Fetch Event
+// Fetch Event - Stale-while-revalidate strategy
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
-  if (event.request.method !== 'GET') return;
+  // Skip cross-origin requests or non-GET requests
+  if (!event.request.url.startsWith(self.location.origin) || event.request.method !== 'GET') {
+    return;
+  }
 
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-        // Fallback for when both cache and network fail
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        // Cache the updated version
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone());
+        });
+        return networkResponse;
       });
+
+      // Return cached version immediately if available, otherwise wait for network
+      return cachedResponse || fetchPromise;
     })
   );
 });
