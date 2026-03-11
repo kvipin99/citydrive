@@ -9,7 +9,7 @@
     {
       "id": "app-logo",
       "description": "CDS Driving School Logo",
-      "imageUrl": "/logo.png",
+      "imageUrl": "https://picsum.photos/seed/citydrive-logo/200/200",
       "imageHint": "driving logo"
     }
   ]
