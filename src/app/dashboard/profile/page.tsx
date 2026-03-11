@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from "@/firebase";
@@ -152,10 +153,10 @@ export default function StudentProfilePage() {
                 <Separator className="col-span-full my-2" />
                 
                 <DetailItem label="Learners License No." value={student.learnersNo} icon={<Fingerprint className="text-primary/60" />} />
-                <DetailItem label="Learners Issue Date" value={formatSafeDate(student.learnersDate)} icon={<Calendar />} />
+                <DetailItem label="Learners Test Date" value={formatSafeDate(student.learnersDate)} icon={<Calendar />} />
                 
                 <DetailItem label="Driving License No." value={student.drivingNo} icon={<Car className="text-green-600/60" />} />
-                <DetailItem label="Driving Test Date" value={formatSafeDate(student.testDate)} icon={<Calendar />} />
+                <DetailItem label="DL Test Date" value={formatSafeDate(student.testDate)} icon={<Calendar />} />
               </div>
               <DetailItem label="Residential Address" value={student.address} icon={<MapPin />} />
             </CardContent>
