@@ -1,4 +1,5 @@
-const CACHE_NAME = 'citydrive-v1';
+// Citydrive Service Worker
+const CACHE_NAME = 'citydrive-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/login',

@@ -1,12 +1,12 @@
 {
   "name": "CityDrive",
   "short_name": "CityDrive",
-  "description": "Comprehensive driving school management system.",
+  "description": "Citydrive Driving School Management System",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/logo.png",
@@ -19,12 +19,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ]
 }
