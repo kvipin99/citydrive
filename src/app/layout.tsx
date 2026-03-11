@@ -6,9 +6,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 export const metadata: Metadata = {
   title: 'Citydrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
-  icons: {
-    icon: '/favicon.ico',
-  },
+  // Manifest references removed to stop browser 404 requests.
 };
 
 export const viewport: Viewport = {
