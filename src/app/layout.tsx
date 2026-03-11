@@ -8,7 +8,6 @@ export const metadata: Metadata = {
   description: 'A comprehensive management system for driving schools.',
   icons: {
     icon: '/favicon.ico',
-    apple: '/logo.png',
   },
 };
 
@@ -19,14 +18,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="apple-touch-icon" href="/logo.png" />
-      </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>
           {children}
