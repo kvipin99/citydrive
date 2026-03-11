@@ -8,8 +8,8 @@
     },
     {
       "id": "app-logo",
-      "description": "CDS Driving School Logo",
-      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/firebasestudio-886aa.appspot.com/o/image-1741710344414.png?alt=media&token=09ea69fa-9004-4df4-aae0-9fc090be09bd",
+      "description": "CityDrive Driving School Logo",
+      "imageUrl": "/logo.png",
       "imageHint": "driving school logo"
     }
   ]

@@ -1,24 +1,23 @@
 {
-  "name": "CityDrive",
+  "name": "CityDrive Driving School",
   "short_name": "CityDrive",
-  "description": "Driving School Management Portal",
+  "description": "Comprehensive Management System for Citydrive Driving School",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
-  "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }

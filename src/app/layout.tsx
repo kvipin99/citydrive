@@ -4,14 +4,20 @@ import { Toaster } from "@/components/ui/toaster"
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
-  title: 'Citydrive - Driving School Management',
+  title: 'CityDrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
-  // Manifest references removed to stop browser 404 requests.
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#0f172a',
 };
 
 export default function RootLayout({
