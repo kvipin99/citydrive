@@ -337,6 +337,18 @@ function StudentsContent() {
       toast({ variant: "destructive", title: "Error", description: "Name, Branch, and Student ID are required." });
       return;
     }
+
+    // Check for duplicate phone number
+    const existingStudentWithPhone = students?.find(s => s.phone === formData.phone);
+    if (existingStudentWithPhone) {
+      toast({ 
+        variant: "destructive", 
+        title: "Duplicate Entry", 
+        description: `Student already registered with this mobile number: ${existingStudentWithPhone.name} (${existingStudentWithPhone.id})` 
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     const studentId = formData.id;
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
@@ -373,6 +385,20 @@ function StudentsContent() {
 
   const handleUpdateStudent = () => {
     if (!selectedStudent) return;
+    
+    // Check for duplicate phone number if it changed
+    if (formData.phone !== selectedStudent.phone) {
+      const existingStudentWithPhone = students?.find(s => s.phone === formData.phone && s.id !== selectedStudent.id);
+      if (existingStudentWithPhone) {
+        toast({ 
+          variant: "destructive", 
+          title: "Update Error", 
+          description: `This mobile number is already assigned to ${existingStudentWithPhone.name} (${existingStudentWithPhone.id})` 
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     const studentRef = doc(db, 'students', selectedStudent.id);
     const updatedData = { ...formData, updatedAt: serverTimestamp() };
@@ -534,7 +560,7 @@ function StudentsContent() {
                       <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>New Student Registration</DialogTitle><DialogDescription>IDs are auto-generated based on the last record in the branch.</DialogDescription></DialogHeader>
                       <div className="flex-1 overflow-y-auto px-6 py-4">
                         <div className="space-y-8 pb-32">
-                          <StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={photoInputRef} handleCourseToggle={handleCourseToggle} />
+                          <StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={photoInputRef} handleCourseToggle={handleCourseToggle} allStudents={students} />
                           <div className="pt-6 border-t"><div className="flex items-center gap-2 text-orange-600 mb-2"><AlertCircle className="h-4 w-4" /><h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4></div><p className="text-[10px] text-muted-foreground mb-3 leading-tight">If registration fails because the ID already exists in the system but not in the list, use this tool to clear the hidden identity.</p><div className="flex gap-2 max-w-sm"><Input placeholder="Conflict ID (e.g. B110001)" className="h-9 text-xs" value={cleanupId} onChange={(e) => setCleanupId(e.target.value.toUpperCase())} /><Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}><Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity</Button></div></div>
                         </div>
                       </div>
@@ -640,7 +666,7 @@ function StudentsContent() {
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update the registration details for {selectedStudent?.name}.</DialogDescription></DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4"><div className="space-y-8 pb-32"><StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={editPhotoInputRef} handleCourseToggle={handleCourseToggle} isEdit={true} /></div></div>
+          <div className="flex-1 overflow-y-auto px-6 py-4"><div className="space-y-8 pb-32"><StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={editPhotoInputRef} handleCourseToggle={handleCourseToggle} isEdit={true} allStudents={students} currentStudentId={selectedStudent?.id} /></div></div>
           <DialogFooter className="p-6 border-t shrink-0"><div className="flex w-full justify-end gap-3"><Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>Cancel</Button><Button onClick={handleUpdateStudent} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}Save Changes</Button></div></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -656,7 +682,12 @@ function StudentsContent() {
   );
 }
 
-function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateFees, handlePhotoUpload, photoInputRef, handleCourseToggle, isEdit = false }: any) {
+function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateFees, handlePhotoUpload, photoInputRef, handleCourseToggle, isEdit = false, allStudents = [], currentStudentId }: any) {
+  const isDuplicatePhone = useMemo(() => {
+    if (!formData.phone || formData.phone.length < 10) return false;
+    return allStudents.some((s: any) => s.phone === formData.phone && s.id !== (currentStudentId || formData.id));
+  }, [formData.phone, allStudents, currentStudentId, formData.id]);
+
   return (
     <div className="grid gap-8 py-4">
       <div className="flex flex-col items-center gap-4 py-6 border-2 border-dashed rounded-2xl bg-muted/20">
@@ -676,7 +707,23 @@ function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateF
           <div className="grid gap-2"><Label className="text-primary font-bold">Register Number</Label><Input className="h-11 font-bold" placeholder="Manual Book No." value={formData.registerNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registerNo: e.target.value}))} /></div>
           <div className="grid gap-2"><Label>Full Student Name</Label><Input className="h-11" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} /></div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="grid gap-2"><Label>Mobile Contact No.</Label><Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} /></div><div className="grid gap-2"><Label>Date of Birth</Label><Input type="date" className="h-11" value={formData.dob || ''} onChange={(e) => setFormData((prev:any) => ({...prev, dob: e.target.value}))} /></div></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid gap-2">
+            <Label className={isDuplicatePhone ? "text-destructive font-bold" : ""}>Mobile Contact No.</Label>
+            <Input 
+              className={`h-11 font-mono ${isDuplicatePhone ? "border-destructive text-destructive bg-destructive/5" : ""}`} 
+              placeholder="98XXXXXXXX" 
+              value={formData.phone || ''} 
+              onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} 
+            />
+            {isDuplicatePhone && (
+              <p className="text-[10px] text-destructive font-bold flex items-center gap-1 animate-in fade-in slide-in-from-top-1">
+                <AlertCircle className="h-3 w-3" /> This student is already registered.
+              </p>
+            )}
+          </div>
+          <div className="grid gap-2"><Label>Date of Birth</Label><Input type="date" className="h-11" value={formData.dob || ''} onChange={(e) => setFormData((prev:any) => ({...prev, dob: e.target.value}))} /></div>
+        </div>
       </div>
       <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><MapPin className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Address & Family</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Parent / Guardian Name</Label><Input className="h-11" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} /></div><div className="grid gap-2"><Label>Full Residential Address</Label><Textarea className="min-h-[44px]" placeholder="Village, Landmark, District..." value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div></div></div>
       <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><Fingerprint className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Government Identifiers</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Aadhar Number</Label><Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Online Application No.</Label><Input className="h-11 font-mono" placeholder="e.g. 234000123" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div></div></div>
