@@ -9,16 +9,23 @@ import { getFirestore } from 'firebase/firestore'
 export function initializeFirebase() {
   let app: FirebaseApp;
   
-  if (!getApps().length) {
+  const apps = getApps();
+  if (apps.length === 0) {
     try {
       // Attempt to initialize using environmental defaults, fallback to manual config
       app = initializeApp(firebaseConfig);
     } catch (e) {
-      console.error("Firebase initialization failed:", e);
-      app = initializeApp(firebaseConfig);
+      // Handle race condition where another component initialized it simultaneously
+      const checkApps = getApps();
+      if (checkApps.length > 0) {
+        app = checkApps[0];
+      } else {
+        console.error("Firebase initialization failed:", e);
+        app = initializeApp(firebaseConfig);
+      }
     }
   } else {
-    app = getApp();
+    app = apps[0];
   }
 
   return {
