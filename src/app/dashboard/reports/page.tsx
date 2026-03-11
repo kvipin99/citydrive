@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo, useEffect } from "react";
@@ -183,63 +182,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <style jsx global>{`
-        @media print {
-          html, body {
-            width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: visible !important;
-          }
-
-          [data-sidebar-wrapper],
-          .sidebar-provider,
-          [data-sidebar="inset"],
-          main {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            display: block !important;
-            left: 0 !important;
-            position: relative !important;
-            transform: none !important;
-          }
-
-          .print-hidden, 
-          nav, 
-          header, 
-          aside,
-          [data-sidebar="sidebar"],
-          [data-sidebar="trigger"],
-          [data-sidebar="rail"],
-          .sidebar-wrapper,
-          button, 
-          .tabs-list { 
-            display: none !important; 
-          }
-
-          .print-area { 
-            width: 100% !important; 
-            padding: 20px !important; 
-            margin: 0 !important; 
-            background: white !important; 
-          }
-
-          .card { 
-            border: 1px solid #eee !important; 
-            box-shadow: none !important; 
-            break-inside: avoid;
-          }
-
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .print-only-header { display: block !important; margin-bottom: 25px; border-bottom: 3px solid hsl(var(--primary)); padding-bottom: 10px; }
-          .print-footer { display: block !important; position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding: 10px 0; }
-        }
-        .print-only-header, .print-footer { display: none; }
-      `}</style>
-
       {/* PRINT HEADER */}
       <div className="print-only-header">
         <div className="flex justify-between items-end">

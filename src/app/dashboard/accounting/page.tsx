@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -254,101 +253,6 @@ export default function AccountingPage() {
 
   return (
     <div className="space-y-6">
-      <style jsx global>{`
-        @media print {
-          html, body {
-            width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: visible !important;
-          }
-
-          [data-sidebar-wrapper],
-          .sidebar-provider,
-          [data-sidebar="inset"],
-          main {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            display: block !important;
-            left: 0 !important;
-            position: relative !important;
-            transform: none !important;
-          }
-
-          .print-hidden, 
-          header, 
-          aside, 
-          [data-sidebar="sidebar"],
-          [data-sidebar="trigger"],
-          [data-sidebar="rail"],
-          .sidebar-wrapper,
-          nav, 
-          button,
-          .tabs-list { 
-            display: none !important; 
-          }
-          
-          .print-area { 
-            width: 100% !important; 
-            margin: 0 !important; 
-            padding: 20px !important; 
-            background: white !important; 
-          }
-          
-          .card { 
-            border: 1px solid #eee !important; 
-            box-shadow: none !important; 
-            margin-bottom: 20px !important;
-            break-inside: avoid;
-          }
-
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-
-          .print-only-header {
-            display: block !important;
-            margin-bottom: 30px;
-            border-bottom: 4px solid hsl(var(--primary));
-            padding-bottom: 15px;
-          }
-
-          .print-footer {
-            display: block !important;
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 10px;
-            color: #666;
-            padding: 10px 0;
-            border-top: 1px solid #eee;
-          }
-
-          .print-grid {
-            display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important;
-            gap: 15px !important;
-          }
-          
-          .print-dual-table {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 20px !important;
-          }
-
-          h2, h3 { color: black !important; }
-        }
-
-        .print-only-header, .print-footer {
-          display: none;
-        }
-      `}</style>
-
       {/* PRINT-ONLY HEADER */}
       <div className="print-only-header">
         <div className="flex justify-between items-end">
