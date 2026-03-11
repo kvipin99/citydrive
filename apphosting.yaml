@@ -2,6 +2,16 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
   maxInstances: 1
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "studio-6224335835-298c7"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:144251106401:web:fe416faa08d63541a32620"
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyC-71eo1GbeFxUXth6At6QN4l39YWPDgr8"
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "studio-6224335835-298c7.firebaseapp.com"
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "144251106401"
