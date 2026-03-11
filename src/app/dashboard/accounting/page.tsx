@@ -17,6 +17,7 @@ import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
+import placeholderData from '@/app/lib/placeholder-images.json';
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -36,6 +37,8 @@ export default function AccountingPage() {
   const db = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+
+  const appLogo = useMemo(() => placeholderData.placeholderImages.find(img => img.id === 'app-logo'), []);
 
   const userProfileRef = useMemoFirebase(() => (db && user ? doc(db, 'users', user.uid) : null), [db, user?.uid]);
   const { data: profile, isLoading: isProfileLoading } = useDoc(userProfileRef);
@@ -258,12 +261,15 @@ export default function AccountingPage() {
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-3">
             <div className="relative h-12 w-12 bg-white flex items-center justify-center rounded-lg border-2 border-primary overflow-hidden">
-              <Image 
-                src="/logo.png" 
-                alt="Logo" 
-                fill 
-                className="object-contain p-1" 
-              />
+              {appLogo && (
+                <Image 
+                  src={appLogo.imageUrl} 
+                  alt="Logo" 
+                  fill 
+                  className="object-contain p-1" 
+                  data-ai-hint={appLogo.imageHint}
+                />
+              )}
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-tighter text-primary uppercase">Citydrive Systems</h1>
