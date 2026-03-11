@@ -95,6 +95,8 @@
     padding: 0 !important;
     overflow: visible !important;
     font-size: 12pt !important;
+    background: white !important;
+    color: black !important;
   }
 
   [data-sidebar-wrapper],
