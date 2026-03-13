@@ -792,8 +792,21 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
             {student.registerNo && <ProfileItem icon={<FileText />} label="Register Number" value={student.registerNo} />}
-            <ProfileItem icon={<Fingerprint />} label="Learners No" value={student.learnersNo} />
-            <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
+            
+            <Separator className="col-span-full my-1 opacity-50" />
+            
+            <div className="grid grid-cols-2 gap-4 col-span-full">
+              <ProfileItem icon={<BookOpen />} label="Learners No" value={student.learnersNo} />
+              <ProfileItem icon={<Calendar />} label="Learners Test Date" value={formatSafeDate(student.learnersDate)} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 col-span-full">
+              <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
+              <ProfileItem icon={<Calendar />} label="DL Test Date" value={formatSafeDate(student.testDate)} />
+            </div>
+
+            <Separator className="col-span-full my-1 opacity-50" />
+            
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
           </div>
         </section>
