@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCollection, useFirestore, useMemoFirebase, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, useDoc } from "@/firebase";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
-import { MoreHorizontal, PlusCircle, Car, Calendar, ShieldCheck, FileText, Trash2, Edit2, RefreshCw } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Car, Calendar, ShieldCheck, FileText, Trash2, Edit2, RefreshCw, Zap, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, isValid, parseISO } from "date-fns";
 
@@ -28,6 +28,8 @@ interface Vehicle {
   brandModel: string;
   regValidity: any; 
   insuranceValidity: any;
+  taxValidity: any;
+  puccValidity: any;
   status: typeof VEHICLE_STATUSES[number];
   createdAt?: any;
   updatedAt?: any;
@@ -62,6 +64,8 @@ export default function VehiclesPage() {
     brandModel: '',
     regValidity: '',
     insuranceValidity: '',
+    taxValidity: '',
+    puccValidity: '',
     status: 'Available' as typeof VEHICLE_STATUSES[number]
   });
 
@@ -93,6 +97,8 @@ export default function VehiclesPage() {
         brandModel: vehicle.brandModel || '',
         regValidity: toInputDate(vehicle.regValidity),
         insuranceValidity: toInputDate(vehicle.insuranceValidity),
+        taxValidity: toInputDate(vehicle.taxValidity),
+        puccValidity: toInputDate(vehicle.puccValidity),
         status: vehicle.status || 'Available'
       });
     } else {
@@ -103,6 +109,8 @@ export default function VehiclesPage() {
         brandModel: '',
         regValidity: '',
         insuranceValidity: '',
+        taxValidity: '',
+        puccValidity: '',
         status: 'Available'
       });
     }
@@ -123,6 +131,8 @@ export default function VehiclesPage() {
       brandModel: formData.brandModel.trim(),
       regValidity: formData.regValidity,
       insuranceValidity: formData.insuranceValidity,
+      taxValidity: formData.taxValidity,
+      puccValidity: formData.puccValidity,
       status: formData.status,
       id: vehicleId,
       updatedAt: serverTimestamp(),
@@ -197,7 +207,14 @@ export default function VehiclesPage() {
                     <TableRow key={v.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell><div className="grid gap-0.5"><span className="font-bold text-primary">{v.regNumber}</span><Badge variant="outline" className="w-fit text-[10px] uppercase font-mono">{v.type}</Badge></div></TableCell>
                       <TableCell className="font-medium">{v.brandModel}</TableCell>
-                      <TableCell><div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight"><div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span></div><div className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span></div></div></TableCell>
+                      <TableCell>
+                        <div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight">
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><ReceiptText className="h-3 w-3" /> Tax: <span className="text-foreground">{formatSafeDate(v.taxValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><Zap className="h-3 w-3" /> PUCC: <span className="text-foreground">{formatSafeDate(v.puccValidity)}</span></div>
+                        </div>
+                      </TableCell>
                       <TableCell><Badge variant={v.status === 'Available' ? 'default' : 'secondary'} className="text-[10px] font-bold">{v.status}</Badge></TableCell>
                       <TableCell className="text-right">
                         {canWrite && (
@@ -242,6 +259,10 @@ export default function VehiclesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Reg Validity</Label><Input type="date" value={formData.regValidity} onChange={(e) => setFormData({...formData, regValidity: e.target.value})} /></div>
                 <div className="grid gap-2"><Label>Ins Validity</Label><Input type="date" value={formData.insuranceValidity} onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2"><Label>Tax Up To</Label><Input type="date" value={formData.taxValidity} onChange={(e) => setFormData({...formData, taxValidity: e.target.value})} /></div>
+                <div className="grid gap-2"><Label>PUCC Up To</Label><Input type="date" value={formData.puccValidity} onChange={(e) => setFormData({...formData, puccValidity: e.target.value})} /></div>
               </div>
               <div className="grid gap-2"><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
             </div>

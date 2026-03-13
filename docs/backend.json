@@ -57,7 +57,12 @@
         "id": { "type": "string" },
         "regNumber": { "type": "string" },
         "brandModel": { "type": "string" },
-        "status": { "type": "string" }
+        "type": { "type": "string", "enum": ["2wlr", "3wlr", "4wlr", "Heavy", "Other"] },
+        "status": { "type": "string", "enum": ["Available", "In Use", "Maintenance"] },
+        "regValidity": { "type": "string", "format": "date" },
+        "insuranceValidity": { "type": "string", "format": "date" },
+        "taxValidity": { "type": "string", "format": "date" },
+        "puccValidity": { "type": "string", "format": "date" }
       }
     },
     "Attendance": {

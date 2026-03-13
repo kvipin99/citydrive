@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -5,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
-import { AlertTriangle, Calendar, ShieldCheck, FileText } from 'lucide-react';
-import { format, isSameMonth, parseISO } from 'date-fns';
+import { AlertTriangle, Calendar, ShieldCheck, FileText, ReceiptText, Zap } from 'lucide-react';
+import { format, isSameMonth, parseISO, isBefore, startOfToday } from 'date-fns';
 
 interface Vehicle {
   id: string;
@@ -15,6 +16,8 @@ interface Vehicle {
   brandModel: string;
   regValidity: string;
   insuranceValidity: string;
+  taxValidity: string;
+  puccValidity: string;
   status: string;
 }
 
@@ -29,29 +32,35 @@ export default function VehicleValidityAlerts() {
 
   const { data: vehicles, isLoading } = useCollection<Vehicle>(vehiclesQuery);
 
-  const expiringThisMonth = useMemo(() => {
+  const expiringAlerts = useMemo(() => {
     if (!vehicles) return [];
-    const today = new Date();
+    const today = startOfToday();
 
-    return vehicles.filter(v => {
+    return vehicles.map(v => {
       const regDate = v.regValidity ? parseISO(v.regValidity) : null;
       const insDate = v.insuranceValidity ? parseISO(v.insuranceValidity) : null;
+      const taxDate = v.taxValidity ? parseISO(v.taxValidity) : null;
+      const puccDate = v.puccValidity ? parseISO(v.puccValidity) : null;
 
-      const isRegExpiring = regDate ? isSameMonth(regDate, today) : false;
-      const isInsExpiring = insDate ? isSameMonth(insDate, today) : false;
+      const isRegAlert = regDate ? (isSameMonth(regDate, today) || isBefore(regDate, today)) : false;
+      const isInsAlert = insDate ? (isSameMonth(insDate, today) || isBefore(insDate, today)) : false;
+      const isTaxAlert = taxDate ? (isSameMonth(taxDate, today) || isBefore(taxDate, today)) : false;
+      const isPuccAlert = puccDate ? (isSameMonth(puccDate, today) || isBefore(puccDate, today)) : false;
 
-      return isRegExpiring || isInsExpiring;
-    }).map(v => {
-      const regDate = v.regValidity ? parseISO(v.regValidity) : null;
-      const insDate = v.insuranceValidity ? parseISO(v.insuranceValidity) : null;
-      const today = new Date();
+      if (!isRegAlert && !isInsAlert && !isTaxAlert && !isPuccAlert) return null;
 
       return {
         ...v,
-        regExpiring: regDate ? isSameMonth(regDate, today) : false,
-        insExpiring: insDate ? isSameMonth(insDate, today) : false,
+        regAlert: isRegAlert,
+        insAlert: isInsAlert,
+        taxAlert: isTaxAlert,
+        puccAlert: isPuccAlert,
+        isExpired: (regDate && isBefore(regDate, today)) || 
+                   (insDate && isBefore(insDate, today)) || 
+                   (taxDate && isBefore(taxDate, today)) || 
+                   (puccDate && isBefore(puccDate, today))
       };
-    });
+    }).filter(v => v !== null);
   }, [vehicles]);
 
   if (isLoading) {
@@ -78,34 +87,49 @@ export default function VehicleValidityAlerts() {
           Validity Alerts
         </CardTitle>
         <CardDescription>
-          Documents expiring in {format(new Date(), 'MMMM yyyy')}
+          Documents expiring or expired this month
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {expiringThisMonth.length === 0 ? (
+          {expiringAlerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
               <ShieldCheck className="h-8 w-8 mb-2 opacity-20" />
               <p className="text-sm">No vehicles require document updates this month.</p>
             </div>
           ) : (
-            expiringThisMonth.map((v) => (
-              <div key={v.id} className="flex flex-col gap-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
+            expiringAlerts.map((v) => (
+              <div key={v.id} className={`flex flex-col gap-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors ${v.isExpired ? 'border-red-200 bg-red-50/10' : ''}`}>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-sm">{v.regNumber}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">{v.regNumber}</span>
+                    {v.isExpired && <Badge variant="destructive" className="text-[8px] h-4">EXPIRED</Badge>}
+                  </div>
                   <Badge variant="outline" className="text-[10px] uppercase font-mono">{v.brandModel}</Badge>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                  {v.regExpiring && (
-                    <div className="flex items-center gap-2 text-xs font-medium text-orange-600 dark:text-orange-400">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 mt-1">
+                  {v.regAlert && (
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-orange-600 dark:text-orange-400">
                       <FileText className="h-3.5 w-3.5" />
-                      <span>Reg Exp: {format(parseISO(v.regValidity), 'MMM dd')}</span>
+                      <span>Reg: {v.regValidity ? format(parseISO(v.regValidity), 'MMM dd') : 'N/A'}</span>
                     </div>
                   )}
-                  {v.insExpiring && (
-                    <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400">
+                  {v.insAlert && (
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-blue-600 dark:text-blue-400">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      <span>Ins Exp: {format(parseISO(v.insuranceValidity), 'MMM dd')}</span>
+                      <span>Ins: {v.insuranceValidity ? format(parseISO(v.insuranceValidity), 'MMM dd') : 'N/A'}</span>
+                    </div>
+                  )}
+                  {v.taxAlert && (
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-purple-600">
+                      <ReceiptText className="h-3.5 w-3.5" />
+                      <span>Tax: {v.taxValidity ? format(parseISO(v.taxValidity), 'MMM dd') : 'N/A'}</span>
+                    </div>
+                  )}
+                  {v.puccAlert && (
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-green-600">
+                      <Zap className="h-3.5 w-3.5" />
+                      <span>PUCC: {v.puccValidity ? format(parseISO(v.puccValidity), 'MMM dd') : 'N/A'}</span>
                     </div>
                   )}
                 </div>
