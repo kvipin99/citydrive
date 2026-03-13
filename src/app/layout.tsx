@@ -1,8 +1,8 @@
+import ServiceWorkerRegister from '@/components/service-worker-register';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-
 export const metadata: Metadata = {
   title: 'CityDrive - Driving School Management',
   description: 'A comprehensive management system for driving schools.',
@@ -28,11 +28,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-body antialiased">
-        <FirebaseClientProvider>
-          {children}
-          <Toaster />
-        </FirebaseClientProvider>
-      </body>
+  <FirebaseClientProvider>
+    <ServiceWorkerRegister />
+    {children}
+    <Toaster />
+  </FirebaseClientProvider>
+</body>
     </html>
   );
 }
