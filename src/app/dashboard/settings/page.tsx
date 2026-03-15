@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -13,13 +14,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
-import { sendBackupEmail } from "@/ai/flows/backup-email-flow";
+import { syncToGoogleDrive } from "@/ai/flows/google-drive-sync-flow";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,8 +46,6 @@ const BACKUP_COLLECTIONS = [
   "resources",
   "quizLinks"
 ];
-
-const DEFAULT_BACKUP_EMAIL = "kvipin99@gmail.com";
 
 function SettingsContent() {
   const { toast } = useToast();
@@ -166,7 +165,7 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Syncing to Drive", description: "Aggregating full school database for Drive sync..." });
+    toast({ title: "ZIP Syncing to Drive", description: "Compressing and uploading full school database to Drive..." });
 
     try {
       const backupData: Record<string, any[]> = {};
@@ -179,22 +178,27 @@ function SettingsContent() {
           total += docs.length;
         } catch (e) {}
       }
-      const recipient = autoSettings?.email || DEFAULT_BACKUP_EMAIL;
-      const result = await sendBackupEmail({
-        email: recipient,
-        backupSummary: `Manual Google Drive Sync: ${total} records across all modules.`,
-        timestamp: new Date().toLocaleString('en-IN'),
+      
+      const result = await syncToGoogleDrive({
         backupDataJson: JSON.stringify(backupData, null, 2),
+        timestamp: new Date().toLocaleString('en-IN'),
       });
+
       if (result.success) {
-        const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-${Date.now()}`);
-        setDocumentNonBlocking(metadataRef, { id: metadataRef.id, timestamp: serverTimestamp(), performedBy: user.email, status: "Successful", type: "Manual Google Drive Sync" }, { merge: true });
-        toast({ title: "Sync Successful", description: `Database snapshot synced to Drive via ${recipient}.` });
+        const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-MANUAL-${Date.now()}`);
+        setDocumentNonBlocking(metadataRef, { 
+          id: metadataRef.id, 
+          timestamp: serverTimestamp(), 
+          performedBy: user.email, 
+          status: "Successful", 
+          type: "Manual Google Drive ZIP Sync" 
+        }, { merge: true });
+        toast({ title: "Sync Successful", description: result.message });
       } else {
         toast({ variant: "destructive", title: "Sync Failed", description: result.message });
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Internal Error" });
+      toast({ variant: "destructive", title: "Internal Error", description: error.message });
     } finally {
       setIsBackingUpManual(false);
     }
@@ -378,36 +382,52 @@ function SettingsContent() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <HardDrive className="h-5 w-5 text-primary" />
-                  Google Drive Backup Sync
+                  Google Drive API Backup Sync
                 </CardTitle>
-                <CardDescription>Automated school records snapshots synced to your Google Drive.</CardDescription>
+                <CardDescription>Direct database ZIP snapshots pushed to your 'Firebase Backups' folder.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                   <div className="space-y-0.5">
-                    <Label className="text-base">Enable Daily Drive Sync</Label>
-                    <p className="text-sm text-muted-foreground">Syncs a full system archive to your linked Drive account every 24 hours.</p>
+                    <Label className="text-base">Enable Daily ZIP Sync</Label>
+                    <p className="text-sm text-muted-foreground">Automatically ZIP and upload a full archive to Drive every 24 hours.</p>
                   </div>
                   <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
                 </div>
-                <div className="grid gap-2">
-                  <Label>Google Drive Linked Email (Backup Target)</Label>
-                  <Input 
-                    placeholder={DEFAULT_BACKUP_EMAIL}
-                    value={autoSettings?.email || ""} 
-                    onChange={(e) => setDocumentNonBlocking(settingsRef!, { email: e.target.value }, { merge: true })} 
-                  />
-                  <p className="text-[10px] text-muted-foreground italic">Backups are transmitted to this address for integration with Google Drive storage.</p>
+                
+                <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Service Account Status
+                  </div>
+                  <div className="grid gap-1.5">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-muted-foreground">Target Folder</span>
+                      <span className="font-mono">/Firebase Backups</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-muted-foreground">Auto-Retention</span>
+                      <span className="font-bold text-orange-600">30 Days (Active)</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-muted-foreground">Compression</span>
+                      <span className="font-bold text-green-600">JSZip (DEFLATE L9)</span>
+                    </div>
+                  </div>
                 </div>
+
                 <Separator />
+                
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
                   <div className="grid gap-1">
-                    <p className="text-sm font-bold">Sync Snapshot to Drive Now</p>
-                    <p className="text-xs text-muted-foreground">Immediately trigger a full database sync to your linked Drive account.</p>
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      <FileArchive className="h-4 w-4 text-primary" />
+                      Sync ZIP Snapshot Now
+                    </p>
+                    <p className="text-xs text-muted-foreground">Manually trigger a compressed upload to your Google Drive account.</p>
                   </div>
                   <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
                     {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                    Sync to Drive Now
+                    Sync ZIP to Drive
                   </Button>
                 </div>
               </CardContent>

@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, getDocs, doc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
-import { sendBackupEmail } from '@/ai/flows/backup-email-flow';
+import { syncToGoogleDrive } from '@/ai/flows/google-drive-sync-flow';
 import { useToast } from '@/hooks/use-toast';
 import { startOfDay } from 'date-fns';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -23,11 +24,9 @@ const BACKUP_COLLECTIONS = [
   "settings"
 ];
 
-const DEFAULT_BACKUP_EMAIL = "kvipin99@gmail.com";
-
 /**
  * This component runs silently in the background of the dashboard layout.
- * It checks if a daily backup has been performed and triggers one if needed.
+ * It checks if a daily backup has been performed and triggers a ZIP sync to Drive if needed.
  */
 export function AutoBackupTrigger() {
   const db = useFirestore();
@@ -66,7 +65,7 @@ export function AutoBackupTrigger() {
 
         // If the last backup was performed BEFORE today, we trigger a new one.
         if (lastBackupDate < startOfTodayDate) {
-          console.log("[CITYDRIVE] Daily Google Drive sync sequence initiated...");
+          console.log("[CITYDRIVE] Daily Google Drive ZIP sync sequence initiated...");
           setIsProcessing(true);
           
           const backupData: Record<string, any[]> = {};
@@ -85,14 +84,9 @@ export function AutoBackupTrigger() {
             }
           }
 
-          const recipient = autoSettings?.email || DEFAULT_BACKUP_EMAIL;
-          const summary = `Automated Daily Drive Sync: ${totalRecords} records across modules.`;
-          
-          const result = await sendBackupEmail({
-            email: recipient,
-            backupSummary: summary,
-            timestamp: new Date().toLocaleString('en-IN'),
+          const result = await syncToGoogleDrive({
             backupDataJson: JSON.stringify(backupData, null, 2),
+            timestamp: new Date().toLocaleString('en-IN'),
           });
 
           if (result.success) {
@@ -103,12 +97,12 @@ export function AutoBackupTrigger() {
               timestamp: serverTimestamp(),
               performedBy: "System Drive Automation",
               status: "Successful",
-              type: "Daily Google Drive Sync"
+              type: "Daily Google Drive ZIP Sync"
             }, { merge: true });
 
             toast({
               title: "Backup Synced to Drive",
-              description: `Database snapshot has been successfully synced to your Google Drive via ${recipient}.`,
+              description: `A ZIP snapshot (${totalRecords} records) was saved to your 'Firebase Backups' folder.`,
             });
           }
         }
@@ -119,7 +113,7 @@ export function AutoBackupTrigger() {
       }
     }
 
-    // Run the check with a small delay after dashboard mount to prioritize UI rendering
+    // Run the check with a small delay after dashboard mount
     const timer = setTimeout(() => executeDailyCheck(), 5000);
     return () => clearTimeout(timer);
   }, [db, user?.uid, isAdmin, autoSettings, isProcessing, toast]);
