@@ -13,13 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2 } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2, AlertCircle, Info } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { syncToGoogleDrive, getGoogleAuthUrl } from "@/ai/flows/google-drive-sync-flow";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +44,8 @@ const BACKUP_COLLECTIONS = [
   "classes",
   "attendance",
   "resources",
-  "quizLinks"
+  "quizLinks",
+  "settings"
 ];
 
 function SettingsContent() {
@@ -62,7 +64,6 @@ function SettingsContent() {
   
   const isMaster = user?.email === 'master@citydriving.in';
   const isAdmin = profile?.role === 'Admin' || isMaster;
-  const isBranchManager = profile?.role === 'BranchManager';
 
   useEffect(() => {
     const tabFromUrl = searchParams.get("tab");
@@ -75,6 +76,11 @@ function SettingsContent() {
     const success = searchParams.get("success");
     if (success === "connected") {
       toast({ title: "Google Drive Connected", description: "The backup system is now linked to your account." });
+    }
+    
+    const error = searchParams.get("error");
+    if (error === "auth_failed") {
+      toast({ variant: "destructive", title: "Connection Failed", description: "The Google authorization flow was interrupted or failed." });
     }
   }, [searchParams, profile, isAdmin, toast]);
 
@@ -95,23 +101,22 @@ function SettingsContent() {
   const controlsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "controls") : null), [db, isAdmin]);
   const { data: controls } = useDoc(controlsRef);
 
-  const [newPassword, setNewPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [branchName, setBranchName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
   const [isBackingUpManual, setIsBackingUpManual] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState("");
 
   useEffect(() => {
     if (profile?.name) setDisplayName(profile.name);
-    if (profile?.branchName) setBranchName(profile.branchName);
-    else if (profile?.branch) setBranchName(profile.branch);
   }, [profile]);
 
   const handleConnectDrive = async () => {
-    const url = await getGoogleAuthUrl();
-    window.location.href = url;
+    try {
+      const url = await getGoogleAuthUrl();
+      window.location.href = url;
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    }
   };
 
   const handleManualBackupTrigger = async () => {
@@ -220,7 +225,7 @@ function SettingsContent() {
               </CardHeader>
               <CardContent>
                 <Table>
-                  <TableHeader><TableRow><TableHead>User / Role</TableHead><TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>User / Role</TableHead>    <TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {isUsersLoading ? <TableRow><TableCell colSpan={3} className="text-center py-8">Loading...</TableCell></TableRow> : filteredUsers.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 italic">No matches.</TableCell></TableRow> : filteredUsers.map((u: any) => (
                       <TableRow key={u.id}>
@@ -313,6 +318,22 @@ function SettingsContent() {
                 <CardDescription>Daily database ZIP snapshots.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {!driveTokens && (
+                  <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Action Required: Resolve 403 Access Denied</AlertTitle>
+                    <AlertDescription className="text-sm space-y-3 mt-2">
+                      <p>To fix the 403 error during Google Connection, you <b>MUST</b> add your email to the Google Cloud Project:</p>
+                      <ol className="list-decimal pl-5 space-y-1 font-medium">
+                        <li>Go to <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" className="underline text-blue-600">Google OAuth Consent Screen</a></li>
+                        <li>Find the <b>"Test Users"</b> section.</li>
+                        <li>Click <b>"+ ADD USERS"</b> and enter your email: <b>{user?.email}</b></li>
+                        <li>Ensure the Redirect URI <b>https://{window.location.host}/api/auth/google/callback</b> is added to your OAuth Client.</li>
+                      </ol>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                     <div className="space-y-0.5">
@@ -327,7 +348,7 @@ function SettingsContent() {
                       </Badge>
                     ) : (
                       <Button onClick={handleConnectDrive} size="sm" className="gap-2">
-                        <LinkIcon className="h-4 w-4" /> Connect Account
+                        <LinkIcon className="h-4 w-4" /> Connect Google Account
                       </Button>
                     )}
                   </div>
