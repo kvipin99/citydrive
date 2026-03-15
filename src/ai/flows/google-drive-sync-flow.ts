@@ -1,6 +1,11 @@
 'use server';
 /**
- * @fileOverview A self-contained Genkit flow for backing up Firestore and Storage to Google Drive.
+ * @fileOverview A robust Genkit flow for backing up Firestore and Storage to Google Drive.
+ * 
+ * Requirements:
+ * - Compresses Firestore data (JSON) and Storage files into a single ZIP.
+ * - Manages a "Firebase Backups" folder.
+ * - Implements a 30-day retention policy.
  */
 
 import { ai } from '@/ai/genkit';
@@ -29,6 +34,7 @@ const DriveSyncOutputSchema = z.object({
   fileId: z.string().optional(),
 });
 
+// Credentials provided by user
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID || "144251106401-7asi8iiqruhe8jq52drha3ct6pgkn4rq.apps.googleusercontent.com";
 const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET || "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";
 
@@ -39,6 +45,9 @@ async function getRedirectUri() {
   return `${protocol}://${host}/api/auth/google/callback`;
 }
 
+/**
+ * Generates the Google Auth URL for the user to link their account.
+ */
 export async function getGoogleAuthUrl() {
   const redirectUri = await getRedirectUri();
   const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
@@ -50,6 +59,9 @@ export async function getGoogleAuthUrl() {
   });
 }
 
+/**
+ * Main function to run the full drive backup.
+ */
 export async function runFullDriveBackup() {
   return driveSyncFlow({});
 }
@@ -64,7 +76,6 @@ const driveSyncFlow = ai.defineFlow(
     const { firestore, firebaseApp } = initializeFirebase();
     const storage = getStorage(firebaseApp);
     const redirectUri = await getRedirectUri();
-    const timestamp = new Date().toLocaleString('en-IN');
     
     try {
       const tokenRef = doc(firestore, 'settings', 'drive_tokens');
@@ -78,6 +89,7 @@ const driveSyncFlow = ai.defineFlow(
       const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
       oauth2Client.setCredentials(tokens);
 
+      // Handle token refresh automatically
       oauth2Client.on('tokens', async (newTokens) => {
         await setDoc(tokenRef, { ...newTokens, updatedAt: new Date().toISOString() }, { merge: true });
       });
@@ -86,16 +98,20 @@ const driveSyncFlow = ai.defineFlow(
       const zip = new JSZip();
 
       // 1. DATA AGGREGATION: Firestore
+      console.log("[BACKUP] Aggregating Firestore collections...");
       const dbData: Record<string, any[]> = {};
       for (const colName of BACKUP_COLLECTIONS) {
         try {
           const snap = await getDocs(collection(firestore, colName));
           dbData[colName] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-        } catch (e) { console.warn(`Skipped ${colName}`); }
+        } catch (e) { 
+          console.warn(`[BACKUP] Skipped collection ${colName}:`, e); 
+        }
       }
       zip.file("database.json", JSON.stringify(dbData, null, 2));
 
-      // 2. DATA AGGREGATION: Storage (Top-level files)
+      // 2. DATA AGGREGATION: Storage (Top-level)
+      console.log("[BACKUP] Aggregating Storage files...");
       try {
         const storageRef = ref(storage, '/');
         const listResult = await listAll(storageRef);
@@ -103,9 +119,16 @@ const driveSyncFlow = ai.defineFlow(
           const bytes = await getBytes(item);
           zip.file(`storage/${item.name}`, bytes);
         }
-      } catch (e) { console.warn("Storage backup limited or empty."); }
+      } catch (e) { 
+        console.warn("[BACKUP] Storage backup limited or empty:", e); 
+      }
 
-      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+      // Generate ZIP Buffer
+      const zipBuffer = await zip.generateAsync({ 
+        type: 'nodebuffer', 
+        compression: 'DEFLATE', 
+        compressionOptions: { level: 9 } 
+      });
 
       // 3. FOLDER MANAGEMENT
       let folderId: string | null = null;
@@ -125,7 +148,7 @@ const driveSyncFlow = ai.defineFlow(
         folderId = newFolder.data.id!;
       }
 
-      // 4. RETENTION: Delete files > 30 days
+      // 4. RETENTION POLICY: Delete files > 30 days old
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const oldFiles = await drive.files.list({
@@ -136,30 +159,42 @@ const driveSyncFlow = ai.defineFlow(
       if (oldFiles.data.files) {
         for (const file of oldFiles.data.files) {
           if (file.createdTime && new Date(file.createdTime) < thirtyDaysAgo) {
+            console.log(`[BACKUP] Deleting expired backup: ${file.name}`);
             await drive.files.delete({ fileId: file.id! });
           }
         }
       }
 
-      // 5. UPLOAD
-      const fileName = `backup-${new Date().toISOString().split('T')[0]}.zip`;
+      // 5. UPLOAD ZIP
+      const fileName = `backup-${new Date().toISOString().split('T')[0]}-${Date.now()}.zip`;
       const response = await drive.files.create({
-        requestBody: { name: fileName, parents: [folderId!] },
-        media: { mimeType: 'application/zip', body: Readable.from(zipBuffer) },
+        requestBody: { 
+          name: fileName, 
+          parents: [folderId!] 
+        },
+        media: { 
+          mimeType: 'application/zip', 
+          body: Readable.from(zipBuffer) 
+        },
         fields: 'id',
       });
 
-      // 6. LOGGING
+      // 6. AUDIT LOGGING
       const metadataRef = doc(firestore, "backupMetadata", `AUTO-${Date.now()}`);
       await setDoc(metadataRef, {
         id: metadataRef.id,
         timestamp: serverTimestamp(),
         status: "Successful",
-        type: "Scheduled Drive ZIP Sync",
-        fileName
+        type: "Daily ZIP Sync",
+        fileName,
+        fileId: response.data.id
       });
 
-      return { success: true, message: `Backup uploaded as ${fileName}.`, fileId: response.data.id! };
+      return { 
+        success: true, 
+        message: `Backup uploaded successfully as ${fileName}.`, 
+        fileId: response.data.id! 
+      };
     } catch (error: any) {
       console.error('[BACKUP ERROR]', error);
       return { success: false, message: `Backup failed: ${error.message}` };

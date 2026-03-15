@@ -19,7 +19,7 @@ import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } f
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
-import { syncToGoogleDrive, getGoogleAuthUrl } from "@/ai/flows/google-drive-sync-flow";
+import { runFullDriveBackup, getGoogleAuthUrl } from "@/ai/flows/google-drive-sync-flow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -55,7 +55,6 @@ function SettingsContent() {
   const { user } = useUser();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState("profile");
   const [currentOrigin, setCurrentOrigin] = useState("");
@@ -131,33 +130,14 @@ function SettingsContent() {
   };
 
   const handleManualBackupTrigger = async () => {
-    if (!db || !user) return;
+    if (!isAdmin) return;
     setIsBackingUpManual(true);
-    toast({ title: "ZIP Syncing to Drive", description: "Compressing and uploading full school database to Drive..." });
+    toast({ title: "Backup Sync Started", description: "Packaging database and storage into ZIP..." });
 
     try {
-      const backupData: Record<string, any[]> = {};
-      for (const colName of BACKUP_COLLECTIONS) {
-        try {
-          const snapshot = await getDocs(collection(db, colName));
-          backupData[colName] = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-        } catch (e) {}
-      }
-      
-      const result = await syncToGoogleDrive({
-        backupDataJson: JSON.stringify(backupData, null, 2),
-        timestamp: new Date().toLocaleString('en-IN'),
-      });
+      const result = await runFullDriveBackup();
 
       if (result.success) {
-        const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-MANUAL-${Date.now()}`);
-        setDocumentNonBlocking(metadataRef, { 
-          id: metadataRef.id, 
-          timestamp: serverTimestamp(), 
-          performedBy: user.email, 
-          status: "Successful", 
-          type: "Manual Google Drive ZIP Sync" 
-        }, { merge: true });
         toast({ title: "Sync Successful", description: result.message });
       } else {
         toast({ variant: "destructive", title: "Sync Failed", description: result.message });
@@ -326,20 +306,19 @@ function SettingsContent() {
                   <HardDrive className="h-5 w-5 text-primary" />
                   Google Drive Backup Sync
                 </CardTitle>
-                <CardDescription>Daily database ZIP snapshots.</CardDescription>
+                <CardDescription>Daily database and storage ZIP snapshots.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <Alert className="bg-primary/5 border-primary/20">
                   <Info className="h-4 w-4" />
-                  <AlertTitle>Final Configuration Checklist</AlertTitle>
+                  <AlertTitle>Google Console Checklist</AlertTitle>
                   <AlertDescription className="text-xs space-y-3 mt-2">
-                    <p>To avoid <b>Error 400 (redirect_uri_mismatch)</b> and <b>403 (Forbidden)</b>, verify these settings in your <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline text-blue-600">Google Cloud Console</a>:</p>
                     <ol className="list-decimal pl-5 space-y-2">
                       <li>
-                        <b>Test Users:</b> Under "OAuth Consent Screen", ensure your email <b>{user?.email}</b> is added to "Test Users".
+                        <b>Test Users:</b> Ensure <b>{user?.email}</b> is added to "Test Users" in OAuth Consent Screen.
                       </li>
                       <li>
-                        <b>Redirect URI:</b> Under "Credentials" {"->"} "OAuth 2.0 Client IDs", add the following URI to <b>"Authorized redirect URIs"</b>:
+                        <b>Authorized Redirect URI:</b> Add this URI to your OAuth Client credentials:
                         <div className="flex items-center gap-2 mt-1 p-2 bg-muted rounded font-mono text-[10px] break-all">
                           <span>{currentOrigin}/api/auth/google/callback</span>
                           <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCopyUri}>
@@ -377,7 +356,7 @@ function SettingsContent() {
                     <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
                       <div className="space-y-0.5">
                         <Label className="text-base">Enable Daily ZIP Sync</Label>
-                        <p className="text-sm text-muted-foreground">Automatic 24h interval snapshots.</p>
+                        <p className="text-sm text-muted-foreground">Automatic interval snapshots (24h).</p>
                       </div>
                       <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
                     </div>
@@ -391,7 +370,7 @@ function SettingsContent() {
                         <FileArchive className="h-4 w-4 text-primary" />
                         Sync ZIP Snapshot Now
                       </p>
-                      <p className="text-xs text-muted-foreground">Manually trigger a compressed upload.</p>
+                      <p className="text-xs text-muted-foreground">Manually trigger a full ZIP upload to Drive.</p>
                     </div>
                     <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
                       {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
