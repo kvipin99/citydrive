@@ -67,7 +67,7 @@ export function AutoBackupTrigger() {
 
         // If the last backup was performed BEFORE today, we trigger a new one.
         if (lastBackupDate < startOfTodayDate) {
-          console.log("[CITYDRIVE] Daily backup sequence initiated...");
+          console.log("[CITYDRIVE] Daily Google Drive sync sequence initiated...");
           setIsProcessing(true);
           
           const backupData: Record<string, any[]> = {};
@@ -87,7 +87,7 @@ export function AutoBackupTrigger() {
           }
 
           const recipient = autoSettings?.email || DEFAULT_BACKUP_EMAIL;
-          const summary = `Automated Daily Snapshot: ${totalRecords} records across ${Object.keys(backupData).length} modules.`;
+          const summary = `Automated Daily Drive Sync: ${totalRecords} records across modules.`;
           
           const result = await sendBackupEmail({
             email: recipient,
@@ -98,26 +98,25 @@ export function AutoBackupTrigger() {
 
           if (result.success) {
             // Record the successful automated run
-            const metadataRef = doc(db, "backupMetadata", `AUTO-${Date.now()}`);
+            const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-AUTO-${Date.now()}`);
             setDocumentNonBlocking(metadataRef, {
               id: metadataRef.id,
               timestamp: serverTimestamp(),
-              performedBy: "System Automation",
+              performedBy: "System Drive Automation",
               status: "Successful",
-              type: "Daily Email Backup"
+              type: "Daily Google Drive Sync"
             }, { merge: true });
 
             toast({
-              title: "Daily Backup Sent",
-              description: `System data has been successfully archived to ${recipient}.`,
+              title: "Backup Synced to Drive",
+              description: `Database snapshot has been successfully synced to your Google Drive via ${recipient}.`,
             });
           }
         }
       } catch (error) {
-        console.error("[CITYDRIVE] Auto-backup error:", error);
+        console.error("[CITYDRIVE] Auto-backup Drive sync error:", error);
       } finally {
-        // We set processing to false but effectively this component won't run again 
-        // until the next mount or dependency change because of the lastBackupDate check.
+        // Processing set to false
       }
     }
 

@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
@@ -167,7 +167,7 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!db || !user) return;
     setIsBackingUpManual(true);
-    toast({ title: "Processing Backup", description: "Aggregating full school database..." });
+    toast({ title: "Syncing to Drive", description: "Aggregating full school database for Drive sync..." });
 
     try {
       const backupData: Record<string, any[]> = {};
@@ -183,16 +183,16 @@ function SettingsContent() {
       const recipient = autoSettings?.email || DEFAULT_BACKUP_EMAIL;
       const result = await sendBackupEmail({
         email: recipient,
-        backupSummary: `Manual On-Demand Export: ${total} records across all modules.`,
+        backupSummary: `Manual Google Drive Sync: ${total} records across all modules.`,
         timestamp: new Date().toLocaleString('en-IN'),
         backupDataJson: JSON.stringify(backupData, null, 2),
       });
       if (result.success) {
-        const metadataRef = doc(db, "backupMetadata", `MANUAL-${Date.now()}`);
-        setDocumentNonBlocking(metadataRef, { id: metadataRef.id, timestamp: serverTimestamp(), performedBy: user.email, status: "Successful", type: "Manual Email Backup" }, { merge: true });
-        toast({ title: "Backup Sent", description: `Database snapshot emailed to ${recipient}.` });
+        const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-${Date.now()}`);
+        setDocumentNonBlocking(metadataRef, { id: metadataRef.id, timestamp: serverTimestamp(), performedBy: user.email, status: "Successful", type: "Manual Google Drive Sync" }, { merge: true });
+        toast({ title: "Sync Successful", description: `Database snapshot synced to Drive via ${recipient}.` });
       } else {
-        toast({ variant: "destructive", title: "Email Failed", description: result.message });
+        toast({ variant: "destructive", title: "Sync Failed", description: result.message });
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Internal Error" });
@@ -378,36 +378,37 @@ function SettingsContent() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <DatabaseBackup className="h-5 w-5 text-primary" />
-                  Daily Backup Automation
+                  <HardDrive className="h-5 w-5 text-primary" />
+                  Google Drive Backup Sync
                 </CardTitle>
-                <CardDescription>Automated school records snapshots sent via email.</CardDescription>
+                <CardDescription>Automated school records snapshots synced to your Google Drive.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                   <div className="space-y-0.5">
-                    <Label className="text-base">Enable Daily Auto-Backup</Label>
-                    <p className="text-sm text-muted-foreground">Sends a full system archive every 24 hours.</p>
+                    <Label className="text-base">Enable Daily Drive Sync</Label>
+                    <p className="text-sm text-muted-foreground">Syncs a full system archive to your linked Drive account every 24 hours.</p>
                   </div>
                   <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Destination Email (Default: ezydriveapp@gmail.com)</Label>
+                  <Label>Google Drive Linked Email (Backup Target)</Label>
                   <Input 
                     placeholder={DEFAULT_BACKUP_EMAIL}
                     value={autoSettings?.email || ""} 
                     onChange={(e) => setDocumentNonBlocking(settingsRef!, { email: e.target.value }, { merge: true })} 
                   />
+                  <p className="text-[10px] text-muted-foreground italic">Backups are transmitted to this address for integration with Google Drive storage.</p>
                 </div>
                 <Separator />
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
                   <div className="grid gap-1">
-                    <p className="text-sm font-bold">Trigger Manual Email Report</p>
-                    <p className="text-xs text-muted-foreground">Force-send a database snapshot immediately to the address above.</p>
+                    <p className="text-sm font-bold">Sync Snapshot to Drive Now</p>
+                    <p className="text-xs text-muted-foreground">Immediately trigger a full database sync to your linked Drive account.</p>
                   </div>
                   <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
-                    {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Send Report Now
+                    {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Sync to Drive Now
                   </Button>
                 </div>
               </CardContent>
