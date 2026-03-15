@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -47,7 +46,7 @@ const BACKUP_COLLECTIONS = [
   "quizLinks"
 ];
 
-const DEFAULT_BACKUP_EMAIL = "ezydriveapp@gmail.com";
+const DEFAULT_BACKUP_EMAIL = "kvipin99@gmail.com";
 
 function SettingsContent() {
   const { toast } = useToast();

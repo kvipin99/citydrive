@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -24,7 +23,7 @@ const BACKUP_COLLECTIONS = [
   "settings"
 ];
 
-const DEFAULT_BACKUP_EMAIL = "ezydriveapp@gmail.com";
+const DEFAULT_BACKUP_EMAIL = "kvipin99@gmail.com";
 
 /**
  * This component runs silently in the background of the dashboard layout.
