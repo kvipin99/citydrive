@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Copy } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
@@ -58,6 +58,7 @@ function SettingsContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState("profile");
+  const [currentOrigin, setCurrentOrigin] = useState("");
 
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
@@ -66,6 +67,10 @@ function SettingsContent() {
   const isAdmin = profile?.role === 'Admin' || isMaster;
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentOrigin(window.location.origin);
+    }
+
     const tabFromUrl = searchParams.get("tab");
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
@@ -117,6 +122,12 @@ function SettingsContent() {
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
     }
+  };
+
+  const handleCopyUri = () => {
+    const uri = `${currentOrigin}/api/auth/google/callback`;
+    navigator.clipboard.writeText(uri);
+    toast({ title: "Copied", description: "Redirect URI copied to clipboard." });
   };
 
   const handleManualBackupTrigger = async () => {
@@ -318,21 +329,27 @@ function SettingsContent() {
                 <CardDescription>Daily database ZIP snapshots.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {!driveTokens && (
-                  <Alert variant="destructive" className="bg-destructive/5 border-destructive/20">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Action Required: Resolve 403 Access Denied</AlertTitle>
-                    <AlertDescription className="text-sm space-y-3 mt-2">
-                      <p>To fix the 403 error during Google Connection, you <b>MUST</b> add your email to the Google Cloud Project:</p>
-                      <ol className="list-decimal pl-5 space-y-1 font-medium">
-                        <li>Go to <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" className="underline text-blue-600">Google OAuth Consent Screen</a></li>
-                        <li>Find the <b>"Test Users"</b> section.</li>
-                        <li>Click <b>"+ ADD USERS"</b> and enter your email: <b>{user?.email}</b></li>
-                        <li>Ensure the Redirect URI <b>https://{window.location.host}/api/auth/google/callback</b> is added to your OAuth Client.</li>
-                      </ol>
-                    </AlertDescription>
-                  </Alert>
-                )}
+                <Alert className="bg-primary/5 border-primary/20">
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Final Configuration Checklist</AlertTitle>
+                  <AlertDescription className="text-xs space-y-3 mt-2">
+                    <p>To avoid <b>Error 400 (redirect_uri_mismatch)</b> and <b>403 (Forbidden)</b>, verify these settings in your <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline text-blue-600">Google Cloud Console</a>:</p>
+                    <ol className="list-decimal pl-5 space-y-2">
+                      <li>
+                        <b>Test Users:</b> Under "OAuth Consent Screen", ensure your email <b>{user?.email}</b> is added to "Test Users".
+                      </li>
+                      <li>
+                        <b>Redirect URI:</b> Under "Credentials" {"->"} "OAuth 2.0 Client IDs", add the following URI to <b>"Authorized redirect URIs"</b>:
+                        <div className="flex items-center gap-2 mt-1 p-2 bg-muted rounded font-mono text-[10px] break-all">
+                          <span>{currentOrigin}/api/auth/google/callback</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCopyUri}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </li>
+                    </ol>
+                  </AlertDescription>
+                </Alert>
 
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
@@ -343,9 +360,12 @@ function SettingsContent() {
                       </p>
                     </div>
                     {driveTokens ? (
-                      <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
-                        <CheckCircle2 className="h-3 w-3" /> Connected
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
+                          <CheckCircle2 className="h-3 w-3" /> Connected
+                        </Badge>
+                        <Button variant="ghost" size="sm" onClick={handleConnectDrive} className="text-xs">Reconnect</Button>
+                      </div>
                     ) : (
                       <Button onClick={handleConnectDrive} size="sm" className="gap-2">
                         <LinkIcon className="h-4 w-4" /> Connect Google Account

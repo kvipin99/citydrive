@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID || "144251106401-7asi8iiqruhe8jq52drha3ct6pgkn4rq.apps.googleusercontent.com";
 const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET || "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";
-const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google/callback` : "https://studio--studio-6224335835-298c7.us-central1.hosted.app/api/auth/google/callback";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -16,7 +15,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+    // Dynamically determine the Redirect URI based on the incoming request to match the one sent during authorization
+    const host = request.headers.get('host') || 'localhost:9002';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+    const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
     const { tokens } = await oauth2Client.getToken(code);
 
     const { firestore } = initializeFirebase();
