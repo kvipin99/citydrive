@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -14,13 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2 } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
-import { syncToGoogleDrive } from "@/ai/flows/google-drive-sync-flow";
+import { syncToGoogleDrive, getGoogleAuthUrl } from "@/ai/flows/google-drive-sync-flow";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +71,12 @@ function SettingsContent() {
     } else if (profile) {
       setActiveTab(isAdmin ? "general" : "profile");
     }
-  }, [searchParams, profile, isAdmin]);
+
+    const success = searchParams.get("success");
+    if (success === "connected") {
+      toast({ title: "Google Drive Connected", description: "The backup system is now linked to your account." });
+    }
+  }, [searchParams, profile, isAdmin, toast]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -84,6 +88,9 @@ function SettingsContent() {
 
   const settingsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "backup") : null), [db, isAdmin]);
   const { data: autoSettings } = useDoc(settingsRef);
+
+  const tokensRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "drive_tokens") : null), [db, isAdmin]);
+  const { data: driveTokens } = useDoc(tokensRef);
 
   const controlsRef = useMemoFirebase(() => (db && isAdmin ? doc(db, "settings", "controls") : null), [db, isAdmin]);
   const { data: controls } = useDoc(controlsRef);
@@ -102,64 +109,9 @@ function SettingsContent() {
     else if (profile?.branch) setBranchName(profile.branch);
   }, [profile]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.type !== 'image/jpeg') {
-      toast({ variant: "destructive", title: "Invalid File Type", description: "Please upload a JPEG image." });
-      return;
-    }
-    if (file.size > 200 * 1024) {
-      toast({ variant: "destructive", title: "File Too Large", description: "Image must be less than 200 KB." });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (profileRef) {
-        updateDocumentNonBlocking(profileRef, { avatarUrl: event.target?.result as string });
-        toast({ title: "Photo Updated", description: "Your profile picture has been changed." });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleUpdateProfile = () => {
-    if (!profileRef || !displayName) return;
-    updateDocumentNonBlocking(profileRef, { name: displayName, updatedAt: serverTimestamp() });
-    toast({ title: "Profile Updated" });
-  };
-
-  const handleUpdateBranch = () => {
-    if (!profileRef || !branchName) return;
-    updateDocumentNonBlocking(profileRef, { branchName: branchName, updatedAt: serverTimestamp() });
-    toast({ title: "Branch Updated" });
-  };
-
-  const handleUpdatePassword = async () => {
-    if (!user || !newPassword) return;
-    setIsSaving(true);
-    try {
-      await updatePassword(user, newPassword);
-      toast({ title: "Password Updated" });
-      setNewPassword("");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Update Failed", description: error.message });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleResetUserPassword = async (email: string) => {
-    if (!email) return;
-    try {
-      await sendPasswordResetEmail(auth!, email);
-      toast({ 
-        title: "Reset Email Sent", 
-        description: `A password reset link has been sent to ${email}. Ask the user to check their inbox.` 
-      });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Reset Failed", description: error.message });
-    }
+  const handleConnectDrive = async () => {
+    const url = await getGoogleAuthUrl();
+    window.location.href = url;
   };
 
   const handleManualBackupTrigger = async () => {
@@ -169,13 +121,10 @@ function SettingsContent() {
 
     try {
       const backupData: Record<string, any[]> = {};
-      let total = 0;
       for (const colName of BACKUP_COLLECTIONS) {
         try {
           const snapshot = await getDocs(collection(db, colName));
-          const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-          backupData[colName] = docs;
-          total += docs.length;
+          backupData[colName] = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
         } catch (e) {}
       }
       
@@ -215,9 +164,7 @@ function SettingsContent() {
         snapshot.docs.forEach(d => {
           if (colName === 'users') {
             const userData = d.data();
-            if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) {
-              return;
-            }
+            if (userData.role === 'Admin' || d.id === user?.uid || userData.email?.includes('master')) return;
           }
           deleteDocumentNonBlocking(doc(db, colName, d.id));
         });
@@ -232,7 +179,7 @@ function SettingsContent() {
 
   const filteredUsers = useMemo(() => {
     if (!allUsers) return [];
-    const unique = [];
+    const unique: any[] = [];
     const seen = new Set();
     allUsers.forEach((u: any) => {
       const key = u.email?.toLowerCase() || u.id?.toLowerCase();
@@ -281,16 +228,13 @@ function SettingsContent() {
                         <TableCell className="text-xs text-muted-foreground">{u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold" onClick={() => handleResetUserPassword(u.email)}>
+                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold" onClick={() => sendPasswordResetEmail(auth!, u.email)}>
                               <Key className="h-3 w-3 mr-1" /> Reset Pwd
                             </Button>
                             {isMaster && u.id !== user?.uid && (
-                              <Button variant="ghost" size="sm" className="text-destructive h-8 text-[10px] font-bold" onClick={() => { if(window.confirm('Delete this user profile permanently?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}>
+                              <Button variant="ghost" size="sm" className="text-destructive h-8 text-[10px] font-bold" onClick={() => { if(window.confirm('Delete user?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}>
                                 <Trash2 className="h-3 w-3 mr-1" /> Delete
                               </Button>
-                            )}
-                            {(!isMaster && u.id !== user?.uid && u.role === 'Admin') && (
-                              <Badge variant="secondary" className="text-[9px]">Protected</Badge>
                             )}
                           </div>
                         </TableCell>
@@ -306,17 +250,14 @@ function SettingsContent() {
                 <CardHeader>
                   <div className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="h-5 w-5" />
-                    <CardTitle>Advanced System Reset (Master Only)</CardTitle>
+                    <CardTitle>Advanced System Reset</CardTitle>
                   </div>
-                  <CardDescription className="text-destructive/80">Wipe data for fresh school entry. This action is irreversible.</CardDescription>
+                  <CardDescription className="text-destructive/80">Irreversible master data wipe.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <ResetAction title="Students & Photos" description="Wipes all student records, photos, and user logins." onReset={() => performModularReset("Students", ["students", "users"])} disabled={isResetting} />
-                  <ResetAction title="Attendance & Session Logs" description="Wipes all training session logs and scheduled classes." onReset={() => performModularReset("Attendance", ["attendance", "classes"])} disabled={isResetting} />
-                  <ResetAction title="Financial Receipts & Expenses" description="Wipes all fee collections and business expenses." onReset={() => performModularReset("Financials", ["payments", "expenses"])} disabled={isResetting} />
-                  <ResetAction title="Instructors & Staff Lists" description="Wipes all staff records and logins (excluding Admins)." onReset={() => performModularReset("Staff", ["instructors", "users"])} disabled={isResetting} />
-                  <ResetAction title="Vehicle Fleet Details" description="Wipes all vehicle registrations and validity data." onReset={() => performModularReset("Vehicles", ["vehicles"])} disabled={isResetting} />
-                  <ResetAction title="Backups & Quiz Links" description="Wipes resources, quiz links, and backup metadata." onReset={() => performModularReset("Resources", ["resources", "quizLinks", "backupMetadata"])} disabled={isResetting} />
+                  <ResetAction title="Students" onReset={() => performModularReset("Students", ["students", "users"])} disabled={isResetting} />
+                  <ResetAction title="Financials" onReset={() => performModularReset("Financials", ["payments", "expenses"])} disabled={isResetting} />
+                  <ResetAction title="Vehicles" onReset={() => performModularReset("Vehicles", ["vehicles"])} disabled={isResetting} />
                 </CardContent>
               </Card>
             )}
@@ -324,34 +265,22 @@ function SettingsContent() {
         )}
 
         <TabsContent value="profile" className="space-y-6 mt-6">
-          <div className="grid gap-6 md:grid-cols-5">
-            <Card className="md:col-span-2">
-              <CardHeader><CardTitle>Personal Info</CardTitle></CardHeader>
-              <CardContent className="flex flex-col items-center gap-6 py-8">
-                <div className="relative">
-                  <Avatar className="h-32 w-32 border-4 border-primary/20"><AvatarImage src={profile?.avatarUrl} /><AvatarFallback><UserIcon className="h-12 w-12" /></AvatarFallback></Avatar>
-                  <Button size="icon" variant="secondary" className="absolute bottom-0 right-0 rounded-full shadow-lg" onClick={() => fileInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
+          <Card>
+            <CardHeader><CardTitle>Personal Info</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center gap-6">
+                <Avatar className="h-20 w-20"><AvatarImage src={profile?.avatarUrl} /><AvatarFallback><UserIcon className="h-10 w-10" /></AvatarFallback></Avatar>
+                <div>
+                  <h3 className="font-bold">{profile?.name}</h3>
+                  <p className="text-sm text-muted-foreground">{profile?.email}</p>
                 </div>
-                <div className="text-center"><h3 className="font-bold text-lg">{profile?.name}</h3><p className="text-sm text-muted-foreground">{profile?.email}</p></div>
-              </CardContent>
-            </Card>
-            <Card className="md:col-span-3">
-              <CardHeader><CardTitle>Account Details</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4">
-                  <div className="grid gap-2"><Label>Display Name</Label><div className="flex gap-2"><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /><Button variant="outline" onClick={handleUpdateProfile}>Update</Button></div></div>
-                  {isBranchManager && <div className="grid gap-2"><Label>Branch Identity</Label><div className="flex gap-2"><Input value={branchName} onChange={(e) => setBranchName(e.target.value)} /><Button variant="outline" onClick={handleUpdateBranch}>Update</Button></div></div>}
-                </div>
-                <Separator />
-                <div className="space-y-4">
-                  <Label>Security</Label>
-                  <div className="grid gap-2"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></div>
-                  <Button onClick={handleUpdatePassword} disabled={isSaving || newPassword.length < 6}>{isSaving && <RefreshCw className="h-4 w-4 animate-spin mr-2" />}Update Password</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              <div className="grid gap-4 max-w-md">
+                <div className="grid gap-2"><Label>Display Name</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
+                <Button onClick={() => updateDocumentNonBlocking(profileRef!, { name: displayName })}>Update Profile</Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {isAdmin && (
@@ -362,18 +291,15 @@ function SettingsContent() {
                   <Clock className="h-5 w-5 text-orange-600" />
                   Operational Guardrails
                 </CardTitle>
-                <CardDescription>Control data entry policies for branch staff.</CardDescription>
+                <CardDescription>Branch entry policies.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent>
                 <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
                   <div className="space-y-0.5">
                     <Label className="text-base">Lock Entry Date (Today Only)</Label>
-                    <p className="text-sm text-muted-foreground">Force branch users to record attendance, receipts, and expenses for the current day only.</p>
+                    <p className="text-sm text-muted-foreground">Restrict branches to current date entries.</p>
                   </div>
-                  <Switch 
-                    checked={controls?.lockDateEntry ?? false} 
-                    onCheckedChange={(checked) => setDocumentNonBlocking(controlsRef!, { lockDateEntry: checked }, { merge: true })} 
-                  />
+                  <Switch checked={controls?.lockDateEntry ?? false} onCheckedChange={(checked) => setDocumentNonBlocking(controlsRef!, { lockDateEntry: checked }, { merge: true })} />
                 </div>
               </CardContent>
             </Card>
@@ -382,54 +308,56 @@ function SettingsContent() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <HardDrive className="h-5 w-5 text-primary" />
-                  Google Drive API Backup Sync
+                  Google Drive Backup Sync
                 </CardTitle>
-                <CardDescription>Direct database ZIP snapshots pushed to your 'Firebase Backups' folder.</CardDescription>
+                <CardDescription>Daily database ZIP snapshots.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Enable Daily ZIP Sync</Label>
-                    <p className="text-sm text-muted-foreground">Automatically ZIP and upload a full archive to Drive every 24 hours.</p>
-                  </div>
-                  <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
-                </div>
-                
-                <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase">
-                    <ShieldCheck className="h-3.5 w-3.5" /> Service Account Status
-                  </div>
-                  <div className="grid gap-1.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-muted-foreground">Target Folder</span>
-                      <span className="font-mono">/Firebase Backups</span>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Connection Status</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {driveTokens ? 'Linked to Google Drive' : 'Drive access not authorized.'}
+                      </p>
                     </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-muted-foreground">Auto-Retention</span>
-                      <span className="font-bold text-orange-600">30 Days (Active)</span>
-                    </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-muted-foreground">Compression</span>
-                      <span className="font-bold text-green-600">JSZip (DEFLATE L9)</span>
-                    </div>
+                    {driveTokens ? (
+                      <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
+                        <CheckCircle2 className="h-3 w-3" /> Connected
+                      </Badge>
+                    ) : (
+                      <Button onClick={handleConnectDrive} size="sm" className="gap-2">
+                        <LinkIcon className="h-4 w-4" /> Connect Account
+                      </Button>
+                    )}
                   </div>
-                </div>
 
-                <Separator />
-                
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
-                  <div className="grid gap-1">
-                    <p className="text-sm font-bold flex items-center gap-2">
-                      <FileArchive className="h-4 w-4 text-primary" />
-                      Sync ZIP Snapshot Now
-                    </p>
-                    <p className="text-xs text-muted-foreground">Manually trigger a compressed upload to your Google Drive account.</p>
-                  </div>
-                  <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
-                    {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                    Sync ZIP to Drive
-                  </Button>
+                  {driveTokens && (
+                    <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Enable Daily ZIP Sync</Label>
+                        <p className="text-sm text-muted-foreground">Automatic 24h interval snapshots.</p>
+                      </div>
+                      <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
+                    </div>
+                  )}
                 </div>
+                
+                {driveTokens && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-bold flex items-center gap-2">
+                        <FileArchive className="h-4 w-4 text-primary" />
+                        Sync ZIP Snapshot Now
+                      </p>
+                      <p className="text-xs text-muted-foreground">Manually trigger a compressed upload.</p>
+                    </div>
+                    <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
+                      {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                      Sync Now
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -439,32 +367,17 @@ function SettingsContent() {
   );
 }
 
-function ResetAction({ title, description, onReset, disabled }: { title: string, description: string, onReset: () => void, disabled?: boolean }) {
+function ResetAction({ title, onReset, disabled }: any) {
   return (
-    <div className="flex flex-col justify-between p-4 rounded-xl border bg-white shadow-sm space-y-3">
-      <div className="space-y-1">
-        <h4 className="text-sm font-black uppercase tracking-tight">{title}</h4>
-        <p className="text-[10px] text-muted-foreground leading-tight">{description}</p>
-      </div>
+    <div className="p-4 rounded-xl border bg-white space-y-3">
+      <h4 className="text-sm font-black uppercase">{title}</h4>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/20 hover:bg-destructive hover:text-white" disabled={disabled}>
-            <Eraser className="h-3.5 w-3.5 mr-1.5" /> Wipe Module
-          </Button>
+          <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/20" disabled={disabled}>Wipe</Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Wipe {title}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all records in this category. This action cannot be undone. Are you sure you want to proceed?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Confirm Wipe
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Wipe {title}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={onReset}>Wipe</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

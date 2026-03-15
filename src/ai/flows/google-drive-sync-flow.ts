@@ -1,13 +1,12 @@
-
 'use server';
 /**
- * @fileOverview A Genkit flow for backing up school data to Google Drive.
+ * @fileOverview A Genkit flow for backing up school data to Google Drive via OAuth2.
  * 
  * Features:
  * - ZIP compression of JSON data
- * - Folder management (creates "Firebase Backups" if missing)
+ * - OAuth2 token management (Refresh flow)
  * - Auto-retention (deletes files older than 30 days)
- * - Service Account OAuth2 authentication
+ * - Dynamic folder creation ("Firebase Backups")
  */
 
 import { ai } from '@/ai/genkit';
@@ -15,6 +14,8 @@ import { z } from 'genkit';
 import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { Readable } from 'stream';
+import { initializeFirebase } from '@/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const DriveSyncInputSchema = z.object({
   backupDataJson: z.string().describe('The full serialized database JSON.'),
@@ -27,6 +28,26 @@ const DriveSyncOutputSchema = z.object({
   fileId: z.string().optional(),
 });
 
+// Credentials provided by the user
+const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID || "144251106401-7asi8iiqruhe8jq52drha3ct6pgkn4rq.apps.googleusercontent.com";
+const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET || "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";
+const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google/callback` : "https://studio--studio-6224335835-298c7.us-central1.hosted.app/api/auth/google/callback";
+
+/**
+ * Generates the OAuth2 Auth URL for the user to connect their account.
+ */
+export async function getGoogleAuthUrl() {
+  const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/drive.file'],
+  });
+}
+
+/**
+ * Main flow to sync data to Google Drive.
+ */
 export async function syncToGoogleDrive(input: z.infer<typeof DriveSyncInputSchema>) {
   return driveSyncFlow(input);
 }
@@ -38,27 +59,30 @@ const driveSyncFlow = ai.defineFlow(
     outputSchema: DriveSyncOutputSchema,
   },
   async (input) => {
-    const clientEmail = process.env.DRIVE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = process.env.DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-    if (!clientEmail || !privateKey) {
-      console.error('[DRIVE SYNC] Missing credentials in environment variables.');
-      return {
-        success: false,
-        message: 'Google Drive credentials not configured. Please set DRIVE_SERVICE_ACCOUNT_EMAIL and DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY.',
-      };
-    }
-
+    const { firestore } = initializeFirebase();
+    
     try {
-      // 1. Authenticate
-      const auth = new google.auth.JWT(
-        clientEmail,
-        undefined,
-        privateKey,
-        ['https://www.googleapis.com/auth/drive.file']
-      );
+      // 1. Fetch Tokens from Firestore
+      const tokenRef = doc(firestore, 'settings', 'drive_tokens');
+      const tokenSnap = await getDoc(tokenRef);
+      
+      if (!tokenSnap.exists()) {
+        return {
+          success: false,
+          message: 'Google Drive not connected. Please go to Settings and click "Connect Google Account".',
+        };
+      }
 
-      const drive = google.drive({ version: 'v3', auth });
+      const tokens = tokenSnap.data();
+      const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+      oauth2Client.setCredentials(tokens);
+
+      // Handle token refresh automatically
+      oauth2Client.on('tokens', async (newTokens) => {
+        await setDoc(tokenRef, newTokens, { merge: true });
+      });
+
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
       // 2. ZIP the data
       const zip = new JSZip();
@@ -72,26 +96,24 @@ const driveSyncFlow = ai.defineFlow(
       });
 
       // 3. Find or Create "Firebase Backups" folder
-      let folderId = process.env.DRIVE_FOLDER_ID;
-      if (!folderId) {
-        const folderSearch = await drive.files.list({
-          q: "name = 'Firebase Backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-          fields: 'files(id)',
-          spaces: 'drive',
-        });
+      let folderId: string | null = null;
+      const folderSearch = await drive.files.list({
+        q: "name = 'Firebase Backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        fields: 'files(id)',
+        spaces: 'drive',
+      });
 
-        if (folderSearch.data.files && folderSearch.data.files.length > 0) {
-          folderId = folderSearch.data.files[0].id!;
-        } else {
-          const newFolder = await drive.files.create({
-            requestBody: {
-              name: 'Firebase Backups',
-              mimeType: 'application/vnd.google-apps.folder',
-            },
-            fields: 'id',
-          });
-          folderId = newFolder.data.id!;
-        }
+      if (folderSearch.data.files && folderSearch.data.files.length > 0) {
+        folderId = folderSearch.data.files[0].id!;
+      } else {
+        const newFolder = await drive.files.create({
+          requestBody: {
+            name: 'Firebase Backups',
+            mimeType: 'application/vnd.google-apps.folder',
+          },
+          fields: 'id',
+        });
+        folderId = newFolder.data.id!;
       }
 
       // 4. Clean up old backups (30 days retention)
