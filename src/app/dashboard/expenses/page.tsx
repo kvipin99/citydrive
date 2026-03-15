@@ -33,6 +33,27 @@ interface ExpenseRecord {
   updatedAt?: any;
 }
 
+// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
+const toUI = (iso: string) => {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return iso;
+};
+
+// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
+const fromUI = (ui: string) => {
+  if (!ui || !ui.includes('/')) return ui;
+  const parts = ui.split('/');
+  if (parts.length === 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = parts[1].padStart(2, '0');
+    const y = parts[2];
+    if (y.length === 4) return `${y}-${m}-${d}`;
+  }
+  return ui;
+};
+
 export default function ExpensesPage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -231,11 +252,11 @@ export default function ExpensesPage() {
               )}
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
-                <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.from} onChange={(e) => setDateRange({...dateRange, from: e.target.value})} />
+                <Input placeholder="DD/MM/YYYY" className="h-8 w-[130px] text-xs bg-background" value={toUI(dateRange.from)} onChange={(e) => setDateRange({...dateRange, from: fromUI(e.target.value)})} />
               </div>
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
-                <Input type="date" className="h-8 w-[130px] text-xs bg-background" value={dateRange.to} onChange={(e) => setDateRange({...dateRange, to: e.target.value})} />
+                <Input placeholder="DD/MM/YYYY" className="h-8 w-[130px] text-xs bg-background" value={toUI(dateRange.to)} onChange={(e) => setDateRange({...dateRange, to: fromUI(e.target.value)})} />
               </div>
               <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold text-primary hover:bg-primary/10" onClick={() => setDateRange({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') })}>Today</Button>
             </div>
@@ -262,7 +283,7 @@ export default function ExpensesPage() {
                 ) : (
                   filteredExpenses.map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-muted/20">
-                      <TableCell className="pl-6 text-muted-foreground text-xs">{exp.date ? format(new Date(exp.date), 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                      <TableCell className="pl-6 text-muted-foreground text-xs">{exp.date ? toUI(exp.date) : 'N/A'}</TableCell>
                       <TableCell><Badge variant="secondary" className="font-medium text-[10px] uppercase tracking-wider">{exp.category}</Badge></TableCell>
                       <TableCell className="max-w-[200px] truncate text-sm">{exp.description || '--'}</TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{exp.branch}</Badge></TableCell>
@@ -296,7 +317,7 @@ export default function ExpensesPage() {
           <DialogHeader><DialogTitle>{selectedExpense ? 'Edit Expense' : 'Record New Expense'}</DialogTitle><DialogDescription>{selectedExpense ? 'Update details.' : 'Enter details.'}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2"><Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input type="date" value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} disabled={isDateLocked} onChange={(e) => setFormData({...formData, date: e.target.value})} /></div>
+              <div className="grid gap-2"><Label className="flex items-center gap-2">Date (DD/MM/YYYY) {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input placeholder="DD/MM/YYYY" value={isDateLocked ? format(new Date(), 'dd/MM/yyyy') : toUI(formData.date)} disabled={isDateLocked} onChange={(e) => setFormData({...formData, date: fromUI(e.target.value)})} /></div>
               <div className="grid gap-2"><Label>Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid gap-2">

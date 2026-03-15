@@ -36,6 +36,27 @@ interface Vehicle {
   createdBy?: string;
 }
 
+// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
+const toUI = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const parts = String(iso).split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return String(iso);
+};
+
+// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
+const fromUI = (ui: string) => {
+  if (!ui || !ui.includes('/')) return ui;
+  const parts = ui.split('/');
+  if (parts.length === 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = parts[1].padStart(2, '0');
+    const y = parts[2];
+    if (y.length === 4) return `${y}-${m}-${d}`;
+  }
+  return ui;
+};
+
 export default function VehiclesPage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -69,25 +90,6 @@ export default function VehiclesPage() {
     status: 'Available' as typeof VEHICLE_STATUSES[number]
   });
 
-  const toInputDate = useCallback((val: any) => {
-    if (!val) return '';
-    try {
-      let d: Date;
-      if (val && typeof val.toDate === 'function') {
-        d = val.toDate();
-      } else if (val && typeof val.seconds === 'number') {
-        d = new Date(val.seconds * 1000);
-      } else if (typeof val === 'string') {
-        d = parseISO(val);
-      } else {
-        d = new Date(val);
-      }
-      return isValid(d) ? format(d, 'yyyy-MM-dd') : '';
-    } catch {
-      return '';
-    }
-  }, []);
-
   const handleOpenDialog = useCallback((vehicle: Vehicle | null = null) => {
     if (vehicle) {
       setSelectedVehicleId(vehicle.id);
@@ -95,10 +97,10 @@ export default function VehiclesPage() {
         regNumber: vehicle.regNumber || '',
         type: vehicle.type || '4wlr',
         brandModel: vehicle.brandModel || '',
-        regValidity: toInputDate(vehicle.regValidity),
-        insuranceValidity: toInputDate(vehicle.insuranceValidity),
-        taxValidity: toInputDate(vehicle.taxValidity),
-        puccValidity: toInputDate(vehicle.puccValidity),
+        regValidity: vehicle.regValidity || '',
+        insuranceValidity: vehicle.insuranceValidity || '',
+        taxValidity: vehicle.taxValidity || '',
+        puccValidity: vehicle.puccValidity || '',
         status: vehicle.status || 'Available'
       });
     } else {
@@ -114,9 +116,8 @@ export default function VehiclesPage() {
         status: 'Available'
       });
     }
-    // Micro-delay to prevent Radix dropdown conflict
     setTimeout(() => setIsDialogOpen(true), 150);
-  }, [toInputDate]);
+  }, []);
 
   const handleSaveVehicle = () => {
     if (!formData.regNumber || !formData.brandModel) {
@@ -152,18 +153,6 @@ export default function VehiclesPage() {
     deleteDocumentNonBlocking(vehicleRef);
     toast({ variant: "destructive", title: "Vehicle Deleted" });
   };
-
-  const formatSafeDate = useCallback((dateVal: any) => {
-    if (!dateVal) return 'N/A';
-    try {
-      let d: Date;
-      if (dateVal && typeof dateVal.toDate === 'function') d = dateVal.toDate();
-      else if (dateVal && typeof dateVal.seconds === 'number') d = new Date(dateVal.seconds * 1000);
-      else if (typeof dateVal === 'string') d = parseISO(dateVal);
-      else d = new Date(dateVal);
-      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
-    } catch { return 'N/A'; }
-  }, []);
 
   return (
     <div className="space-y-6">
@@ -209,10 +198,10 @@ export default function VehiclesPage() {
                       <TableCell className="font-medium">{v.brandModel}</TableCell>
                       <TableCell>
                         <div className="grid gap-1 text-[10px] uppercase font-bold tracking-tight">
-                          <div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{formatSafeDate(v.regValidity)}</span></div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{formatSafeDate(v.insuranceValidity)}</span></div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground"><ReceiptText className="h-3 w-3" /> Tax: <span className="text-foreground">{formatSafeDate(v.taxValidity)}</span></div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground"><Zap className="h-3 w-3" /> PUCC: <span className="text-foreground">{formatSafeDate(v.puccValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><FileText className="h-3 w-3" /> Reg: <span className="text-foreground">{toUI(v.regValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><ShieldCheck className="h-3 w-3" /> Ins: <span className="text-foreground">{toUI(v.insuranceValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><ReceiptText className="h-3 w-3" /> Tax: <span className="text-foreground">{toUI(v.taxValidity)}</span></div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground"><Zap className="h-3 w-3" /> PUCC: <span className="text-foreground">{toUI(v.puccValidity)}</span></div>
                         </div>
                       </TableCell>
                       <TableCell><Badge variant={v.status === 'Available' ? 'default' : 'secondary'} className="text-[10px] font-bold">{v.status}</Badge></TableCell>
@@ -248,7 +237,7 @@ export default function VehiclesPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if(!open) { setIsDialogOpen(false); setSelectedVehicleId(null); } }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 pb-2"><DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle><DialogDescription>Validity details.</DialogDescription></DialogHeader>
+          <DialogHeader className="p-6 pb-2"><DialogTitle>{selectedVehicleId ? 'Edit Vehicle' : 'Add New Vehicle'}</DialogTitle><DialogDescription>Validity details (DD/MM/YYYY).</DialogDescription></DialogHeader>
           <ScrollArea className="flex-1 min-h-0">
             <div className="grid gap-4 px-6 py-4 pb-32">
               <div className="grid grid-cols-2 gap-4">
@@ -257,12 +246,12 @@ export default function VehiclesPage() {
               </div>
               <div className="grid gap-2"><Label>Brand & Model</Label><Input value={formData.brandModel} onChange={(e) => setFormData({...formData, brandModel: e.target.value})} /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2"><Label>Reg Validity</Label><Input type="date" value={formData.regValidity} onChange={(e) => setFormData({...formData, regValidity: e.target.value})} /></div>
-                <div className="grid gap-2"><Label>Ins Validity</Label><Input type="date" value={formData.insuranceValidity} onChange={(e) => setFormData({...formData, insuranceValidity: e.target.value})} /></div>
+                <div className="grid gap-2"><Label>Reg Validity (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" value={toUI(formData.regValidity)} onChange={(e) => setFormData({...formData, regValidity: fromUI(e.target.value)})} /></div>
+                <div className="grid gap-2"><Label>Ins Validity (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" value={toUI(formData.insuranceValidity)} onChange={(e) => setFormData({...formData, insuranceValidity: fromUI(e.target.value)})} /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2"><Label>Tax Up To</Label><Input type="date" value={formData.taxValidity} onChange={(e) => setFormData({...formData, taxValidity: e.target.value})} /></div>
-                <div className="grid gap-2"><Label>PUCC Up To</Label><Input type="date" value={formData.puccValidity} onChange={(e) => setFormData({...formData, puccValidity: e.target.value})} /></div>
+                <div className="grid gap-2"><Label>Tax Up To (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" value={toUI(formData.taxValidity)} onChange={(e) => setFormData({...formData, taxValidity: fromUI(e.target.value)})} /></div>
+                <div className="grid gap-2"><Label>PUCC Up To (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" value={toUI(formData.puccValidity)} onChange={(e) => setFormData({...formData, puccValidity: fromUI(e.target.value)})} /></div>
               </div>
               <div className="grid gap-2"><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
             </div>

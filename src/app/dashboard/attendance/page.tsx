@@ -14,7 +14,7 @@ import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@
 import { setDocumentNonBlocking, deleteDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection, doc, query, where, serverTimestamp } from "firebase/firestore";
 import { CheckCircle2, Calendar as CalendarIcon, Search, RefreshCw, Clock, Trash2, PlusCircle, UserCircle, X, Car, BookOpen, Calculator, Filter, Users, UserSquare, Lock } from "lucide-react";
-import { format, isValid } from "date-fns";
+import { format, isValid, parse, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 const SESSION_TYPES = [
@@ -23,6 +23,27 @@ const SESSION_TYPES = [
 ] as const;
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+
+// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
+const toUI = (iso: string) => {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return iso;
+};
+
+// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
+const fromUI = (ui: string) => {
+  if (!ui || !ui.includes('/')) return ui;
+  const parts = ui.split('/');
+  if (parts.length === 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = parts[1].padStart(2, '0');
+    const y = parts[2];
+    if (y.length === 4) return `${y}-${m}-${d}`;
+  }
+  return ui;
+};
 
 export default function AttendancePage() {
   const db = useFirestore();
@@ -296,9 +317,9 @@ export default function AttendancePage() {
   const headerRangeDisplay = useMemo(() => {
     if (dateRange.from === dateRange.to) {
       const d = new Date(dateRange.from);
-      return isValid(d) ? format(d, 'EEEE, MMM do') : dateRange.from;
+      return isValid(d) ? format(d, 'dd/MM/yyyy') : dateRange.from;
     }
-    return `${dateRange.from} to ${dateRange.to}`;
+    return `${toUI(dateRange.from)} to ${toUI(dateRange.to)}`;
   }, [dateRange]);
 
   return (
@@ -351,18 +372,18 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">From:</Label>
                 <Input 
-                  type="date" 
-                  value={dateRange.from} 
-                  onChange={(e) => setDateRange({...dateRange, from: e.target.value})}
+                  placeholder="DD/MM/YYYY"
+                  value={toUI(dateRange.from)} 
+                  onChange={(e) => setDateRange({...dateRange, from: fromUI(e.target.value)})}
                   className="h-9 w-[130px] bg-background border-primary/20 text-xs font-bold"
                 />
               </div>
               <div className="flex items-center gap-2">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground">To:</Label>
                 <Input 
-                  type="date" 
-                  value={dateRange.to} 
-                  onChange={(e) => setDateRange({...dateRange, to: e.target.value})}
+                  placeholder="DD/MM/YYYY"
+                  value={toUI(dateRange.to)} 
+                  onChange={(e) => setDateRange({...dateRange, to: fromUI(e.target.value)})}
                   className="h-9 w-[130px] bg-background border-primary/20 text-xs font-bold"
                 />
               </div>
@@ -506,12 +527,12 @@ export default function AttendancePage() {
 
                   <div className="grid gap-3">
                     <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
-                      Session Date {isDateLocked && <Lock className="h-3 w-3" />}
+                      Session Date (DD/MM/YYYY) {isDateLocked && <Lock className="h-3 w-3" />}
                     </Label>
                     <Input 
-                      type="date" 
-                      value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : entryDate} 
-                      onChange={(e) => setEntryDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      value={isDateLocked ? format(new Date(), 'dd/MM/yyyy') : toUI(entryDate)} 
+                      onChange={(e) => setEntryDate(fromUI(e.target.value))}
                       disabled={isDateLocked}
                       className="h-11 bg-background border-2 font-bold"
                     />
@@ -686,7 +707,7 @@ export default function AttendancePage() {
                     <TableRow key={record.id} className="hover:bg-muted/20">
                       {(isStudent || dateRange.from !== dateRange.to) && (
                         <TableCell className="pl-6 font-medium text-xs">
-                          {record.date && isValid(new Date(record.date)) ? format(new Date(record.date), 'MMM dd, yyyy') : 'N/A'}
+                          {record.date ? toUI(record.date) : 'N/A'}
                         </TableCell>
                       )}
                       {!isStudent && (

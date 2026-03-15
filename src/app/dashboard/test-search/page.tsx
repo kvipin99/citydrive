@@ -29,6 +29,27 @@ const typeLabelMap: Record<string, string> = {
   'N/A': 'N/A'
 };
 
+// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
+const toUI = (iso: string | undefined | null) => {
+  if (!iso) return '';
+  const parts = String(iso).split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return String(iso);
+};
+
+// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
+const fromUI = (ui: string) => {
+  if (!ui || !ui.includes('/')) return ui;
+  const parts = ui.split('/');
+  if (parts.length === 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = parts[1].padStart(2, '0');
+    const y = parts[2];
+    if (y.length === 4) return `${y}-${m}-${d}`;
+  }
+  return ui;
+};
+
 export default function TestSearchPage() {
   const db = useFirestore();
   const { user } = useUser();
@@ -123,24 +144,24 @@ export default function TestSearchPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
+              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range (DD/MM/YYYY)</Label>
               <div className="space-y-2">
                 <div className="grid gap-1">
                   <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
                   <Input 
-                    type="date" 
+                    placeholder="DD/MM/YYYY"
                     className="h-9 text-xs" 
-                    value={dateRange.from} 
-                    onChange={(e) => setDateRange({...dateRange, from: e.target.value})} 
+                    value={toUI(dateRange.from)} 
+                    onChange={(e) => setDateRange({...dateRange, from: fromUI(e.target.value)})} 
                   />
                 </div>
                 <div className="grid gap-1">
                   <span className="text-[10px] font-medium text-muted-foreground uppercase">To</span>
                   <Input 
-                    type="date" 
+                    placeholder="DD/MM/YYYY"
                     className="h-9 text-xs" 
-                    value={dateRange.to} 
-                    onChange={(e) => setDateRange({...dateRange, to: e.target.value})} 
+                    value={toUI(dateRange.to)} 
+                    onChange={(e) => setDateRange({...dateRange, to: fromUI(e.target.value)})} 
                   />
                 </div>
               </div>
@@ -184,7 +205,7 @@ export default function TestSearchPage() {
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="bg-background">
-                    {dateRange.from === dateRange.to ? dateRange.from : `${dateRange.from} to ${dateRange.to}`}
+                    {dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} to ${toUI(dateRange.to)}`}
                   </Badge>
                 </div>
               </CardHeader>
@@ -240,7 +261,7 @@ export default function TestSearchPage() {
                             </TableCell>
                             <TableCell>
                               <Badge className={testType === 'learners' ? 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-50' : 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-50'}>
-                                {testType === 'learners' ? s.learnersDate : s.testDate}
+                                {toUI(testType === 'learners' ? s.learnersDate : s.testDate)}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right pr-6">
@@ -282,7 +303,6 @@ export default function TestSearchPage() {
 function StudentProfileViewContent({ student, db }: any) {
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !student?.userId) return null;
-    // CRITICAL: Must satisfies the studentUid == auth.uid rule
     return query(collection(db, 'attendance'), where('studentUid', '==', student.userId));
   }, [db, student?.userId]);
 
@@ -317,16 +337,6 @@ function StudentProfileViewContent({ student, db }: any) {
     return { ...hours, paid, balance };
   }, [attendance, student, vehicles]);
 
-  const formatSafeDate = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
-    } catch {
-      return 'N/A';
-    }
-  };
-
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
@@ -356,8 +366,8 @@ function StudentProfileViewContent({ student, db }: any) {
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><User className="h-4 w-4" /> Information</h3>
           <div className="grid gap-4 text-sm">
-            <ProfileItem icon={<Clock />} label="Admission Date" value={formatSafeDate(student.registrationDate)} />
-            <ProfileItem icon={<Calendar />} label="Date of Birth" value={formatSafeDate(student.dob)} />
+            <ProfileItem icon={<Clock />} label="Admission Date" value={toUI(student.registrationDate)} />
+            <ProfileItem icon={<Calendar />} label="Date of Birth" value={toUI(student.dob)} />
             <ProfileItem icon={<Phone />} label="Mobile" value={student.phone} />
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
@@ -366,12 +376,12 @@ function StudentProfileViewContent({ student, db }: any) {
             
             <div className="grid grid-cols-2 gap-4 col-span-full">
               <ProfileItem icon={<BookOpen />} label="Learners No" value={student.learnersNo} />
-              <ProfileItem icon={<Calendar />} label="Learners Test Date" value={formatSafeDate(student.learnersDate)} />
+              <ProfileItem icon={<Calendar />} label="Learners Test Date" value={toUI(student.learnersDate)} />
             </div>
 
             <div className="grid grid-cols-2 gap-4 col-span-full">
               <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
-              <ProfileItem icon={<Calendar />} label="DL Test Date" value={formatSafeDate(student.testDate)} />
+              <ProfileItem icon={<Calendar />} label="DL Test Date" value={toUI(student.testDate)} />
             </div>
 
             <Separator className="col-span-full my-1 opacity-50" />
@@ -414,7 +424,7 @@ function StudentProfileViewContent({ student, db }: any) {
               <TableBody>
                 {[...attendance].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((a: any) => (
                   <TableRow key={a.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs font-medium">{formatSafeDate(a.date)}</TableCell>
+                    <TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell>
                     <TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell>
                     <TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell>
                     <TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell>
@@ -439,7 +449,7 @@ function StudentProfileViewContent({ student, db }: any) {
               <TableBody>
                 {student.payments.map((p: any) => (
                   <TableRow key={p.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs">{formatSafeDate(p.date)}</TableCell>
+                    <TableCell className="text-xs">{toUI(p.date)}</TableCell>
                     <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
                     <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>
                   </TableRow>
