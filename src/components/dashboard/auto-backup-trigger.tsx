@@ -115,7 +115,7 @@ export function AutoBackupTrigger() {
       } catch (error) {
         console.error("[CITYDRIVE] Auto-backup Drive sync error:", error);
       } finally {
-        // Processing set to false
+        setIsProcessing(false);
       }
     }
 

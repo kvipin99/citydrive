@@ -1,6 +1,7 @@
 'use server';
 /**
  * @fileOverview This file implements a Genkit flow for sending database backups via email using Resend.
+ * Specifically optimized to act as a transport for Google Drive integration.
  *
  * - sendBackupEmail - A function that handles the email delivery process.
  * - BackupEmailInput - The input type for the sendBackupEmail function.
@@ -59,16 +60,17 @@ const backupEmailFlow = ai.defineFlow(
       ] : [];
 
       const { data, error } = await resend.emails.send({
-        from: 'Citydrive Backup <onboarding@resend.dev>',
+        from: 'Citydrive Sync <onboarding@resend.dev>',
         to: [input.email],
-        subject: `[BACKUP] Citydrive Data - ${input.timestamp}`,
-        text: `${input.backupSummary}
+        subject: `[GOOGLE DRIVE SYNC] Citydrive Database Snapshot - ${input.timestamp}`,
+        text: `Citydrive Management System: Daily Google Drive Synchronization
         
-Generated: ${input.timestamp}
+Summary: ${input.backupSummary}
+Timestamp: ${input.timestamp}
 
-${isTooBig ? 'Note: The database was too large to attach (>10MB). Please use the manual export tool in the dashboard.' : 'This is an automated backup. Please find the database snapshot attached as a JSON file.'}
+${isTooBig ? 'Note: The database snapshot was too large to attach (>10MB). Please use the manual export tool in the dashboard for local download.' : 'The attached JSON file contains the latest snapshot of your school database. This email is intended for your Google Drive-linked account for archival purposes.'}
 
-This email was sent via Resend from the Citydrive Management Portal.`,
+This is an automated system sync from the Citydrive Management Portal.`,
         attachments: attachments,
       });
 
@@ -77,17 +79,17 @@ This email was sent via Resend from the Citydrive Management Portal.`,
         throw new Error(error.message);
       }
 
-      console.log(`[BACKUP FLOW] Email sent successfully to ${input.email}. ID: ${data?.id}`);
+      console.log(`[BACKUP FLOW] Sync email sent successfully to ${input.email}. ID: ${data?.id}`);
 
       return {
         success: true,
-        message: `Backup successfully emailed to ${input.email}.`,
+        message: `Backup snapshot synced to ${input.email}.`,
       };
     } catch (err: any) {
-      console.error('[BACKUP FLOW] Unexpected error sending email:', err);
+      console.error('[BACKUP FLOW] Unexpected error sending sync email:', err);
       return {
         success: false,
-        message: `Failed to send email: ${err.message || 'Unknown provider error'}`,
+        message: `Failed to sync: ${err.message || 'Unknown provider error'}`,
       };
     }
   }
