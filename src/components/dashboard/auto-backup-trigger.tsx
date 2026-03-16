@@ -4,25 +4,9 @@
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, getDocs, doc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
-import { syncToGoogleDrive } from '@/ai/flows/google-drive-sync-flow';
+import { runFullDriveBackup } from '@/ai/flows/google-drive-sync-flow';
 import { useToast } from '@/hooks/use-toast';
 import { startOfDay } from 'date-fns';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-
-const BACKUP_COLLECTIONS = [
-  "users", 
-  "students", 
-  "instructors", 
-  "vehicles", 
-  "courses", 
-  "payments", 
-  "expenses", 
-  "classes",
-  "attendance",
-  "resources",
-  "quizLinks",
-  "settings"
-];
 
 /**
  * This component runs silently in the background of the dashboard layout.
@@ -68,41 +52,13 @@ export function AutoBackupTrigger() {
           console.log("[CITYDRIVE] Daily Google Drive ZIP sync sequence initiated...");
           setIsProcessing(true);
           
-          const backupData: Record<string, any[]> = {};
-          let totalRecords = 0;
-
-          // Aggregate all specified collections
-          for (const colName of BACKUP_COLLECTIONS) {
-            try {
-              const colRef = collection(db, colName);
-              const snapshot = await getDocs(colRef);
-              const docs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
-              backupData[colName] = docs;
-              totalRecords += docs.length;
-            } catch (e) {
-              console.warn(`[BACKUP] Skipping collection ${colName} due to permissions or absence.`);
-            }
-          }
-
-          const result = await syncToGoogleDrive({
-            backupDataJson: JSON.stringify(backupData, null, 2),
-            timestamp: new Date().toLocaleString('en-IN'),
-          });
+          // Call the server-side flow directly
+          const result = await runFullDriveBackup();
 
           if (result.success) {
-            // Record the successful automated run
-            const metadataRef = doc(db, "backupMetadata", `DRIVE-SYNC-AUTO-${Date.now()}`);
-            setDocumentNonBlocking(metadataRef, {
-              id: metadataRef.id,
-              timestamp: serverTimestamp(),
-              performedBy: "System Drive Automation",
-              status: "Successful",
-              type: "Daily Google Drive ZIP Sync"
-            }, { merge: true });
-
             toast({
-              title: "Backup Synced to Drive",
-              description: `A ZIP snapshot (${totalRecords} records) was saved to your 'Firebase Backups' folder.`,
+              title: "Daily Backup Synced",
+              description: result.message,
             });
           }
         }

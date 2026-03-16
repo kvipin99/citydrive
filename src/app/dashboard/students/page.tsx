@@ -273,7 +273,7 @@ function StudentsContent() {
 
   const filteredStudentsList = useMemo(() => {
     if (!students) return [];
-    let result = students;
+    let result = [...students];
     const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
@@ -287,7 +287,8 @@ function StudentsContent() {
         s.registerNo?.toLowerCase().includes(term)
       );
     }
-    return result;
+    // Sort by registrationDate (Admission Date) descending
+    return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
   }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
 
   const toInputDate = useCallback((val: any) => {
