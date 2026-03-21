@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -7,6 +8,7 @@ import { useUser, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { AutoBackupTrigger } from '@/components/dashboard/auto-backup-trigger';
+import { UsageHeartbeat } from '@/components/dashboard/usage-heartbeat';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import Image from "next/image";
 import placeholderData from '@/app/lib/placeholder-images.json';
@@ -49,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <div className="bg-sidebar">
         <AutoBackupTrigger />
+        <UsageHeartbeat />
         
         <Sidebar>
           <SidebarHeader>

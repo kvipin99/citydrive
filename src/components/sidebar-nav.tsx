@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from 'next/navigation';
@@ -20,6 +21,7 @@ import {
   ClipboardCheck,
   Layers,
   Search,
+  History,
 } from 'lucide-react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -38,6 +40,7 @@ const navItems = [
   { href: '/dashboard/courses', icon: Tags, label: 'Course Catalog', adminOnly: true },
   { href: '/dashboard/accounting', icon: Receipt, label: 'Accounting', staffOnly: true },
   { href: '/dashboard/reports', icon: Book, label: 'Reports', staffOnly: true },
+  { href: '/dashboard/usage', icon: History, label: 'User Usage', masterOnly: true },
   { href: '/dashboard/quizzes', icon: ClipboardCheck, label: 'Quizzes' },
   { href: '/dashboard/resources', icon: FileVideo, label: 'Resources' },
   { href: '/dashboard/backup', icon: DatabaseBackup, label: 'Backup', adminOnly: true },
@@ -55,7 +58,8 @@ export default function SidebarNav() {
   }, [db, user]);
 
   const { data: profile } = useDoc(userProfileRef);
-  const isAdmin = profile?.role === 'Admin' || user?.email === 'master@citydriving.in';
+  const isMaster = user?.email === 'master@citydriving.in';
+  const isAdmin = profile?.role === 'Admin' || isMaster;
   const isBranchManager = profile?.role === 'BranchManager';
   const isStudent = profile?.role === 'Student';
   const isInstructor = profile?.role === 'Instructor';
@@ -69,9 +73,10 @@ export default function SidebarNav() {
           if (item.adminOnly && !isAdmin) return null;
           if (item.staffOnly && !isStaff) return null;
           if (item.studentOnly && !isStudent) return null;
+          if (item.masterOnly && !isMaster) return null;
           
           // 2. Special restriction for Instructor role
-          if (isInstructor) {
+          if (isInstructor && !isAdmin) {
             const allowedForInstructor = ['/dashboard', '/dashboard/attendance', '/dashboard/quizzes', '/dashboard/resources', '/dashboard/settings'];
             if (!allowedForInstructor.includes(item.href)) {
               return null;

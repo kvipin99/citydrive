@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A robust Genkit flow for backing up Firestore and Storage to Google Drive.
@@ -13,7 +14,7 @@ import { z } from 'genkit';
 import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { Readable } from 'stream';
-import { initializeFirebase } from '@/firebase';
+import { initializeFirebase } from '@/firebase/init';
 import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref, listAll, getBytes } from 'firebase/storage';
 import { headers } from 'next/headers';

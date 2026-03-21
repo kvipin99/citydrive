@@ -141,6 +141,20 @@
         "url": { "type": "string" },
         "description": { "type": "string" }
       }
+    },
+    "UsageLog": {
+      "title": "Usage Log",
+      "type": "object",
+      "description": "Records user activity heartbeats for time tracking.",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "role": { "type": "string" },
+        "branch": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -161,6 +175,7 @@
       { "path": "/classes/{id}", "definition": { "entityName": "Class" } },
       { "path": "/resources/{id}", "definition": { "entityName": "Resource" } },
       { "path": "/quizLinks/{id}", "definition": { "entityName": "QuizLink" } },
+      { "path": "/usageLogs/{id}", "definition": { "entityName": "UsageLog" } },
       { "path": "/settings/{id}", "definition": { "description": "System configuration settings." } },
       { "path": "/backupMetadata/{id}", "definition": { "description": "Audit logs for database exports." } }
     ]

@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -84,6 +85,11 @@ service cloud.firestore {
     match /quizLinks/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /usageLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
     }
 
     match /settings/{id} {
