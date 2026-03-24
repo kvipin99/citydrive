@@ -29,12 +29,29 @@ const typeLabelMap: Record<string, string> = {
   'N/A': 'N/A'
 };
 
-// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
-const toUI = (iso: string | undefined | null) => {
-  if (!iso) return '';
-  const parts = String(iso).split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return String(iso);
+// Helper to format any date to Display (DD/MM/YYYY)
+const toUI = (dateVal: any) => {
+  if (!dateVal) return '';
+  
+  let d: Date;
+  if (dateVal && typeof dateVal === 'object' && 'seconds' in dateVal) {
+    d = new Date(dateVal.seconds * 1000);
+  } else if (typeof dateVal === 'string') {
+    if (dateVal.includes('T')) {
+      d = parseISO(dateVal);
+    } else {
+      const parts = dateVal.split('-');
+      if (parts.length === 3) {
+        d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        d = new Date(dateVal);
+      }
+    }
+  } else {
+    d = new Date(dateVal);
+  }
+
+  return isValid(d) ? format(d, 'dd/MM/yyyy') : String(dateVal);
 };
 
 // Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
@@ -65,11 +82,9 @@ export default function TestSearchPage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // State for Profile View
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
 
-  // Sync branch for non-admins
   useEffect(() => {
     if (profile && !isAdmin) {
       setSelectedBranch(profile.branch || "Branch 1");

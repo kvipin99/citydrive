@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Phone, Mail, MapPin, Calendar, Clock, CreditCard, Wallet, GraduationCap, User as UserIcon, BookOpen, Car, Fingerprint, FileText, Receipt as ReceiptIcon } from "lucide-react";
-import { format, isValid } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { useMemo } from "react";
 
 const typeLabelMap: Record<string, string> = {
@@ -37,7 +37,6 @@ export default function StudentProfilePage() {
 
   const attendanceQuery = useMemoFirebase(() => {
     if (!db || !user?.uid) return null;
-    // CRITICAL: Students MUST query by studentUid to comply with security rules
     return query(collection(db, "attendance"), where("studentUid", "==", user.uid));
   }, [db, user?.uid]);
   const { data: attendance } = useCollection(attendanceQuery);
@@ -91,10 +90,28 @@ export default function StudentProfilePage() {
     );
   }
 
-  const formatSafeDate = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
-    return isValid(d) ? format(d, 'MMM dd, yyyy') : 'N/A';
+  const formatSafeDate = (dateVal: any) => {
+    if (!dateVal) return 'N/A';
+    
+    let d: Date;
+    if (dateVal && typeof dateVal === 'object' && 'seconds' in dateVal) {
+      d = new Date(dateVal.seconds * 1000);
+    } else if (typeof dateVal === 'string') {
+      if (dateVal.includes('T')) {
+        d = parseISO(dateVal);
+      } else {
+        const parts = dateVal.split('-');
+        if (parts.length === 3) {
+          d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          d = new Date(dateVal);
+        }
+      }
+    } else {
+      d = new Date(dateVal);
+    }
+
+    return isValid(d) ? format(d, 'dd/MM/yyyy') : 'N/A';
   };
 
   return (

@@ -66,12 +66,32 @@ const typeLabelMap: Record<string, string> = {
   'N/A': 'N/A'
 };
 
-// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
-const toUI = (iso: string | undefined | null) => {
-  if (!iso) return '';
-  const parts = String(iso).split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return iso;
+// Helper to format any date input to Display (DD/MM/YYYY)
+const toUI = (dateVal: any) => {
+  if (!dateVal) return '';
+  
+  let d: Date;
+  if (dateVal && typeof dateVal === 'object' && 'seconds' in dateVal) {
+    // Firestore Timestamp
+    d = new Date(dateVal.seconds * 1000);
+  } else if (typeof dateVal === 'string') {
+    // Plain string or ISO string
+    if (dateVal.includes('T')) {
+      d = parseISO(dateVal);
+    } else {
+      const parts = dateVal.split('-');
+      if (parts.length === 3) {
+        // Assume YYYY-MM-DD
+        d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        d = new Date(dateVal);
+      }
+    }
+  } else {
+    d = new Date(dateVal);
+  }
+
+  return isValid(d) ? format(d, 'dd/MM/yyyy') : String(dateVal);
 };
 
 // Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
@@ -287,19 +307,8 @@ function StudentsContent() {
         s.registerNo?.toLowerCase().includes(term)
       );
     }
-    // Sort by registrationDate (Admission Date) descending
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
   }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
-
-  const toInputDate = useCallback((val: any) => {
-    if (!val) return '';
-    if (typeof val === 'string') return val;
-    if (val.seconds) return format(new Date(val.seconds * 1000), 'yyyy-MM-dd');
-    try {
-      const d = new Date(val);
-      return isValid(d) ? format(d, 'yyyy-MM-dd') : '';
-    } catch { return ''; }
-  }, []);
 
   const coursePriceMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -811,21 +820,16 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
             <ProfileItem icon={<Fingerprint />} label="Aadhar" value={student.aadharNo} />
             <ProfileItem icon={<FileText />} label="Online App ID" value={student.onlineAppNo} />
             {student.registerNo && <ProfileItem icon={<FileText />} label="Register Number" value={student.registerNo} />}
-            
             <Separator className="col-span-full my-1 opacity-50" />
-            
             <div className="grid grid-cols-2 gap-4 col-span-full">
               <ProfileItem icon={<BookOpen />} label="Learners No" value={student.learnersNo} />
               <ProfileItem icon={<Calendar />} label="Learners Test Date" value={toUI(student.learnersDate)} />
             </div>
-
             <div className="grid grid-cols-2 gap-4 col-span-full">
               <ProfileItem icon={<Car />} label="Driving License No" value={student.drivingNo} />
               <ProfileItem icon={<Calendar />} label="DL Test Date" value={toUI(student.testDate)} />
             </div>
-
             <Separator className="col-span-full my-1 opacity-50" />
-            
             <ProfileItem icon={<MapPin />} label="Address" value={student.address} fullWidth />
           </div>
         </section>
