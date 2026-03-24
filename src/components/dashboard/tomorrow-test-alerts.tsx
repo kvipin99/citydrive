@@ -3,13 +3,13 @@
 
 import { useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
 import { GraduationCap, Car, ArrowRight, BellRing } from "lucide-react";
 import { format, addDays } from "date-fns";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 export default function TomorrowTestAlerts() {
   const db = useFirestore();
@@ -70,11 +70,14 @@ export default function TomorrowTestAlerts() {
     }));
   }, [students, profile, isAdmin, tomorrowStr, isFromBranch]);
 
+  const learnersTests = useMemo(() => upcomingTests.filter(t => t.type === 'Learners'), [upcomingTests]);
+  const drivingTests = useMemo(() => upcomingTests.filter(t => t.type === 'Driving'), [upcomingTests]);
+
   if (isLoading || upcomingTests.length === 0) return null;
 
   return (
-    <Card className="border-orange-200 bg-orange-50/20 dark:bg-orange-950/10 dark:border-orange-900/50 shadow-sm border-l-4 border-l-orange-500">
-      <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
+    <Card className="border-orange-200 bg-orange-50/20 dark:bg-orange-950/10 dark:border-orange-900/50 shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
+      <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0 bg-orange-50/30">
         <div className="grid gap-1">
           <CardTitle className="text-base flex items-center gap-2 text-orange-700 dark:text-orange-400 font-bold uppercase tracking-tight">
             <BellRing className="h-4 w-4 animate-pulse" />
@@ -90,33 +93,75 @@ export default function TomorrowTestAlerts() {
           </Link>
         </Button>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {upcomingTests.map((s) => (
-            <Link 
-              key={s.id} 
-              href={`/dashboard/students?id=${s.id}`}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-orange-100 dark:border-orange-900/20 group hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${s.type === 'Learners' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                  {s.type === 'Learners' ? <GraduationCap className="h-4 w-4" /> : <Car className="h-4 w-4" />}
-                </div>
-                <div className="grid">
-                  <span className="font-bold text-xs truncate max-w-[140px] group-hover:text-primary transition-colors">{s.name}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] text-muted-foreground uppercase font-mono">{s.id}</span>
-                    <span className={`text-[8px] font-black px-1 rounded uppercase ${s.type === 'Learners' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
-                      {s.type}
-                    </span>
-                  </div>
-                </div>
+      <CardContent className="pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+          {/* LEARNERS COLUMN */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center">
+                <GraduationCap className="h-3.5 w-3.5 text-orange-600" />
               </div>
-              <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-          ))}
+              <h4 className="text-[10px] font-black uppercase text-orange-700 tracking-widest">Learners Tests ({learnersTests.length})</h4>
+            </div>
+            
+            <div className="grid gap-2">
+              {learnersTests.length === 0 ? (
+                <p className="text-[10px] italic text-muted-foreground py-2 pl-8">No learners tests scheduled.</p>
+              ) : (
+                learnersTests.map((s) => (
+                  <TestAlertItem key={s.id} student={s} />
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="hidden md:block absolute left-1/2 top-0 bottom-0">
+            <Separator orientation="vertical" />
+          </div>
+
+          {/* DRIVING COLUMN */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center">
+                <Car className="h-3.5 w-3.5 text-blue-600" />
+              </div>
+              <h4 className="text-[10px] font-black uppercase text-blue-700 tracking-widest">Driving Tests ({drivingTests.length})</h4>
+            </div>
+
+            <div className="grid gap-2">
+              {drivingTests.length === 0 ? (
+                <p className="text-[10px] italic text-muted-foreground py-2 pl-8">No driving tests scheduled.</p>
+              ) : (
+                drivingTests.map((s) => (
+                  <TestAlertItem key={s.id} student={s} />
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function TestAlertItem({ student }: { student: any }) {
+  return (
+    <Link 
+      href={`/dashboard/students?id=${student.id}`}
+      className="flex items-center justify-between p-2 rounded-xl bg-background border border-orange-100/50 dark:border-orange-900/20 group hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="grid">
+          <span className="font-bold text-xs truncate max-w-[160px] group-hover:text-primary transition-colors">{student.name}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] text-muted-foreground uppercase font-mono">{student.id}</span>
+            <span className="text-[8px] font-black px-1 rounded uppercase bg-muted text-muted-foreground">
+              {student.branch}
+            </span>
+          </div>
+        </div>
+      </div>
+      <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+    </Link>
   );
 }
