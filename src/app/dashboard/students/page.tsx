@@ -307,6 +307,7 @@ function StudentsContent() {
         s.registerNo?.toLowerCase().includes(term)
       );
     }
+    // Sorting by Admission Date Descending (Newest first)
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
   }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
 
@@ -610,6 +611,7 @@ function StudentsContent() {
                 <TableRow>
                   <TableHead>Student ID & Name</TableHead>
                   <TableHead>Branch</TableHead>
+                  <TableHead>Admission Date</TableHead>
                   <TableHead>Agreed Fee (₹)</TableHead>
                   <TableHead>Balance Due (₹)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -617,7 +619,7 @@ function StudentsContent() {
               </TableHeader>
               <TableBody>
                 {filteredStudentsList.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No records found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
                   filteredStudentsList.map((student) => (
                     <TableRow key={student.id}>
@@ -634,6 +636,9 @@ function StudentsContent() {
                         </div>
                       </TableCell>
                       <TableCell>{student.branch}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-medium">
+                        {toUI(student.registrationDate)}
+                      </TableCell>
                       <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
                       <TableCell><span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDue(student).toLocaleString()}</span></TableCell>
                       <TableCell className="text-right">
