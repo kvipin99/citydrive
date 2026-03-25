@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, query, where, doc } from "firebase/firestore";
-import { Clock, Filter, RefreshCw, Calendar as CalendarIcon, User, MapPin, History } from "lucide-react";
+import { Clock, Filter, RefreshCw, Calendar as CalendarIcon, User, MapPin, History, Users, Activity } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
+import { DateSegmentedInput } from "@/components/ui/date-segmented-input";
 
 // Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
 const toUI = (iso: string) => {
@@ -19,19 +20,6 @@ const toUI = (iso: string) => {
   const parts = iso.split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return iso;
-};
-
-// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
-const fromUI = (ui: string) => {
-  if (!ui || !ui.includes('/')) return ui;
-  const parts = ui.split('/');
-  if (parts.length === 3) {
-    const d = parts[0].padStart(2, '0');
-    const m = parts[1].padStart(2, '0');
-    const y = parts[2];
-    if (y.length === 4) return `${y}-${m}-${d}`;
-  }
-  return ui;
 };
 
 export default function UserUsagePage() {
@@ -74,10 +62,10 @@ export default function UserUsagePage() {
       const key = log.userId;
       if (!stats[key]) {
         stats[key] = {
-          userId: log.userId,
-          userName: log.userName,
-          branch: log.branch,
-          role: log.role,
+          userId: key,
+          userName: log.userName || "Unknown",
+          branch: log.branch || "N/A",
+          role: log.role || "User",
           heartbeats: 0,
           lastActive: null
         };
@@ -91,6 +79,10 @@ export default function UserUsagePage() {
     });
 
     return Object.values(stats).sort((a, b) => b.heartbeats - a.heartbeats);
+  }, [usageLogs]);
+
+  const totalHeartbeats = useMemo(() => {
+    return (usageLogs || []).length;
   }, [usageLogs]);
 
   const formatUsageTime = (heartbeats: number) => {
@@ -121,21 +113,11 @@ export default function UserUsagePage() {
         <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-2 rounded-xl border border-primary/10">
           <div className="flex items-center gap-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground">From</Label>
-            <Input 
-              placeholder="DD/MM/YYYY" 
-              className="h-9 w-[130px] text-xs bg-background" 
-              value={toUI(dateRange.from)} 
-              onChange={(e) => setDateRange({...dateRange, from: fromUI(e.target.value)})} 
-            />
+            <DateSegmentedInput value={dateRange.from} onChange={(v) => setDateRange({...dateRange, from: v})} />
           </div>
           <div className="flex items-center gap-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground">To</Label>
-            <Input 
-              placeholder="DD/MM/YYYY" 
-              className="h-9 w-[130px] text-xs bg-background" 
-              value={toUI(dateRange.to)} 
-              onChange={(e) => setDateRange({...dateRange, to: fromUI(e.target.value)})} 
-            />
+            <DateSegmentedInput value={dateRange.to} onChange={(v) => setDateRange({...dateRange, to: v})} />
           </div>
           <Button 
             variant="ghost" 
@@ -148,19 +130,69 @@ export default function UserUsagePage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-primary/5 border-primary/20 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-black uppercase text-primary flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Total System Usage
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-3xl font-black text-primary">
+              {formatUsageTime(totalHeartbeats)}
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">
+              Combined time for all users
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-muted/30 border-muted-foreground/10 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-black uppercase text-muted-foreground flex items-center gap-2">
+              <Users className="h-4 w-4" /> Active Staff
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-3xl font-black">
+              {aggregatedUsage.length}
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">
+              Users recorded in period
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-muted/30 border-muted-foreground/10 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-black uppercase text-muted-foreground flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4" /> Reporting Period
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-sm font-black uppercase">
+              {dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} - ${toUI(dateRange.to)}`}
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">
+              Selected filter range
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader className="pb-3 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
-              User Activity Report
+              Detailed User Breakdown
             </CardTitle>
             <Badge variant="outline" className="font-bold">
-              {aggregatedUsage.length} Users Active
+              {aggregatedUsage.length} Users Found
             </Badge>
           </div>
           <CardDescription>
-            Estimated usage time calculated from 10-minute heartbeat logs.
+            Individual time tracking based on 10-minute heartbeat frequency.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
