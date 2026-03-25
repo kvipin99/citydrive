@@ -35,6 +35,7 @@ export default function UserUsagePage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
+  // Fetch Usage Logs for the period
   const usageQuery = useMemoFirebase(() => {
     if (!db || !isMaster) return null;
     return query(
@@ -44,10 +45,17 @@ export default function UserUsagePage() {
     );
   }, [db, isMaster, dateRange.from, dateRange.to]);
 
-  const { data: usageLogs, isLoading } = useCollection(usageQuery);
+  // Fetch All Staff Users to ensure full breakdown
+  const usersQuery = useMemoFirebase(() => {
+    if (!db || !isMaster) return null;
+    return collection(db, "users");
+  }, [db, isMaster]);
+
+  const { data: usageLogs, isLoading: isLogsLoading } = useCollection(usageQuery);
+  const { data: portalUsers, isLoading: isUsersLoading } = useCollection(usersQuery);
 
   const aggregatedUsage = useMemo(() => {
-    if (!usageLogs) return [];
+    if (!portalUsers) return [];
 
     const stats: Record<string, { 
       userId: string, 
@@ -58,28 +66,37 @@ export default function UserUsagePage() {
       lastActive: Date | null
     }> = {};
 
-    usageLogs.forEach(log => {
-      const key = log.userId;
-      if (!stats[key]) {
-        stats[key] = {
-          userId: key,
-          userName: log.userName || "Unknown",
-          branch: log.branch || "N/A",
-          role: log.role || "User",
-          heartbeats: 0,
-          lastActive: null
-        };
-      }
-      stats[key].heartbeats++;
-      
-      const ts = log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : null;
-      if (ts && (!stats[key].lastActive || ts > stats[key].lastActive)) {
-        stats[key].lastActive = ts;
-      }
+    // Initialize list with all Portal Users (excluding Students usually, or showing all)
+    portalUsers.forEach(u => {
+      // Skip students to focus on staff/admin usage
+      if (u.role === 'Student') return;
+
+      stats[u.id] = {
+        userId: u.id,
+        userName: u.name || u.email || "Unknown",
+        branch: u.branch || "HeadOffice",
+        role: u.role || "User",
+        heartbeats: 0,
+        lastActive: u.updatedAt?.seconds ? new Date(u.updatedAt.seconds * 1000) : null
+      };
     });
 
+    // Aggregate heartbeats from the filtered logs
+    if (usageLogs) {
+      usageLogs.forEach(log => {
+        if (stats[log.userId]) {
+          stats[log.userId].heartbeats++;
+          
+          const ts = log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : null;
+          if (ts && (!stats[log.userId].lastActive || ts > stats[log.userId].lastActive)) {
+            stats[log.userId].lastActive = ts;
+          }
+        }
+      });
+    }
+
     return Object.values(stats).sort((a, b) => b.heartbeats - a.heartbeats);
-  }, [usageLogs]);
+  }, [usageLogs, portalUsers]);
 
   const totalHeartbeats = useMemo(() => {
     return (usageLogs || []).length;
@@ -102,6 +119,8 @@ export default function UserUsagePage() {
       </div>
     );
   }
+
+  const isLoading = isLogsLoading || isUsersLoading;
 
   return (
     <div className="space-y-6">
@@ -150,7 +169,7 @@ export default function UserUsagePage() {
         <Card className="bg-muted/30 border-muted-foreground/10 shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-black uppercase text-muted-foreground flex items-center gap-2">
-              <Users className="h-4 w-4" /> Active Staff
+              <Users className="h-4 w-4" /> Registered Staff
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
@@ -158,7 +177,7 @@ export default function UserUsagePage() {
               {aggregatedUsage.length}
             </div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">
-              Users recorded in period
+              Active & Inactive Identities
             </p>
           </CardContent>
         </Card>
@@ -188,7 +207,7 @@ export default function UserUsagePage() {
               Detailed User Breakdown
             </CardTitle>
             <Badge variant="outline" className="font-bold">
-              {aggregatedUsage.length} Users Found
+              {aggregatedUsage.length} Staff Identities
             </Badge>
           </div>
           <CardDescription>
@@ -240,7 +259,7 @@ export default function UserUsagePage() {
                       {u.lastActive ? format(u.lastActive, 'dd/MM HH:mm') : 'N/A'}
                     </TableCell>
                     <TableCell className="text-right pr-6">
-                      <Badge variant="secondary" className="font-black text-xs px-3 py-1 bg-primary/5 text-primary border-primary/10">
+                      <Badge variant="secondary" className={`font-black text-xs px-3 py-1 border-primary/10 ${u.heartbeats > 0 ? 'bg-primary/5 text-primary' : 'bg-muted text-muted-foreground opacity-50'}`}>
                         {formatUsageTime(u.heartbeats)}
                       </Badge>
                     </TableCell>
