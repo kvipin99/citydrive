@@ -25,6 +25,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { firebaseConfig } from "@/firebase/config";
 import { format, isValid, parseISO } from "date-fns";
+import { DateSegmentedInput } from "@/components/ui/date-segmented-input";
 
 const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
@@ -66,22 +67,17 @@ const typeLabelMap: Record<string, string> = {
   'N/A': 'N/A'
 };
 
-// Helper to format any date input to Display (DD/MM/YYYY)
 const toUI = (dateVal: any) => {
-  if (!dateVal) return '';
-  
+  if (!dateVal) return 'N/A';
   let d: Date;
   if (dateVal && typeof dateVal === 'object' && 'seconds' in dateVal) {
-    // Firestore Timestamp
     d = new Date(dateVal.seconds * 1000);
   } else if (typeof dateVal === 'string') {
-    // Plain string or ISO string
     if (dateVal.includes('T')) {
       d = parseISO(dateVal);
     } else {
       const parts = dateVal.split('-');
       if (parts.length === 3) {
-        // Assume YYYY-MM-DD
         d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       } else {
         d = new Date(dateVal);
@@ -90,21 +86,7 @@ const toUI = (dateVal: any) => {
   } else {
     d = new Date(dateVal);
   }
-
   return isValid(d) ? format(d, 'dd/MM/yyyy') : String(dateVal);
-};
-
-// Helper to parse Display (DD/MM/YYYY) to ISO (YYYY-MM-DD)
-const fromUI = (ui: string) => {
-  if (!ui || !ui.includes('/')) return ui;
-  const parts = ui.split('/');
-  if (parts.length === 3) {
-    const d = parts[0].padStart(2, '0');
-    const m = parts[1].padStart(2, '0');
-    const y = parts[2];
-    if (y.length === 4) return `${y}-${m}-${d}`;
-  }
-  return ui;
 };
 
 function StudentsContent() {
@@ -206,24 +188,16 @@ function StudentsContent() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
-    
     const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
     const rBranch = normalize(record.branch);
     const targetBranch = normalize(branchName);
-    
     if (rBranch === targetBranch) return true;
-
     const tNum = branchName.match(/\d+/)?.[0];
-    const rNum = record.branch?.match(/\d+/)?.[0];
-    if (tNum && rNum && tNum === rNum) return true;
-
     if (tNum) {
       const rid = normalize(record.id || '');
-      const sid = normalize(record.studentId || '');
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
-      if (bPattern.test(rid) || bPattern.test(sid)) return true;
+      if (bPattern.test(rid)) return true;
     }
-    
     return false;
   }, []);
 
@@ -307,7 +281,6 @@ function StudentsContent() {
         s.registerNo?.toLowerCase().includes(term)
       );
     }
-    // Sorting by Admission Date Descending (Newest first)
     return result.sort((a, b) => (b.registrationDate || '').localeCompare(a.registrationDate || ''));
   }, [students, searchQuery, selectedBranchFilter, isAdmin, profileBranch, isFromBranch]);
 
@@ -369,17 +342,11 @@ function StudentsContent() {
       toast({ variant: "destructive", title: "Error", description: "Name, Branch, and Student ID are required." });
       return;
     }
-
     const existingStudentWithPhone = students?.find(s => s.phone === formData.phone);
     if (existingStudentWithPhone) {
-      toast({ 
-        variant: "destructive", 
-        title: "Duplicate Entry", 
-        description: `Student already registered with this mobile number: ${existingStudentWithPhone.name} (${existingStudentWithPhone.id})` 
-      });
+      toast({ variant: "destructive", title: "Duplicate Entry", description: `Mobile number already registered to ${existingStudentWithPhone.name}.` });
       return;
     }
-
     setIsSubmitting(true);
     const studentId = formData.id;
     const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
@@ -406,7 +373,7 @@ function StudentsContent() {
       console.error("Registration Error:", error);
       let errorMsg = "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID Conflict: Auth record for "${studentId}" already exists. Use the "Fix Auth Conflicts" tool below.`;
+        errorMsg = `ID Conflict: Auth record for "${studentId}" already exists.`;
       }
       toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
     } finally {
@@ -416,19 +383,6 @@ function StudentsContent() {
 
   const handleUpdateStudent = () => {
     if (!selectedStudent) return;
-    
-    if (formData.phone !== selectedStudent.phone) {
-      const existingStudentWithPhone = students?.find(s => s.phone === formData.phone && s.id !== selectedStudent.id);
-      if (existingStudentWithPhone) {
-        toast({ 
-          variant: "destructive", 
-          title: "Update Error", 
-          description: `This mobile number is already assigned to ${existingStudentWithPhone.name} (${existingStudentWithPhone.id})` 
-        });
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     const studentRef = doc(db, 'students', selectedStudent.id);
     const updatedData = { ...formData, updatedAt: serverTimestamp() };
@@ -525,11 +479,7 @@ function StudentsContent() {
       setCleanupId("");
     } catch (error: any) {
       console.error("Cleanup error:", error);
-      let msg = "Could not find or delete that identity.";
-      if (error.code === 'auth/invalid-credential') {
-        msg = "Cleanup Failed: Password has likely been changed from default 'City123'. Manual deletion in console required.";
-      }
-      toast({ variant: "destructive", title: "Cleanup Failed", description: msg });
+      toast({ variant: "destructive", title: "Cleanup Failed", description: "Identity not found or password changed." });
       try { await deleteApp(secondaryApp); } catch {}
     } finally {
       setIsSubmitting(false);
@@ -550,8 +500,6 @@ function StudentsContent() {
     return Math.max(0, (student.amount || 0) - paid);
   }, []);
 
-  const isActuallyLoading = isStudentsLoading;
-
   return (
     <div className="space-y-6">
       <Card>
@@ -560,7 +508,7 @@ function StudentsContent() {
             <div>
               <CardTitle>Students Database</CardTitle>
               <CardDescription>
-                {isStudent ? 'My training and profile record.' : isAdmin ? (selectedBranchFilter === 'All' ? 'Global school enrollment records.' : `Records for ${selectedBranchFilter}`) : `Records for your branch.`}
+                {isStudent ? 'My training and profile record.' : isAdmin ? (selectedBranchFilter === 'All' ? 'Global records.' : `Records for ${selectedBranchFilter}`) : `Records for your branch.`}
               </CardDescription>
             </div>
             {!isStudent && (
@@ -581,20 +529,20 @@ function StudentsContent() {
                 )}
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search ID, Name or Register..." className="pl-8 w-[200px] lg:w-[250px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  <Input placeholder="Search ID, Name..." className="pl-8 w-[200px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                 </div>
                 {isBranchManager && (
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
                     <DialogTrigger asChild><Button onClick={resetForm}><PlusCircle className="mr-2 h-4 w-4" />Register Student</Button></DialogTrigger>
                     <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>New Student Registration</DialogTitle><DialogDescription>IDs are auto-generated based on the last record in the branch.</DialogDescription></DialogHeader>
+                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>New Student Registration</DialogTitle><DialogDescription>IDs are auto-generated based on branch.</DialogDescription></DialogHeader>
                       <div className="flex-1 overflow-y-auto px-6 py-4">
                         <div className="space-y-8 pb-32">
-                          <StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={photoInputRef} handleCourseToggle={handleCourseToggle} allStudents={students} />
-                          <div className="pt-6 border-t"><div className="flex items-center gap-2 text-orange-600 mb-2"><AlertCircle className="h-4 w-4" /><h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4></div><p className="text-[10px] text-muted-foreground mb-3 leading-tight">If registration fails because the ID already exists in the system but not in the list, use this tool to clear the hidden identity.</p><div className="flex gap-2 max-w-sm"><Input placeholder="Conflict ID (e.g. B110001)" className="h-9 text-xs" value={cleanupId} onChange={(e) => setCleanupId(e.target.value.toUpperCase())} /><Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}><Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity</Button></div></div>
+                          <StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={photoInputRef} handleCourseToggle={handleCourseToggle} />
+                          <div className="pt-6 border-t"><div className="flex items-center gap-2 text-orange-600 mb-2"><AlertCircle className="h-4 w-4" /><h4 className="text-xs font-bold uppercase tracking-tight">Fix Auth Conflicts</h4></div><p className="text-[10px] text-muted-foreground mb-3 leading-tight">Clear hidden identity if registration fails.</p><div className="flex gap-2 max-w-sm"><Input placeholder="Conflict ID" className="h-9 text-xs" value={cleanupId} onChange={(e) => setCleanupId(e.target.value.toUpperCase())} /><Button variant="outline" size="sm" className="h-9 text-[10px] font-bold" onClick={handleCleanupGhost} disabled={!cleanupId || isSubmitting}><Eraser className="h-3.5 w-3.5 mr-1.5" /> Force Delete Identity</Button></div></div>
                         </div>
                       </div>
-                      <DialogFooter className="p-6 border-t bg-muted/10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0"><div className="flex w-full justify-end gap-3"><Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button><Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Confirm Registration</Button></div></DialogFooter>
+                      <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><div className="flex w-full justify-end gap-3"><Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>Cancel</Button><Button onClick={handleAddStudent} disabled={isSubmitting} className="min-w-[150px]">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Confirm Registration</Button></div></DialogFooter>
                     </DialogContent>
                   </Dialog>
                 )}
@@ -603,7 +551,7 @@ function StudentsContent() {
           </div>
         </CardHeader>
         <CardContent>
-          {isActuallyLoading ? (
+          {isStudentsLoading ? (
              <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
@@ -629,16 +577,12 @@ function StudentsContent() {
                           <div className="grid gap-0.5">
                             <span className="font-bold text-primary">{student.id}</span>
                             <span className="text-sm">{student.name}</span>
-                            {student.registerNo && (
-                              <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>
-                            )}
+                            {student.registerNo && <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>{student.branch}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-medium">
-                        {toUI(student.registrationDate)}
-                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-medium">{toUI(student.registrationDate)}</TableCell>
                       <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
                       <TableCell><span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDue(student).toLocaleString()}</span></TableCell>
                       <TableCell className="text-right">
@@ -650,9 +594,8 @@ function StudentsContent() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault(); 
-                                  const { payments, ...formDataRest } = student; 
                                   setSelectedStudent(student); 
-                                  setFormData({ ...formDataRest, registrationDate: student.registrationDate, learnersDate: student.learnersDate, testDate: student.testDate, dob: student.dob }); 
+                                  setFormData({ ...student }); 
                                   setTimeout(() => setIsEditDialogOpen(true), 150);
                                 }}><Edit2 className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={(e) => { 
@@ -692,23 +635,23 @@ function StudentsContent() {
 
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>. This will wipe all fee and attendance records associated with this ID. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel><Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Wipe Record</Button></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update the registration details for {selectedStudent?.name}.</DialogDescription></DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4"><div className="space-y-8 pb-32"><StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={editPhotoInputRef} handleCourseToggle={handleCourseToggle} isEdit={true} allStudents={students} currentStudentId={selectedStudent?.id} /></div></div>
+          <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update info for {selectedStudent?.name}.</DialogDescription></DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4"><div className="space-y-8 pb-32"><StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={editPhotoInputRef} handleCourseToggle={handleCourseToggle} isEdit={true} /></div></div>
           <DialogFooter className="p-6 border-t shrink-0"><div className="flex w-full justify-end gap-3"><Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>Cancel</Button><Button onClick={handleUpdateStudent} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}Save Changes</Button></div></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if (!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b shrink-0"><DialogTitle>Issue Student Receipt</DialogTitle><DialogDescription>Record a course fee collection for <b>{selectedStudent?.name}</b>.</DialogDescription></DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6"><div className="grid gap-6 pb-20">{selectedStudent && (<div className="space-y-4 animate-in fade-in zoom-in-95 duration-200"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p></div></div><div className="grid gap-4 pt-4 border-t"><div className="grid gap-2"><Label className="flex items-center gap-2">Receipt Date (DD/MM/YYYY) {isDateLocked && <Lock className="h-3 w-3" />}</Label><Input placeholder="DD/MM/YYYY" value={isDateLocked ? format(new Date(), 'dd/MM/yyyy') : toUI(receiptFormData.date)} disabled={isDateLocked} onChange={(e) => setReceiptFormData({...receiptFormData, date: fromUI(e.target.value)})} />{isDateLocked && <p className="text-[10px] text-muted-foreground italic">Today only.</p>}</div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div><div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div><div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div></div></div>)}</div></div>
+          <DialogHeader className="p-6 border-b shrink-0"><DialogTitle>Issue Student Receipt</DialogTitle><DialogDescription>Record fee for <b>{selectedStudent?.name}</b>.</DialogDescription></DialogHeader>
+          <div className="flex-1 overflow-y-auto p-6"><div className="grid gap-6 pb-20">{selectedStudent && (<div className="space-y-4 animate-in fade-in zoom-in-95 duration-200"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p></div></div><div className="grid gap-4 pt-4 border-t"><div className="grid gap-2"><Label className="flex items-center gap-2">Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><DateSegmentedInput value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} onChange={(v) => setReceiptFormData({...receiptFormData, date: v})} disabled={isDateLocked} /></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div><div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div><div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div></div></div>)}</div></div>
           <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><Button onClick={handleSaveReceipt} disabled={isSubmitting} className="w-full">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Confirm & Generate</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -716,53 +659,34 @@ function StudentsContent() {
   );
 }
 
-function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateFees, handlePhotoUpload, photoInputRef, handleCourseToggle, isEdit = false, allStudents = [], currentStudentId }: any) {
-  const isDuplicatePhone = useMemo(() => {
-    if (!formData.phone || formData.phone.length < 10) return false;
-    return allStudents.some((s: any) => s.phone === formData.phone && s.id !== (currentStudentId || formData.id));
-  }, [formData.phone, allStudents, currentStudentId, formData.id]);
-
+function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateFees, handlePhotoUpload, photoInputRef, handleCourseToggle, isEdit = false }: any) {
   return (
     <div className="grid gap-8 py-4">
       <div className="flex flex-col items-center gap-4 py-6 border-2 border-dashed rounded-2xl bg-muted/20">
         <Label className="font-bold text-primary">STUDENT PHOTOGRAPH (REQUIRED)</Label>
         <div className="relative group">
-          <Avatar className="h-40 w-40 border-4 border-white shadow-2xl transition-transform group-hover:scale-105"><AvatarImage src={formData.photoUrl || undefined} alt="Preview" className="object-cover" /><AvatarFallback className="bg-primary/5"><Camera className="h-16 w-16 text-primary/20" /></AvatarFallback></Avatar>
-          <Button size="icon" variant="default" className="absolute bottom-2 right-2 rounded-full shadow-lg h-10 w-10" onClick={() => photoInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
+          <Avatar className="h-40 w-40 border-4 border-white shadow-2xl"><AvatarImage src={formData.photoUrl || undefined} alt="Preview" /><AvatarFallback className="bg-primary/5"><Camera className="h-16 w-16 text-primary/20" /></AvatarFallback></Avatar>
+          <Button size="icon" variant="default" className="absolute bottom-2 right-2 rounded-full h-10 w-10" onClick={() => photoInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
           <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
         </div>
-        <p className="text-[10px] text-muted-foreground italic">Standard JPEG format only. Max 200KB.</p>
       </div>
       <div className="space-y-6">
         <div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><User className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Basic Identity</h3></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="grid gap-2"><Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && !isEdit && <Lock className="h-3 w-3" />}</Label><Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
-          <div className="grid gap-2"><Label className="text-primary font-bold flex items-center gap-1.5">Student ID (Auto-generated) <Lock className="h-3 w-3 text-muted-foreground" /></Label><Input className="h-11 bg-muted font-black text-primary border-primary/20 cursor-not-allowed" value={formData.id || ''} readOnly /></div>
+          <div className="grid gap-2"><Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && !isEdit && <Lock className="h-3 w-3" />}</Label><Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}><SelectTrigger className="h-11 font-bold"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
+          <div className="grid gap-2"><Label className="text-primary font-bold">Student ID <Lock className="h-3 w-3 text-muted-foreground" /></Label><Input className="h-11 bg-muted font-black text-primary" value={formData.id || ''} readOnly /></div>
           <div className="grid gap-2"><Label className="text-primary font-bold">Register Number</Label><Input className="h-11 font-bold" placeholder="Manual Book No." value={formData.registerNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registerNo: e.target.value}))} /></div>
           <div className="grid gap-2"><Label>Full Student Name</Label><Input className="h-11" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} /></div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="grid gap-2">
-            <Label className={isDuplicatePhone ? "text-destructive font-bold" : ""}>Mobile Contact No.</Label>
-            <Input 
-              className={`h-11 font-mono ${isDuplicatePhone ? "border-destructive text-destructive bg-destructive/5" : ""}`} 
-              placeholder="98XXXXXXXX" 
-              value={formData.phone || ''} 
-              onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} 
-            />
-            {isDuplicatePhone && (
-              <p className="text-[10px] text-destructive font-bold flex items-center gap-1 animate-in fade-in slide-in-from-top-1">
-                <AlertCircle className="h-3 w-3" /> This student is already registered.
-              </p>
-            )}
-          </div>
-          <div className="grid gap-2"><Label>Date of Birth (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" className="h-11" value={toUI(formData.dob)} onChange={(e) => setFormData((prev:any) => ({...prev, dob: fromUI(e.target.value)}))} /></div>
+          <div className="grid gap-2"><Label>Mobile Contact No.</Label><Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} /></div>
+          <div className="grid gap-2"><Label>Date of Birth</Label><DateSegmentedInput value={formData.dob} onChange={(v) => setFormData((prev:any) => ({...prev, dob: v}))} /></div>
         </div>
       </div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><MapPin className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Address & Family</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Parent / Guardian Name</Label><Input className="h-11" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} /></div><div className="grid gap-2"><Label>Full Residential Address</Label><Textarea className="min-h-[44px]" placeholder="Village, Landmark, District..." value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div></div></div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><Fingerprint className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Government Identifiers</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Aadhar Number</Label><Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Online Application No.</Label><Input className="h-11 font-mono" placeholder="e.g. 234000123" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div></div></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="p-6 border-2 border-primary/10 rounded-2xl bg-primary/5 space-y-4"><div className="flex items-center gap-2 text-primary font-black uppercase text-xs"><BookOpen className="h-4 w-4" /> Learners License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Learners License No.</Label><Input className="bg-background font-mono" placeholder="MH12 2023000..." value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Learners Test Date (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" className="bg-background" value={toUI(formData.learnersDate)} onChange={(e) => setFormData((prev:any) => ({...prev, learnersDate: fromUI(e.target.value)}))} /></div></div></div><div className="p-6 border-2 border-green-100 rounded-2xl bg-green-50/30 space-y-4"><div className="flex items-center gap-2 text-green-700 font-black uppercase text-xs"><Car className="h-4 w-4" /> Permanent License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Driving License No.</Label><Input className="bg-background font-mono" placeholder="MH12..." value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div><div className="grid gap-2"><Label>DL Test Date (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" className="bg-background" value={toUI(formData.testDate)} onChange={(e) => setFormData((prev:any) => ({...prev, testDate: fromUI(e.target.value)}))} /></div></div></div></div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><CheckCircle2 className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Course Enrollment & Billing</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="grid gap-2"><Label>Admission Date (DD/MM/YYYY)</Label><Input placeholder="DD/MM/YYYY" className="h-11" value={toUI(formData.registrationDate)} onChange={(e) => setFormData((prev:any) => ({...prev, registrationDate: fromUI(e.target.value)}))} /></div><div className="grid gap-2"><Label>Admission Status</Label><Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}><SelectTrigger className="h-11 font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent></Select></div><div className="grid gap-2"><Label>Internal Remarks</Label><Input className="h-11" placeholder="e.g. Late evening preferred" value={formData.remarks || ''} onChange={(e) => setFormData((prev:any) => ({...prev, remarks: e.target.value}))} /></div></div><div className="p-6 border rounded-2xl bg-muted/30 space-y-6"><Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{masterCourses?.map((course: any) => (<div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer"><Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} /><Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label><Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge></div>))}<div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer"><Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} /><Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label></div></div>{formData.courses?.includes('Others') && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2"><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Course Title</Label><Input value={formData.specialCourseName || ''} placeholder="e.g. VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} placeholder="0" onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div></div>)}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4"><div className="p-6 border-2 border-orange-100 rounded-2xl bg-orange-50/20"><div className="grid gap-3"><Label className={`flex items-center gap-2 font-bold ${!isAdmin ? "text-muted-foreground" : "text-orange-700"}`}><Tags className="h-4 w-4" /> Discount Applied (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label><Input type="number" className="h-12 text-lg font-bold bg-background" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} />{!isAdmin && <p className="text-[10px] text-muted-foreground italic">Discount authorization restricted.</p>}</div></div><div className="p-6 border-4 border-primary rounded-2xl bg-primary text-primary-foreground shadow-2xl"><div className="grid gap-1"><span className="text-[10px] font-black uppercase tracking-widest opacity-80">Final Agreed Net Fee</span><div className="text-4xl font-black">₹{formData.amount?.toLocaleString() || '0'}</div><span className="text-[10px] font-medium opacity-70">Payable amount calculated automatically</span></div></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><MapPin className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Address & Family</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Parent / Guardian Name</Label><Input className="h-11" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} /></div><div className="grid gap-2"><Label>Full Residential Address</Label><Textarea className="min-h-[44px]" value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><Fingerprint className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Government Identifiers</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Aadhar Number</Label><Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Online Application No.</Label><Input className="h-11 font-mono" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div></div></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="p-6 border-2 border-primary/10 rounded-2xl bg-primary/5 space-y-4"><div className="flex items-center gap-2 text-primary font-black uppercase text-xs"><BookOpen className="h-4 w-4" /> Learners License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Learners License No.</Label><Input className="bg-background font-mono" value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Learners Test Date</Label><DateSegmentedInput value={formData.learnersDate} onChange={(v) => setFormData((prev:any) => ({...prev, learnersDate: v}))} /></div></div></div><div className="p-6 border-2 border-green-100 rounded-2xl bg-green-50/30 space-y-4"><div className="flex items-center gap-2 text-green-700 font-black uppercase text-xs"><Car className="h-4 w-4" /> Permanent License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Driving License No.</Label><Input className="bg-background font-mono" value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div><div className="grid gap-2"><Label>DL Test Date</Label><DateSegmentedInput value={formData.testDate} onChange={(v) => setFormData((prev:any) => ({...prev, testDate: v}))} /></div></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><CheckCircle2 className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Course Enrollment & Billing</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="grid gap-2"><Label>Admission Date</Label><DateSegmentedInput value={formData.registrationDate} onChange={(v) => setFormData((prev:any) => ({...prev, registrationDate: v}))} /></div><div className="grid gap-2"><Label>Admission Status</Label><Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}><SelectTrigger className="h-11 font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent></Select></div><div className="grid gap-2"><Label>Internal Remarks</Label><Input className="h-11" value={formData.remarks || ''} onChange={(e) => setFormData((prev:any) => ({...prev, remarks: e.target.value}))} /></div></div><div className="p-6 border rounded-2xl bg-muted/30 space-y-6"><Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{masterCourses?.map((course: any) => (<div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer"><Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} /><Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label><Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge></div>))}<div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer"><Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} /><Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label></div></div>{formData.courses?.includes('Others') && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2"><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Course Title</Label><Input value={formData.specialCourseName || ''} placeholder="e.g. VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div></div>)}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4"><div className="p-6 border-2 border-orange-100 rounded-2xl bg-orange-50/20"><div className="grid gap-3"><Label className={`flex items-center gap-2 font-bold ${!isAdmin ? "text-muted-foreground" : "text-orange-700"}`}><Tags className="h-4 w-4" /> Discount Applied (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label><Input type="number" className="h-12 text-lg font-bold bg-background" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} /></div></div><div className="p-6 border-4 border-primary rounded-2xl bg-primary text-primary-foreground shadow-2xl"><div className="grid gap-1"><span className="text-[10px] font-black uppercase tracking-widest opacity-80">Final Agreed Net Fee</span><div className="text-4xl font-black">₹{formData.amount?.toLocaleString() || '0'}</div></div></div></div></div>
     </div>
   );
 }
@@ -770,35 +694,25 @@ function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateF
 function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
   const attendanceQuery = useMemoFirebase(() => (!db || !student?.userId) ? null : query(collection(db, 'attendance'), where('studentUid', '==', student.userId)), [db, student?.userId]);
   const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
-  
   const vehiclesQuery = useMemoFirebase(() => (db ? collection(db, 'vehicles') : null), [db]);
   const { data: vehicles } = useCollection(vehiclesQuery);
-
   const hourStats = useMemo(() => {
     if (!attendance) return { practical: 0, theory: 0, byType: {} as Record<string, number> };
-    
     const vMap: Record<string, string> = {};
     vehicles?.forEach(v => { vMap[v.id] = v.type; });
-
     return attendance.reduce((acc, curr) => {
       const h = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') {
-        acc.theory += h;
-      } else {
+      if (curr.type === 'Theory') acc.theory += h;
+      else {
         acc.practical += h;
         const type = curr.vehicleType || vMap[curr.vehicleId] || 'Other';
-        if (type !== 'N/A') {
-          acc.byType[type] = (acc.byType[type] || 0) + h;
-        }
+        if (type !== 'N/A') acc.byType[type] = (acc.byType[type] || 0) + h;
       }
       return acc;
     }, { practical: 0, theory: 0, byType: {} as Record<string, number> });
   }, [attendance, vehicles]);
-
   const sortedAttendance = useMemo(() => (!attendance) ? [] : [...attendance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.startTime || '').localeCompare(a.startTime || '')), [attendance]);
   const paidAmount = useMemo(() => student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0, [student?.payments]);
-  const balance = calculateBalanceDue(student);
-  
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
@@ -813,7 +727,7 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         <StatSummary label="Practical Hr" value={`${hourStats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" breakdown={hourStats.byType} />
         <StatSummary label="Theory Hr" value={`${hourStats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
         <StatSummary label="Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
-        <StatSummary label="Balance" value={`₹${balance.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
+        <StatSummary label="Balance" value={`₹${calculateBalanceDue(student).toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section className="space-y-4">
@@ -840,44 +754,19 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </section>
         <section className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CheckCircle2 className="h-4 w-4" /> Courses</h3>
-          <div className="space-y-2">{student.courses?.map((c: string, i: number) => (
-            <div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center">
-              <span className="font-medium text-sm">
-                {c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}
-              </span>
-              <Badge variant="outline">Enrolled</Badge>
-            </div>
-          ))}</div>
+          <div className="space-y-2">{student.courses?.map((c: string, i: number) => (<div key={i} className="p-3 rounded-lg border bg-muted/20 flex justify-between items-center"><span className="font-medium text-sm">{c === 'Others' ? (student.specialCourseName || 'Custom Course') : c}</span><Badge variant="outline">Enrolled</Badge></div>))}</div>
           {student.remarks && (<div className="mt-6 p-4 rounded-lg bg-orange-50 border border-orange-100"><p className="text-[10px] font-bold text-orange-600 uppercase mb-1">Remarks</p><p className="text-xs text-orange-800 italic">{student.remarks}</p></div>)}
         </section>
       </div>
       <Separator className="my-4" />
-      <section className="space-y-4">
-        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Clock className="h-4 w-4" /> Attendance</h3>
+      <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Clock className="h-4 w-4" /> Attendance</h3>
         {isAttendanceLoading ? (<div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>) : sortedAttendance.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No logs found.</p>) : (
-          <div className="rounded-xl border overflow-hidden">
-            <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader>
-              <TableBody>{sortedAttendance.map((a: any) => (<TableRow key={a.id} className="hover:bg-muted/30"><TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell><TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell><TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell><TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell></TableRow>))}</TableBody>
-            </Table>
-          </div>
+          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader><TableBody>{sortedAttendance.map((a: any) => (<TableRow key={a.id} className="hover:bg-muted/30"><TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell><TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell><TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell><TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
-      <section className="space-y-4">
-        <h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
-        {!student.payments || student.payments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts issued.</p>) : (
-          <div className="rounded-xl border overflow-hidden">
-            <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>{student.payments.map((p: any) => (
-                <TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30">
-                  <TableCell className="text-xs">{toUI(p.date)}</TableCell>
-                  <TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell>
-                  <TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell>
-                </TableRow>
-              ))}</TableBody>
-            </Table>
-          </div>
+      <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
+        {!student.payments || student.payments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts.</p>) : (
+          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader><TableBody>{student.payments.map((p: any) => (<TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30"><TableCell className="text-xs">{toUI(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
     </div>
@@ -887,25 +776,9 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
 function StatSummary({ label, value, icon, color, breakdown }: any) {
   const colorMap: Record<string, string> = { primary: "bg-primary/5 border-primary/10 text-primary", green: "bg-green-50/50 border-green-100 text-green-700", red: "bg-red-50/50 border-red-100 text-red-700", blue: "bg-blue-50/50 border-blue-100 text-blue-700", orange: "bg-orange-50/50 border-orange-100 text-orange-700" };
   return (
-    <Card className={colorMap[color]}>
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-xs font-bold uppercase flex items-center gap-2">{icon} {label}</CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <div className="text-xl font-black">{value}</div>
-        {breakdown && Object.keys(breakdown).length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {Object.entries(breakdown).map(([type, hours]: [string, any]) => (
-              hours > 0 && (
-                <Badge key={type} variant="outline" className="text-[11px] px-2 py-0.5 h-6 font-mono font-bold bg-muted/30 border-primary/10">
-                  {typeLabelMap[type] || type}: {hours.toFixed(1)}h
-                </Badge>
-              )
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Card className={colorMap[color]}><CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase flex items-center gap-2">{icon} {label}</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-xl font-black">{value}</div>
+        {breakdown && Object.keys(breakdown).length > 0 && (<div className="mt-2 flex flex-wrap gap-1">{Object.entries(breakdown).map(([type, hours]: [string, any]) => hours > 0 && (<Badge key={type} variant="outline" className="text-[11px] px-2 py-0.5 h-6 font-mono font-bold bg-muted/30 border-primary/10">{typeLabelMap[type] || type}: {hours.toFixed(1)}h</Badge>))}</div>)}
+      </CardContent></Card>
   );
 }
 
