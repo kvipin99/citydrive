@@ -4,17 +4,15 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, query, where, doc } from "firebase/firestore";
-import { Clock, Filter, RefreshCw, Calendar as CalendarIcon, User, MapPin, History, Users, Activity } from "lucide-react";
+import { Clock, RefreshCw, Calendar as CalendarIcon, MapPin, History, Users, Activity } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { DateSegmentedInput } from "@/components/ui/date-segmented-input";
 
-// Helper to format ISO (YYYY-MM-DD) to Display (DD/MM/YYYY)
 const toUI = (iso: string) => {
   if (!iso) return '';
   const parts = iso.split('-');
@@ -35,7 +33,6 @@ export default function UserUsagePage() {
     to: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // Fetch Usage Logs for the period
   const usageQuery = useMemoFirebase(() => {
     if (!db || !isMaster) return null;
     return query(
@@ -45,7 +42,6 @@ export default function UserUsagePage() {
     );
   }, [db, isMaster, dateRange.from, dateRange.to]);
 
-  // Fetch All Staff Users to ensure full breakdown
   const usersQuery = useMemoFirebase(() => {
     if (!db || !isMaster) return null;
     return collection(db, "users");
@@ -66,9 +62,7 @@ export default function UserUsagePage() {
       lastActive: Date | null
     }> = {};
 
-    // Initialize list with all Portal Users (excluding Students usually, or showing all)
     portalUsers.forEach(u => {
-      // Skip students to focus on staff/admin usage
       if (u.role === 'Student') return;
 
       stats[u.id] = {
@@ -81,12 +75,10 @@ export default function UserUsagePage() {
       };
     });
 
-    // Aggregate heartbeats from the filtered logs
     if (usageLogs) {
       usageLogs.forEach(log => {
         if (stats[log.userId]) {
           stats[log.userId].heartbeats++;
-          
           const ts = log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : null;
           if (ts && (!stats[log.userId].lastActive || ts > stats[log.userId].lastActive)) {
             stats[log.userId].lastActive = ts;
@@ -103,7 +95,7 @@ export default function UserUsagePage() {
   }, [usageLogs]);
 
   const formatUsageTime = (heartbeats: number) => {
-    const totalMinutes = heartbeats * 10; // 10 minutes per heartbeat
+    const totalMinutes = heartbeats * 10;
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
     if (hours === 0) return `${mins}m`;

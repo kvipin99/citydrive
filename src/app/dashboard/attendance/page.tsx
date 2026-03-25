@@ -121,11 +121,14 @@ export default function AttendancePage() {
     if (isInstructor && !isAdmin) result = result.filter(rec => rec.instructorId === user?.uid);
     else if (isBranchManager && !isAdmin) result = result.filter(rec => isFromBranch(rec, profile?.branch || "Branch 1"));
     else if (isAdmin && selectedBranch !== "All") result = result.filter(rec => isFromBranch(rec, selectedBranch));
+    
     if (instructorFilter !== "All" && !isInstructor) {
       if (instructorFilter === "Others") {
         const registeredIds = new Set(instructors?.map(i => i.userId) || []);
         result = result.filter(rec => !rec.instructorId || rec.instructorId === 'Manual' || !registeredIds.has(rec.instructorId));
-      } else result = result.filter(rec => rec.instructorId === instructorFilter);
+      } else {
+        result = result.filter(rec => rec.instructorId === instructorFilter);
+      }
     }
     return result;
   }, [rawAttendance, selectedBranch, instructorFilter, profile?.branch, isAdmin, isInstructor, isBranchManager, isFromBranch, instructors, user?.uid]);
@@ -135,11 +138,23 @@ export default function AttendancePage() {
     const uniqueTheory = new Set();
     const totals = (filteredAttendance || []).reduce((acc, curr) => {
       const hours = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') { acc.theoryHours += hours; uniqueTheory.add(curr.studentId); }
-      else { acc.practicalHours += hours; uniquePractical.add(curr.studentId); }
+      if (curr.type === 'Theory') { 
+        acc.theoryHours += hours; 
+        uniqueTheory.add(curr.studentId); 
+      }
+      else { 
+        acc.practicalHours += hours; 
+        uniquePractical.add(curr.studentId); 
+      }
       return acc;
     }, { practicalHours: 0, theoryHours: 0 });
-    return { ...totals, practicalCount: uniquePractical.size, theoryCount: uniqueTheory.size, totalUniqueStudents: new Set((filteredAttendance || []).map(a => a.studentId)).size };
+    
+    return { 
+      ...totals, 
+      practicalCount: uniquePractical.size, 
+      theoryCount: uniqueTheory.size, 
+      totalUniqueStudents: new Set((filteredAttendance || []).map(a => a.studentId)).size 
+    };
   }, [filteredAttendance]);
 
   const filteredSearch = useMemo(() => {
@@ -167,75 +182,424 @@ export default function AttendancePage() {
     const attendanceId = `${selectedStudent.id}_${recordingDate}_${startTime.replace(':', '')}_${sessionType.charAt(0)}`;
     const actualDuration = calculateDuration(startTime, endTime);
     const vehicle = vehicles?.find(v => v.id === selectedVehicleId);
+    
     let instrName = profile.name || "Unknown", instrId = user.uid;
-    if (selectedInstructorId === 'Manual') { instrName = manualInstructorName || "Manual"; instrId = "Manual"; }
-    else if (selectedInstructorId) { const instr = instructors?.find(i => i.userId === selectedInstructorId); if (instr) { instrName = instr.name; instrId = instr.userId; } }
-    const record = { id: attendanceId, studentId: selectedStudent.id, studentUid: selectedStudent.userId, studentName: selectedStudent.name, instructorId: instrId, instructorName: instrName, date: recordingDate, status: 'Present', type: sessionType, startTime, endTime, duration: actualDuration, vehicleId: sessionType === 'Practical' ? (selectedVehicleId || 'None') : 'Theory', vehicleReg: sessionType === 'Practical' ? (vehicle?.regNumber || 'None') : 'N/A', vehicleType: sessionType === 'Practical' ? (vehicle?.type || 'Other') : 'N/A', branch: selectedStudent.branch, createdAt: serverTimestamp(), createdBy: user.uid };
+    if (selectedInstructorId === 'Manual') { 
+      instrName = manualInstructorName || "Manual"; 
+      instrId = "Manual"; 
+    } else if (selectedInstructorId) { 
+      const instr = instructors?.find(i => i.userId === selectedInstructorId); 
+      if (instr) { 
+        instrName = instr.name; 
+        instrId = instr.userId; 
+      } 
+    }
+
+    const record = { 
+      id: attendanceId, 
+      studentId: selectedStudent.id, 
+      studentUid: selectedStudent.userId, 
+      studentName: selectedStudent.name, 
+      instructorId: instrId, 
+      instructorName: instrName, 
+      date: recordingDate, 
+      status: 'Present', 
+      type: sessionType, 
+      startTime, 
+      endTime, 
+      duration: actualDuration, 
+      vehicleId: sessionType === 'Practical' ? (selectedVehicleId || 'None') : 'Theory', 
+      vehicleReg: sessionType === 'Practical' ? (vehicle?.regNumber || 'None') : 'N/A', 
+      vehicleType: sessionType === 'Practical' ? (vehicle?.type || 'Other') : 'N/A', 
+      branch: selectedStudent.branch, 
+      createdAt: serverTimestamp(), 
+      createdBy: user.uid 
+    };
+
     setDocumentNonBlocking(doc(db, 'attendance', attendanceId), record, { merge: true });
     toast({ title: "Recorded", description: `${selectedStudent.name} ${sessionType} session saved.` });
     setIsDialogOpen(false);
     resetPopup();
   };
 
-  const resetPopup = () => { setStudentSearch(""); setSelectedStudent(null); setSelectedVehicleId(""); setSessionType('Practical'); setStartTime("09:00"); setEndTime("10:00"); setEntryDate(format(new Date(), 'yyyy-MM-dd')); setSelectedInstructorId(user?.uid || ""); setManualInstructorName(""); };
+  const resetPopup = () => { 
+    setStudentSearch(""); 
+    setSelectedStudent(null); 
+    setSelectedVehicleId(""); 
+    setSessionType('Practical'); 
+    setStartTime("09:00"); 
+    setEndTime("10:00"); 
+    setEntryDate(format(new Date(), 'yyyy-MM-dd')); 
+    setSelectedInstructorId(user?.uid || ""); 
+    setManualInstructorName(""); 
+  };
 
-  const sortedRecords = useMemo(() => [...filteredAttendance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.startTime || '').localeCompare(a.startTime || '')), [filteredAttendance]);
+  const sortedRecords = useMemo(() => 
+    [...filteredAttendance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.startTime || '').localeCompare(a.startTime || '')), 
+  [filteredAttendance]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div><h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2><p className="text-muted-foreground text-sm">{isStudent ? 'My history.' : 'Branch records.'}</p></div>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Attendance Log</h2>
+          <p className="text-muted-foreground text-sm">{isStudent ? 'My history.' : 'Branch records.'}</p>
+        </div>
         {!isStudent && (
           <div className="flex flex-wrap items-center gap-3">
-            {!isInstructor && (<div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-2"><Label className="text-[10px] font-black px-2 text-primary uppercase">Staff:</Label><Select value={instructorFilter} onValueChange={setInstructorFilter}><SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold"><SelectValue placeholder="All Staff" /></SelectTrigger><SelectContent><SelectItem value="All">All Instructors</SelectItem>{instructors?.map(i => <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>)}<SelectItem value="Others">Manual Entries</SelectItem></SelectContent></Select></div>)}
-            {isManagement && (<div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3"><Label className="text-[10px] font-black px-2 text-primary uppercase">Branch:</Label><Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}><SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>)}
+            {!isInstructor && (
+              <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-2">
+                <Label className="text-[10px] font-black px-2 text-primary uppercase">Staff:</Label>
+                <Select value={instructorFilter} onValueChange={setInstructorFilter}>
+                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
+                    <SelectValue placeholder="All Staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Instructors</SelectItem>
+                    {instructors?.map(i => <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>)}
+                    <SelectItem value="Others">Manual Entries</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {isManagement && (
+              <div className="bg-muted/30 p-2 rounded-lg border flex items-center gap-3">
+                <Label className="text-[10px] font-black px-2 text-primary uppercase">Branch:</Label>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
+                  <SelectTrigger className="h-9 w-[140px] bg-background border-primary/20 text-xs font-bold">
+                    <SelectValue placeholder="Select Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Branches</SelectItem>
+                    {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="bg-muted/30 p-2 rounded-lg border flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">From:</Label><DateSegmentedInput value={dateRange.from} onChange={(v) => setDateRange({...dateRange, from: v})} /></div>
-              <div className="flex items-center gap-2"><Label className="text-[10px] font-black uppercase text-muted-foreground">To:</Label><DateSegmentedInput value={dateRange.to} onChange={(v) => setDateRange({...dateRange, to: v})} /></div>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">From:</Label>
+                <DateSegmentedInput value={dateRange.from} onChange={(v) => setDateRange({...dateRange, from: v})} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground">To:</Label>
+                <DateSegmentedInput value={dateRange.to} onChange={(v) => setDateRange({...dateRange, to: v})} />
+              </div>
               <Button variant="outline" size="sm" onClick={() => { const t = format(new Date(), 'yyyy-MM-dd'); setDateRange({ from: t, to: t }); }} className="h-9 text-[10px] font-bold border-primary/20 text-primary">Today</Button>
             </div>
-            <Button size="lg" className="shadow-lg h-11" onClick={() => setIsDialogOpen(true)}><PlusCircle className="mr-2 h-5 w-5" />Record Session</Button>
+            <Button size="lg" className="shadow-lg h-11" onClick={() => setIsDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-5 w-5" />Record Session
+            </Button>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="bg-blue-50/50 border-blue-100 shadow-sm"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2"><Car className="h-3.5 w-3.5" /> Practical Stats</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black text-blue-700">{statsSummary.practicalHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div><div className="text-blue-600/80 text-[10px] font-black uppercase mt-1">{statsSummary.practicalCount} Students</div></CardContent></Card>
-        <Card className="bg-orange-50/50 border-orange-100 shadow-sm"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-orange-600 flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Theory Stats</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black text-orange-700">{statsSummary.theoryHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div><div className="text-orange-600/80 text-[10px] font-black uppercase mt-1">{statsSummary.theoryCount} Students</div></CardContent></Card>
-        <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block"><CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2"><Calculator className="h-3.5 w-3.5" /> Overall Summary</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-2xl font-black text-primary">{(statsSummary.practicalHours + statsSummary.theoryHours).toFixed(1)} <span className="text-xs font-normal">Total Hours</span></div><div className="text-primary/80 text-[10px] font-black uppercase mt-1">{statsSummary.totalUniqueStudents} Unique Students</div></CardContent></Card>
+        <Card className="bg-blue-50/50 border-blue-100 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-blue-600 flex items-center gap-2">
+              <Car className="h-3.5 w-3.5" /> Practical Stats
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-blue-700">{statsSummary.practicalHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <div className="text-blue-600/80 text-[10px] font-black uppercase mt-1">{statsSummary.practicalCount} Students</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-orange-50/50 border-orange-100 shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-orange-600 flex items-center gap-2">
+              <BookOpen className="h-3.5 w-3.5" /> Theory Stats
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-orange-700">{statsSummary.theoryHours.toFixed(1)} <span className="text-xs font-normal">Hours</span></div>
+            <div className="text-orange-600/80 text-[10px] font-black uppercase mt-1">{statsSummary.theoryCount} Students</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-primary/5 border-primary/10 shadow-sm hidden lg:block">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-primary flex items-center gap-2">
+              <Calculator className="h-3.5 w-3.5" /> Overall Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="text-2xl font-black text-primary">{(statsSummary.practicalHours + statsSummary.theoryHours).toFixed(1)} <span className="text-xs font-normal">Total Hours</span></div>
+            <div className="text-primary/80 text-[10px] font-black uppercase mt-1">{statsSummary.totalUniqueStudents} Unique Students</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if(!open) resetPopup(); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b shrink-0 bg-muted/5"><DialogTitle>Record Student Session</DialogTitle><DialogDescription>Search student to log training hours.</DialogDescription></DialogHeader>
+          <DialogHeader className="p-6 border-b shrink-0 bg-muted/5">
+            <DialogTitle>Record Student Session</DialogTitle>
+            <DialogDescription>Search student to log training hours.</DialogDescription>
+          </DialogHeader>
           <div className="flex-1 overflow-y-auto p-6">
             {!selectedStudent ? (
-              <div className="grid gap-2"><Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Search Student</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Name, ID..." className="pl-8" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} /></div><div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto min-h-[100px]">{isStudentsLoading ? <div className="p-12 flex flex-col items-center gap-3 text-muted-foreground"><RefreshCw className="h-6 w-6 animate-spin text-primary" /><p className="text-xs">Loading...</p></div> : filteredSearch.length === 0 ? <div className="p-12 text-center text-muted-foreground italic text-sm">No matches.</div> : filteredSearch.map(s => (<div key={s.id} className="p-4 hover:bg-primary/5 cursor-pointer flex justify-between items-center transition-colors" onClick={() => setSelectedStudent(s)}><div className="flex items-center gap-3"><UserCircle className="h-10 w-10 text-primary/30" /><div><p className="font-black text-sm">{s.name}</p><div className="flex items-center gap-2"><Badge variant="outline" className="text-[9px] font-mono">{s.id}</Badge><span className="text-[10px] text-muted-foreground uppercase font-bold">{s.branch}</span></div></div></div><Button size="sm" variant="ghost" className="text-primary font-bold text-[10px] uppercase">Select</Button></div>))}</div></div>
+              <div className="grid gap-2">
+                <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Search Student</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Name, ID..." className="pl-8" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+                </div>
+                <div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto min-h-[100px]">
+                  {isStudentsLoading ? (
+                    <div className="p-12 flex flex-col items-center gap-3 text-muted-foreground">
+                      <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-xs">Loading...</p>
+                    </div>
+                  ) : filteredSearch.length === 0 ? (
+                    <div className="p-12 text-center text-muted-foreground italic text-sm">No matches.</div>
+                  ) : (
+                    filteredSearch.map(s => (
+                      <div key={s.id} className="p-4 hover:bg-primary/5 cursor-pointer flex justify-between items-center transition-colors" onClick={() => setSelectedStudent(s)}>
+                        <div className="flex items-center gap-3">
+                          <UserCircle className="h-10 w-10 text-primary/30" />
+                          <div>
+                            <p className="font-black text-sm">{s.name}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[9px] font-mono">{s.id}</Badge>
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold">{s.branch}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="ghost" className="text-primary font-bold text-[10px] uppercase">Select</Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             ) : (
               <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-                <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-white font-black text-lg shadow-sm">{selectedStudent.name.charAt(0)}</div><div><p className="font-black text-primary leading-none mb-1">{selectedStudent.name}</p><div className="flex items-center gap-2"><span className="text-[10px] font-mono">{selectedStudent.id}</span><Badge variant="secondary" className="text-[9px] uppercase px-1 py-0">{selectedStudent.branch}</Badge></div></div></div><Button variant="outline" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full"><X className="h-4 w-4" /></Button></div>
-                <div className="grid gap-3"><Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">Session Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><DateSegmentedInput value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : entryDate} onChange={(v) => setEntryDate(v)} disabled={isDateLocked} />{isDateLocked && <p className="text-[10px] text-muted-foreground italic">Restricted to today.</p>}</div>
-                <div className="grid gap-3"><Label className="text-xs font-bold uppercase text-muted-foreground">Session Type</Label><div className="grid grid-cols-2 gap-3">{SESSION_TYPES.map(type => { const Icon = type.icon; const active = sessionType === type.value; return (<Button key={type.value} variant={active ? 'default' : 'outline'} className={`h-14 flex flex-col items-center gap-1 justify-center rounded-xl border-2 ${active ? 'border-primary shadow-md' : 'border-muted'}`} onClick={() => setSessionType(type.value as any)}><Icon className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">{type.label}</span></Button>); })}</div></div>
-                <div className="grid gap-3"><Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">Instructor {isInstructor && <Lock className="h-3 w-3" />}</Label><Select value={selectedInstructorId} onValueChange={setSelectedInstructorId} disabled={isInstructor}><SelectTrigger className="h-11 border-2"><SelectValue placeholder="Select Instructor" /></SelectTrigger><SelectContent><SelectItem value={user?.uid || ""}>Me ({profile?.name || 'Self'})</SelectItem>{instructors?.filter(i => i.userId !== user?.uid).map(i => (<SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>))}{(isAdmin || isBranchManager) && <SelectItem value="Manual">Manual Name</SelectItem>}</SelectContent></Select>{selectedInstructorId === 'Manual' && <Input placeholder="Type Name" value={manualInstructorName} onChange={(e) => setManualInstructorName(e.target.value)} className="h-11 border-2" />}</div>
-                {sessionType === 'Practical' && (<div className="grid gap-3"><Label className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground"><Car className="h-4 w-4 text-primary" />Assigned Vehicle</Label><Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}><SelectTrigger className="h-11 bg-background border-2"><SelectValue placeholder="Select Vehicle" /></SelectTrigger><SelectContent><SelectItem value="None">No Vehicle</SelectItem>{vehicles?.map(v => (<SelectItem key={v.id} value={v.id}>{v.regNumber} ({v.brandModel})</SelectItem>))}</SelectContent></Select></div>)}
-                <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">From</Label><Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-11 border-2" /></div><div className="grid gap-2"><Label className="text-xs font-bold uppercase text-muted-foreground">To</Label><Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-11 border-2" /></div></div>
-                <div className="p-4 bg-muted/50 rounded-2xl flex justify-between items-center border-2 border-dashed"><span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Duration:</span><Badge variant="secondary" className="font-black text-sm px-3 py-1 bg-primary/10 text-primary border-primary/20">{calculateDuration(startTime, endTime)} Hours</Badge></div>
+                <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-white font-black text-lg shadow-sm">{selectedStudent.name.charAt(0)}</div>
+                    <div>
+                      <p className="font-black text-primary leading-none mb-1">{selectedStudent.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono">{selectedStudent.id}</span>
+                        <Badge variant="secondary" className="text-[9px] uppercase px-1 py-0">{selectedStudent.branch}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full"><X className="h-4 w-4" /></Button>
+                </div>
+                
+                <div className="grid gap-3">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                    Session Date {isDateLocked && <Lock className="h-3 w-3" />}
+                  </Label>
+                  <DateSegmentedInput 
+                    value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : entryDate} 
+                    onChange={(v) => setEntryDate(v)} 
+                    disabled={isDateLocked} 
+                  />
+                  {isDateLocked && <p className="text-[10px] text-muted-foreground italic">Restricted to today.</p>}
+                </div>
+
+                <div className="grid gap-3">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Session Type</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SESSION_TYPES.map(type => {
+                      const Icon = type.icon;
+                      const active = sessionType === type.value;
+                      return (
+                        <Button 
+                          key={type.value} 
+                          variant={active ? 'default' : 'outline'} 
+                          className={`h-14 flex flex-col items-center gap-1 justify-center rounded-xl border-2 ${active ? 'border-primary shadow-md' : 'border-muted'}`} 
+                          onClick={() => setSessionType(type.value as any)}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span className="text-[10px] font-bold uppercase">{type.label}</span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                    Instructor {isInstructor && <Lock className="h-3 w-3" />}
+                  </Label>
+                  <Select value={selectedInstructorId} onValueChange={setSelectedInstructorId} disabled={isInstructor}>
+                    <SelectTrigger className="h-11 border-2">
+                      <SelectValue placeholder="Select Instructor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={user?.uid || ""}>Me ({profile?.name || 'Self'})</SelectItem>
+                      {instructors?.filter(i => i.userId !== user?.uid).map(i => (
+                        <SelectItem key={i.id} value={i.userId}>{i.name}</SelectItem>
+                      ))}
+                      {(isAdmin || isBranchManager) && <SelectItem value="Manual">Manual Name</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  {selectedInstructorId === 'Manual' && (
+                    <Input placeholder="Type Name" value={manualInstructorName} onChange={(e) => setManualInstructorName(e.target.value)} className="h-11 border-2" />
+                  )}
+                </div>
+
+                {sessionType === 'Practical' && (
+                  <div className="grid gap-3">
+                    <Label className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground">
+                      <Car className="h-4 w-4 text-primary" />Assigned Vehicle
+                    </Label>
+                    <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                      <SelectTrigger className="h-11 bg-background border-2">
+                        <SelectValue placeholder="Select Vehicle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="None">No Vehicle</SelectItem>
+                        {vehicles?.map(v => (
+                          <SelectItem key={v.id} value={v.id}>{v.regNumber} ({v.brandModel})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">From</Label>
+                    <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-11 border-2" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">To</Label>
+                    <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-11 border-2" />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-2xl flex justify-between items-center border-2 border-dashed">
+                  <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Duration:</span>
+                  <Badge variant="secondary" className="font-black text-sm px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                    {calculateDuration(startTime, endTime)} Hours
+                  </Badge>
+                </div>
               </div>
             )}
           </div>
-          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]"><Button onClick={handleMarkAttendance} className="w-full h-12 text-base font-bold shadow-lg" disabled={!selectedStudent}><CheckCircle2 className="mr-2 h-5 w-5" />Confirm & Save Session</Button></DialogFooter>
+          <DialogFooter className="p-6 border-t bg-muted/10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <Button onClick={handleMarkAttendance} className="w-full h-12 text-base font-bold shadow-lg" disabled={!selectedStudent}>
+              <CheckCircle2 className="mr-2 h-5 w-5" />Confirm & Save Session
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-sm"><CardHeader className="pb-3 border-b bg-muted/5"><div className="flex items-center justify-between"><div><CardTitle className="text-lg">Session Log</CardTitle><CardDescription>{dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} to ${toUI(dateRange.to)}`}</CardDescription></div><Badge variant="outline" className="h-6 font-bold">{sortedRecords.length} Sessions Found</Badge></div></CardHeader>
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3 border-b bg-muted/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Session Log</CardTitle>
+              <CardDescription>{dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} to ${toUI(dateRange.to)}`}</CardDescription>
+            </div>
+            <Badge variant="outline" className="h-6 font-bold">{sortedRecords.length} Sessions Found</Badge>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
-          {isAttendanceLoading ? (<div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>) : (
-            <Table><TableHeader className="bg-muted/30"><TableRow>{(isStudent || dateRange.from !== dateRange.to) && <TableHead className="pl-6">Date</TableHead>}{!isStudent && <TableHead className="pl-6">Student</TableHead>    <TableHead>Instructor</TableHead><TableHead>Type</TableHead><TableHead>Vehicle</TableHead><TableHead>Timing</TableHead><TableHead>Duration</TableHead><TableHead>Branch</TableHead>{!isStaff ? null : <TableHead className="text-right pr-6">Action</TableHead>}</TableRow></TableHeader>
-              <TableBody>{sortedRecords.length === 0 ? (<TableRow><TableCell colSpan={10} className="text-center py-20 text-muted-foreground"><div className="flex flex-col items-center gap-2"><CalendarIcon className="h-10 w-10 opacity-20" /><p className="italic">No sessions logged.</p></div></TableCell></TableRow>) : sortedRecords.map((record) => (
-                <TableRow key={record.id} className="hover:bg-muted/20">{(isStudent || dateRange.from !== dateRange.to) && (<TableCell className="pl-6 font-medium text-xs">{toUI(record.date)}</TableCell>)}{!isStudent && (<TableCell className="pl-6"><div className="flex items-center gap-3"><div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{record.studentName?.charAt(0) || 'S'}</div><div className="grid gap-0.5"><span className="font-bold text-sm leading-none">{record.studentName}</span><span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span></div></div></TableCell>)}<TableCell><div className="flex items-center gap-2"><UserSquare className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs font-medium">{record.instructorName || 'Unknown'}</span></div></TableCell><TableCell><Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>{record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}{record.type || 'Practical'}</Badge></TableCell><TableCell><div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">{record.type === 'Theory' ? 'Classroom' : (<><Car className="h-3 w-3" />{record.vehicleReg || 'None'}</>)}</div></TableCell><TableCell><div className="flex items-center gap-2 text-xs font-medium"><Clock className="h-3.5 w-3.5 text-primary" />{record.startTime} - {record.endTime}</div></TableCell><TableCell><Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100 text-[10px]">{record.duration}h</Badge></TableCell><TableCell><Badge variant="outline" className="text-[10px] uppercase">{record.branch}</Badge></TableCell>{isStaff && (<TableCell className="text-right pr-6"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if(window.confirm('Delete record?')) deleteDocumentNonBlocking(doc(db, 'attendance', record.id)); }}><Trash2 className="h-4 w-4" /></Button></TableCell>)}</TableRow>))}
-              </TableBody></Table>
+          {isAttendanceLoading ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow>
+                  {(isStudent || dateRange.from !== dateRange.to) && <TableHead className="pl-6">Date</TableHead>}
+                  {!isStudent && <TableHead className="pl-6">Student</TableHead>}
+                  <TableHead>Instructor</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Timing</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Branch</TableHead>
+                  {isStaff && <TableHead className="text-right pr-6">Action</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-20 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <CalendarIcon className="h-10 w-10 opacity-20" />
+                        <p className="italic">No sessions logged.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedRecords.map((record) => (
+                    <TableRow key={record.id} className="hover:bg-muted/20">
+                      {(isStudent || dateRange.from !== dateRange.to) && (
+                        <TableCell className="pl-6 font-medium text-xs">{toUI(record.date)}</TableCell>
+                      )}
+                      {!isStudent && (
+                        <TableCell className="pl-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                              {record.studentName?.charAt(0) || 'S'}
+                            </div>
+                            <div className="grid gap-0.5">
+                              <span className="font-bold text-sm leading-none">{record.studentName}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <UserSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium">{record.instructorName || 'Unknown'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>
+                          {record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}
+                          {record.type || 'Practical'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                          {record.type === 'Theory' ? 'Classroom' : (
+                            <>
+                              <Car className="h-3 w-3" />
+                              {record.vehicleReg || 'None'}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-xs font-medium">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          {record.startTime} - {record.endTime}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100 text-[10px]">
+                          {record.duration}h
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {record.branch}
+                        </Badge>
+                      </TableCell>
+                      {isStaff && (
+                        <TableCell className="text-right pr-6">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if(window.confirm('Delete record?')) deleteDocumentNonBlocking(doc(db, 'attendance', record.id)); }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           )}
-        </CardContent></Card>
+        </CardContent>
+      </Card>
     </div>
   );
 }
