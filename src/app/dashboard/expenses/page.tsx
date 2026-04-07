@@ -84,16 +84,27 @@ export default function ExpensesPage() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
     const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
-    const rBranch = normalize(record.branch);
-    const targetBranch = normalize(branchName);
-    if (rBranch === targetBranch) return true;
-    const tNum = branchName.match(/\d+/)?.[0];
+    const rBranchStr = normalize(record.branch);
+    const tBranchStr = normalize(branchName);
+    
+    // 1. Match by normalized name
+    if (rBranchStr === tBranchStr) return true;
+
+    // 2. Match by branch number
+    const getNum = (s: string) => s.match(/\d+/)?.[0];
+    const rNum = getNum(rBranchStr);
+    const tNum = getNum(tBranchStr);
+    if (rNum && tNum && rNum === tNum) return true;
+
+    // 3. Match by ID prefix
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
+    
     return false;
   }, []);
 
@@ -111,6 +122,7 @@ export default function ExpensesPage() {
       setFormData({ date: expense.date, category: expense.category, amount: expense.amount, description: expense.description || '', branch: expense.branch || profile?.branch || 'Branch 1' });
     } else {
       setSelectedExpense(null);
+      // Ensure the branch defaults correctly from profile for non-admins immediately
       setFormData({ date: format(new Date(), 'yyyy-MM-dd'), category: 'Fuel', amount: 0, description: '', branch: isAdmin ? "Branch 1" : (profileBranch || "Branch 1") });
     }
     setTimeout(() => setIsDialogOpen(true), 150);
@@ -154,7 +166,19 @@ export default function ExpensesPage() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label className="flex items-center gap-2">Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><DateSegmentedInput value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : formData.date} onChange={(v) => setFormData({...formData, date: v})} disabled={isDateLocked} /></div>
               <div className="grid gap-2"><Label>Category</Label><Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{EXPENSE_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div></div>
-            <div className="grid gap-2"><Label className="font-bold flex items-center gap-2">Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>{isAdmin ? (<Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}><SelectTrigger className="h-11 font-bold border-primary/20"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent></Select>) : (<div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight"><MapPin className="h-4 w-4 mr-2" />{formData.branch}</div>)}</div>
+            <div className="grid gap-2"><Label className="font-bold flex items-center gap-2">Branch {!isAdmin && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>{isAdmin ? (
+              <Select value={formData.branch} onValueChange={(v) => setFormData({...formData, branch: v})}>
+                <SelectTrigger className="h-11 font-bold border-primary/20">
+                  <SelectValue placeholder="Select Branch" />
+                </SelectTrigger>
+                <SelectContent>{BRANCHES.map(branch => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent>
+              </Select>
+            ) : (
+              <div className="h-11 flex items-center px-3 rounded-md border-2 border-primary/10 bg-muted/30 font-black text-primary uppercase tracking-tight">
+                <MapPin className="h-4 w-4 mr-2" />
+                {formData.branch || profileBranch || 'Branch 1'}
+              </div>
+            )}</div>
             <div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} /></div>
             <div className="grid gap-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
           </div>

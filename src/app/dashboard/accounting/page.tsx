@@ -76,16 +76,29 @@ export default function AccountingPage() {
 
   const isFromBranch = useCallback((record: any, branchName: string) => {
     if (!branchName || branchName === "All" || branchName === "Full") return true;
+    
     const normalize = (s: any) => s?.toString().toLowerCase().trim().replace(/\s+/g, '') || '';
-    const rBranch = normalize(record.branch);
-    const targetBranch = normalize(branchName);
-    if (rBranch === targetBranch) return true;
-    const tNum = branchName.match(/\d+/)?.[0];
+    const rBranchStr = normalize(record.branch);
+    const tBranchStr = normalize(branchName);
+    
+    // 1. Exact normalized name match
+    if (rBranchStr === tBranchStr) return true;
+
+    // 2. Branch number comparison (e.g. "Branch 1" vs "1")
+    const getNum = (s: string) => s.match(/\d+/)?.[0];
+    const rNum = getNum(rBranchStr);
+    const tNum = getNum(tBranchStr);
+    if (rNum && tNum && rNum === tNum) return true;
+
+    // 3. ID Prefix Check (e.g. B1, REC-B1, EXP-B1)
+    // Only check ID if the branch field is missing or generic
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
+      // Strict regex checking for branch prefix with boundaries
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
+    
     return false;
   }, []);
 
