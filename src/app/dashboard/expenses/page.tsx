@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -96,20 +95,16 @@ export default function ExpensesPage() {
     const rBranchStr = normalize(record.branch);
     const tBranchStr = normalize(branchName);
     
-    // 1. Direct normalized name match
     if (rBranchStr === tBranchStr) return true;
 
-    // 2. Kainatty / Branch 1 Synonym Logic
     const isB1 = (s: string) => s === 'branch1' || s === 'kainatty' || s === 'kainaty' || s === 'b1';
     if (isB1(rBranchStr) && isB1(tBranchStr)) return true;
 
-    // 3. Match by branch number
     const getNum = (s: string) => s.match(/\d+/)?.[0];
     const rNum = getNum(rBranchStr);
     const tNum = getNum(tBranchStr);
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 4. Match by ID prefix
     if (tNum) {
       const rid = normalize(record.id || '');
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
@@ -171,7 +166,7 @@ export default function ExpensesPage() {
           </div></CardHeader>
         <CardContent className="p-0">
           {isProfileLoading || isExpensesLoading ? (<div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>) : (
-            <Table><TableHeader className="bg-muted/30"><TableRow><TableHead className="pl-6">Date</TableHead><TableHead>Category</TableHead>    <TableHead>Description</TableHead><TableHead>Branch</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead className="w-[50px]"></TableHead></TableRow></TableHeader>
+            <Table><TableHeader className="bg-muted/30"><TableRow><TableHead className="pl-6">Date</TableHead><TableHead>Category</TableHead><TableHead>Description</TableHead><TableHead>Branch</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead className="w-[50px]"></TableHead></TableRow></TableHeader>
               <TableBody>{filteredExpenses.length === 0 ? (<TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic"><div className="flex flex-col items-center gap-2 opacity-50"><CalendarIcon className="h-10 w-10" /><p className="italic text-sm font-medium">No expenses found.</p></div></TableCell></TableRow>) : filteredExpenses.map((exp) => (
                 <TableRow key={exp.id} className="hover:bg-muted/20"><TableCell className="pl-6 text-muted-foreground text-xs">{toUI(exp.date)}</TableCell><TableCell><Badge variant="secondary" className="font-medium text-[10px] uppercase">{exp.category}</Badge></TableCell><TableCell className="max-w-[200px] truncate text-sm">{exp.description || '--'}</TableCell><TableCell><Badge variant="outline" className="text-[10px] uppercase">{formatBranchName(exp.branch)}</Badge></TableCell><TableCell className="text-right font-black text-red-600 pr-6">₹{exp.amount?.toLocaleString()}</TableCell><TableCell>{isAdmin && (<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => handleOpenDialog(exp)}><Edit2 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive font-bold" onSelect={() => { if(window.confirm('Delete?')) deleteDocumentNonBlocking(doc(db, 'expenses', exp.id)); }}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>)}</TableCell></TableRow>))}</TableBody></Table>
           )}

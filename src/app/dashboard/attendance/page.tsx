@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -23,7 +22,7 @@ const SESSION_TYPES = [
   { value: 'Theory', label: 'Theory Class', icon: BookOpen },
 ] as const;
 
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+const BRANCHES = ["Kainatty", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 const toUI = (iso: string) => {
   if (!iso) return 'N/A';
@@ -74,7 +73,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     if (profile && !isAdmin) {
-      setSelectedBranch(profile.branch || "Branch 1");
+      setSelectedBranch(profile.branch || "Kainatty");
     }
     if (profile && !selectedInstructorId) {
       setSelectedInstructorId(user?.uid || "");
@@ -119,7 +118,7 @@ export default function AttendancePage() {
     if (!rawAttendance) return [];
     let result = rawAttendance;
     if (isInstructor && !isAdmin) result = result.filter(rec => rec.instructorId === user?.uid);
-    else if (isBranchManager && !isAdmin) result = result.filter(rec => isFromBranch(rec, profile?.branch || "Branch 1"));
+    else if (isBranchManager && !isAdmin) result = result.filter(rec => isFromBranch(rec, profile?.branch || "Kainatty"));
     else if (isAdmin && selectedBranch !== "All") result = result.filter(rec => isFromBranch(rec, selectedBranch));
     
     if (instructorFilter !== "All" && !isInstructor) {
@@ -159,7 +158,7 @@ export default function AttendancePage() {
 
   const filteredSearch = useMemo(() => {
     if (!allStudents) return [];
-    const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Branch 1");
+    const searchBranchContext = (isAdmin || isInstructor) ? "All" : (profile?.branch || "Kainatty");
     let result = allStudents.filter(s => s.status !== 'Completed' && s.status !== 'Inactive');
     if (searchBranchContext !== "All") result = result.filter(s => isFromBranch(s, searchBranchContext));
     if (!studentSearch) return result;
@@ -342,7 +341,7 @@ export default function AttendancePage() {
                 <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Search Student</Label>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Name, ID..." className="pl-8" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+                  <Input placeholder="Name, ID..." className="pl-8" value={studentSearch} onChange={(e) => studentSearch === e.target.value ? null : setStudentSearch(e.target.value)} />
                 </div>
                 <div className="border rounded-xl mt-1 divide-y bg-background shadow-sm max-h-[400px] overflow-auto min-h-[100px]">
                   {isStudentsLoading ? (
@@ -384,7 +383,7 @@ export default function AttendancePage() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setSelectedStudent(null)} className="h-8 w-8 p-0 rounded-full"><X className="h-4 w-4" /></Button>
+                  <X className="h-4 w-4 cursor-pointer" onClick={() => setSelectedStudent(null)} />
                 </div>
                 
                 <div className="grid gap-3">

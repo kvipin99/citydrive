@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -25,7 +24,7 @@ const RECEIPT_CATEGORIES = [
   "Other Income"
 ] as const;
 
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+const BRANCHES = ["Kainatty", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface ReceiptRecord {
   id: string;
@@ -88,21 +87,21 @@ export default function OtherReceiptsPage() {
     payerName: '',
     category: 'Photostate / Printing' as ReceiptRecord['category'],
     description: '',
-    branch: 'Branch 1'
+    branch: 'Kainatty'
   });
 
   useEffect(() => {
     if (profile && isDialogOpen) {
       setFormData(prev => ({ 
         ...prev, 
-        branch: profile.branch || "Branch 1" 
+        branch: profile.branch || "Kainatty" 
       }));
     }
   }, [profile?.branch, isDialogOpen]);
 
   useEffect(() => {
     if (profile && !isAdmin) {
-      setSelectedBranchFilter(profileBranch || "Branch 1");
+      setSelectedBranchFilter(profileBranch || "Kainatty");
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
@@ -121,7 +120,6 @@ export default function OtherReceiptsPage() {
 
     if (tNum) {
       const rid = normalize(record.id || '');
-      // Robust pattern for IDs
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
       if (bPattern.test(rid)) return true;
     }
@@ -138,7 +136,7 @@ export default function OtherReceiptsPage() {
       payerName: '',
       category: 'Photostate / Printing',
       description: '',
-      branch: profile?.branch || 'Branch 1'
+      branch: profile?.branch || 'Kainatty'
     });
   };
 
@@ -184,7 +182,7 @@ export default function OtherReceiptsPage() {
     if (!allReceipts) return [];
     let result = allReceipts.filter(r => r.category !== "Course Fee" && !r.studentId);
 
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Kainatty");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(r => isFromBranch(r, currentBranchContext));
     }
