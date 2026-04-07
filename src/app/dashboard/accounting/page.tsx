@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useDoc } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { DollarSign, Receipt, TrendingUp, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, ListTree, PieChart } from "lucide-react";
+import { DollarSign, Receipt, TrendingUp, RefreshCw, Layers, FileDown, Printer, MapPin, Filter, ListTree, PieChart, Calendar } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -143,6 +143,18 @@ export default function AccountingPage() {
     return Object.entries(s).sort((a, b) => b[0].localeCompare(a[0]));
   }, [allTransactions, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
+  const yearlySummary = useMemo(() => {
+    const s: Record<string, { income: number, expense: number }> = {};
+    const context = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    allTransactions.filter(t => isFromBranch(t, context)).forEach(t => { 
+      const k = format(t.date, 'yyyy'); 
+      if (!s[k]) s[k] = { income: 0, expense: 0 }; 
+      if (t.type === 'Income') s[k].income += t.amount; 
+      else s[k].expense += t.amount; 
+    });
+    return Object.entries(s).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [allTransactions, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
+
   const isLoading = isProfileLoading || isPaymentsLoading || isExpensesLoading;
 
   if (isProfileLoading) return <div className="flex flex-col items-center justify-center py-20 gap-4"><RefreshCw className="h-8 w-8 animate-spin text-primary" /><p className="text-sm">Loading accounting...</p></div>;
@@ -193,7 +205,28 @@ export default function AccountingPage() {
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="monthly"><Card><CardHeader><CardTitle>Monthly Summaries</CardTitle></CardHeader><CardContent>{isLoading ? <LoadingSpinner /> : <SummaryTable data={monthlySummary} type="Month" />}</CardContent></Card></TabsContent>
+            <TabsContent value="monthly">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Monthly Summaries</CardTitle>
+                  <CardDescription>Consolidated revenue and expenses by month.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? <LoadingSpinner /> : <SummaryTable data={monthlySummary} type="Month" />}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="yearly">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5 text-primary" /> Yearly Summaries</CardTitle>
+                  <CardDescription>Consolidated financial performance by fiscal year.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? <LoadingSpinner /> : <SummaryTable data={yearlySummary} type="Year" />}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
       </div>
