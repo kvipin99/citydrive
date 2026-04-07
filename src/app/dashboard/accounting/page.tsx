@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import placeholderData from '@/app/lib/placeholder-images.json';
 import { DateSegmentedInput } from "@/components/ui/date-segmented-input";
 
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+const BRANCHES = ["Kainatty", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 interface Transaction {
   id: string;
@@ -40,6 +40,13 @@ const toUI = (iso: string) => {
   const parts = iso.split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return iso;
+};
+
+const formatBranchName = (name: string) => {
+  if (!name) return 'Unknown';
+  const n = name.toString().toLowerCase().trim();
+  if (n === 'branch 1' || n === 'b1' || n === 'kainaty' || n === 'kainatty') return 'Kainatty';
+  return name;
 };
 
 export default function AccountingPage() {
@@ -64,7 +71,7 @@ export default function AccountingPage() {
 
   useEffect(() => {
     if (profile && !isAdmin) {
-      setSelectedBranch(profile.branch || "Branch 1");
+      setSelectedBranch(formatBranchName(profile.branch || "Kainatty"));
     }
   }, [profile, isAdmin]);
 
@@ -84,17 +91,19 @@ export default function AccountingPage() {
     // 1. Exact normalized name match
     if (rBranchStr === tBranchStr) return true;
 
-    // 2. Branch number comparison (e.g. "Branch 1" vs "1")
+    // 2. Kainatty / Branch 1 Synonym Logic
+    const isB1 = (s: string) => s === 'branch1' || s === 'kainatty' || s === 'kainaty' || s === 'b1';
+    if (isB1(rBranchStr) && isB1(tBranchStr)) return true;
+
+    // 3. Branch number comparison (e.g. "Branch 2" vs "2")
     const getNum = (s: string) => s.match(/\d+/)?.[0];
     const rNum = getNum(rBranchStr);
     const tNum = getNum(tBranchStr);
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 3. ID Prefix Check (e.g. B1, REC-B1, EXP-B1)
-    // Only check ID if the branch field is missing or generic
+    // 4. ID Prefix Check (e.g. B1, REC-B1, EXP-B1)
     if (tNum) {
       const rid = normalize(record.id || '');
-      // Strict regex checking for branch prefix with boundaries
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
@@ -117,7 +126,7 @@ export default function AccountingPage() {
 
   const filteredTransactions = useMemo(() => {
     let result = allTransactions.filter(t => { const d = format(t.date, 'yyyy-MM-dd'); return d >= dateRange.from && d <= dateRange.to; });
-    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranch : (profile?.branch || "Kainatty");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") result = result.filter(t => isFromBranch(t, currentBranchContext));
     return result;
   }, [allTransactions, dateRange, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
@@ -143,7 +152,7 @@ export default function AccountingPage() {
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) { toast({ variant: "destructive", title: "No Data" }); return; }
     const h = ["Date", "Type", "Category", "Description", "Details", "Branch", "Amount"];
-    const rows = filteredTransactions.map(t => [format(t.date, 'yyyy-MM-dd'), t.type, t.category, t.description, t.receiptNo || t.studentId || '', t.branch, t.amount]);
+    const rows = filteredTransactions.map(t => [format(t.date, 'yyyy-MM-dd'), t.type, t.category, t.description, t.receiptNo || t.studentId || '', formatBranchName(t.branch), t.amount]);
     const csv = [h, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); link.download = `accounting_${format(new Date(), 'yyyy-MM-dd')}.csv`; link.click();
     toast({ title: "Exported" });
@@ -151,14 +160,14 @@ export default function AccountingPage() {
 
   const monthlySummary = useMemo(() => {
     const s: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    const context = isAdmin ? selectedBranch : (profile?.branch || "Kainatty");
     allTransactions.filter(t => isFromBranch(t, context)).forEach(t => { const k = format(t.date, 'yyyy-MM'); if (!s[k]) s[k] = { income: 0, expense: 0 }; if (t.type === 'Income') s[k].income += t.amount; else s[k].expense += t.amount; });
     return Object.entries(s).sort((a, b) => b[0].localeCompare(a[0]));
   }, [allTransactions, isAdmin, selectedBranch, profile?.branch, isFromBranch]);
 
   const yearlySummary = useMemo(() => {
     const s: Record<string, { income: number, expense: number }> = {};
-    const context = isAdmin ? selectedBranch : (profile?.branch || "Branch 1");
+    const context = isAdmin ? selectedBranch : (profile?.branch || "Kainatty");
     allTransactions.filter(t => isFromBranch(t, context)).forEach(t => { 
       const k = format(t.date, 'yyyy'); 
       if (!s[k]) s[k] = { income: 0, expense: 0 }; 
@@ -177,12 +186,12 @@ export default function AccountingPage() {
       <div className="print-only-header">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-3"><div className="relative h-12 w-12 bg-white flex items-center justify-center rounded-lg border-2 border-primary overflow-hidden">{appLogo && <Image src={appLogo.imageUrl} alt="Logo" fill className="object-contain p-1" data-ai-hint={appLogo.imageHint}/>}</div><div><h1 className="text-2xl font-black text-primary uppercase">Citydrive Systems</h1><p className="text-xs font-bold text-muted-foreground uppercase">Management Portal</p></div></div>
-          <div className="text-right"><h2 className="text-lg font-bold uppercase">Financial Daybook</h2><p className="text-xs font-medium">Branch: {isAdmin ? selectedBranch : profile?.branch} | Period: {toUI(dateRange.from)} to {toUI(dateRange.to)}</p></div>
+          <div className="text-right"><h2 className="text-lg font-bold uppercase">Financial Daybook</h2><p className="text-xs font-medium">Branch: {formatBranchName(isAdmin ? selectedBranch : (profile?.branch || ''))} | Period: {toUI(dateRange.from)} to {toUI(dateRange.to)}</p></div>
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print-hidden">
-        <div className="grid gap-1"><h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2><p className="text-muted-foreground text-sm">{isAdmin ? "Consolidated school-wide accounts." : `Daily accounts for ${profile?.branch}.`}</p></div>
+        <div className="grid gap-1"><h2 className="text-2xl font-bold tracking-tight">Financial Daybook</h2><p className="text-muted-foreground text-sm">{isAdmin ? "Consolidated school-wide accounts." : `Daily accounts for ${formatBranchName(profile?.branch || "Kainatty")}.`}</p></div>
         <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => window.print()} className="gap-2"><Printer className="h-4 w-4" /> Print</Button><Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-2"><FileDown className="h-4 w-4" /> CSV</Button><Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" /><Button size="sm" asChild variant="outline"><Link href="/dashboard/expenses">New Expense</Link></Button><Button size="sm" asChild><Link href="/dashboard/payments">Collect Fee</Link></Button></div>
       </div>
 
@@ -254,7 +263,7 @@ function ItemizedTable({ transactions, colorClass }: { transactions: Transaction
   return (
     <Table><TableHeader className="bg-muted/20"><TableRow><TableHead className="w-[100px] pl-4">Date</TableHead><TableHead>Details</TableHead><TableHead className="text-right pr-4">Amount</TableHead></TableRow></TableHeader>
       <TableBody>{transactions.length === 0 ? (<TableRow><TableCell colSpan={3} className="text-center py-16 text-muted-foreground italic">No records.</TableCell></TableRow>) : transactions.map((t) => (
-        <TableRow key={t.id} className="hover:bg-muted/10 group"><TableCell className="pl-4 text-xs font-medium text-muted-foreground">{format(t.date, 'dd/MM')}</TableCell><TableCell><div className="grid gap-0.5"><span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span><div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase font-mono">{t.branch && <span className="text-primary font-bold">{t.branch}</span>}{t.category && <span className="bg-muted px-1 rounded-sm text-[10px] font-black">{t.category}</span>}</div></div></TableCell><TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>₹{t.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table>
+        <TableRow key={t.id} className="hover:bg-muted/10 group"><TableCell className="pl-4 text-xs font-medium text-muted-foreground">{format(t.date, 'dd/MM')}</TableCell><TableCell><div className="grid gap-0.5"><span className="font-bold text-xs group-hover:text-primary transition-colors">{t.description}</span><div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase font-mono">{t.branch && <span className="text-primary font-bold">{formatBranchName(t.branch)}</span>}{t.category && <span className="bg-muted px-1 rounded-sm text-[10px] font-black">{t.category}</span>}</div></div></TableCell><TableCell className={`text-right font-black pr-4 text-sm ${colorClass}`}>₹{t.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table>
   );
 }
 
