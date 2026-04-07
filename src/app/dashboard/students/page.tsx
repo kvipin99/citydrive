@@ -126,9 +126,16 @@ function StudentsContent() {
     if (!db || !user) return null;
     return collection(db, 'courses');
   }, [db, user?.uid]);
+
+  // Fetch all payments to calculate real-time balances in the table
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!db || !user || !profile?.role) return null;
+    return collection(db, 'payments');
+  }, [db, user?.uid, profile?.role]);
   
   const { data: students, isLoading: isStudentsLoading } = useCollection<Student>(studentsQuery);
   const { data: masterCourses } = useCollection<any>(coursesQuery);
+  const { data: allPayments } = useCollection<any>(paymentsQuery);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("All");
@@ -421,7 +428,11 @@ function StudentsContent() {
       receivedBy: user?.uid,
       description: receiptFormData.description
     };
+    
+    // Core action: Update payments collection
     setDocumentNonBlocking(receiptRef, record, { merge: true });
+    
+    // Optional legacy sync: update the student doc if needed for non-profile queries
     try {
       const studentSnap = await getDoc(studentRef);
       if (studentSnap.exists()) {
@@ -433,9 +444,11 @@ function StudentsContent() {
         updateDocumentNonBlocking(studentRef, { payments: updatedPayments, updatedAt: serverTimestamp() });
       }
     } catch (e) { console.error(e); }
+    
     setTimeout(() => {
       setIsReceiptDialogOpen(false);
       setIsSubmitting(false);
+      resetForm(); 
       toast({ title: "Receipt Generated", description: `Receipt #${receiptFormData.receiptNo} saved.` });
     }, 150);
   };
@@ -495,10 +508,12 @@ function StudentsContent() {
     setFormData(prev => ({ ...prev, courses: newCourses, amount: newAmount, ...(!hasOthers ? { specialCourseName: '', specialCourseFee: 0 } : {}) }));
   };
 
-  const calculateBalanceDue = useCallback((student: Student) => {
-    const paid = student.payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
-    return Math.max(0, (student.amount || 0) - paid);
-  }, []);
+  const calculateBalanceDueRealTime = useCallback((student: Student) => {
+    if (!allPayments) return 0;
+    const studentPayments = allPayments.filter(p => p.studentId === student.id);
+    const totalPaid = studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    return Math.max(0, (student.amount || 0) - totalPaid);
+  }, [allPayments]);
 
   return (
     <div className="space-y-6">
@@ -584,7 +599,7 @@ function StudentsContent() {
                       <TableCell>{student.branch}</TableCell>
                       <TableCell className="text-xs text-muted-foreground font-medium">{toUI(student.registrationDate)}</TableCell>
                       <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell><span className={`font-bold ${calculateBalanceDue(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDue(student).toLocaleString()}</span></TableCell>
+                      <TableCell><span className={`font-bold ${calculateBalanceDueRealTime(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDueRealTime(student).toLocaleString()}</span></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button size="icon" variant="ghost" onClick={(e) => { e.preventDefault(); setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
@@ -629,7 +644,7 @@ function StudentsContent() {
       }}>
         <SheetContent className="sm:max-w-3xl overflow-y-auto">
           <SheetHeader className="pb-6"><SheetTitle>Student Profile Dashboard</SheetTitle></SheetHeader>
-          {selectedStudent && (<StudentProfileView student={selectedStudent} db={db} isAdmin={isAdmin} calculateBalanceDue={calculateBalanceDue} />)}
+          {selectedStudent && (<StudentProfileView student={selectedStudent} db={db} isAdmin={isAdmin} />)}
         </SheetContent>
       </Sheet>
 
@@ -651,7 +666,7 @@ function StudentsContent() {
       <Dialog open={isReceiptDialogOpen} onOpenChange={(open) => { setIsReceiptDialogOpen(open); if (!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-md p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
           <DialogHeader className="p-6 border-b shrink-0"><DialogTitle>Issue Student Receipt</DialogTitle><DialogDescription>Record fee for <b>{selectedStudent?.name}</b>.</DialogDescription></DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6"><div className="grid gap-6 pb-20">{selectedStudent && (<div className="space-y-4 animate-in fade-in zoom-in-95 duration-200"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalanceDue(selectedStudent).toLocaleString()}</p></div></div><div className="grid gap-4 pt-4 border-t"><div className="grid gap-2"><Label className="flex items-center gap-2">Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><DateSegmentedInput value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} onChange={(v) => setReceiptFormData({...receiptFormData, date: v})} disabled={isDateLocked} /></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div><div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div><div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div></div></div>)}</div></div>
+          <div className="flex-1 overflow-y-auto p-6"><div className="grid gap-6 pb-20">{selectedStudent && (<div className="space-y-4 animate-in fade-in zoom-in-95 duration-200"><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-2 border rounded bg-muted/30"><p className="text-xs text-muted-foreground">Agreed Fee</p><p className="font-bold">₹{selectedStudent.amount?.toLocaleString()}</p></div><div className="p-2 border rounded bg-destructive/5"><p className="text-xs text-muted-foreground">Current Balance</p><p className="font-bold text-destructive">₹{calculateBalanceDueRealTime(selectedStudent).toLocaleString()}</p></div></div><div className="grid gap-4 pt-4 border-t"><div className="grid gap-2"><Label className="flex items-center gap-2">Receipt Date {isDateLocked && <Lock className="h-3 w-3" />}</Label><DateSegmentedInput value={isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date} onChange={(v) => setReceiptFormData({...receiptFormData, date: v})} disabled={isDateLocked} /></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Amount (₹)</Label><Input type="number" placeholder="0.00" value={receiptFormData.amount || ''} onChange={(e) => setReceiptFormData({...receiptFormData, amount: Number(e.target.value)})} /></div><div className="grid gap-2"><Label>Method</Label><Select value={receiptFormData.method} onValueChange={(v) => setReceiptFormData({...receiptFormData, method: v as any})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Online">Online</SelectItem><SelectItem value="Cheque">Cheque</SelectItem></SelectContent></Select></div></div><div className="grid gap-2"><Label>Receipt No.</Label><Input placeholder="e.g. 1001" value={receiptFormData.receiptNo} onChange={(e) => setReceiptFormData({...receiptFormData, receiptNo: e.target.value})} /></div><div className="grid gap-2"><Label>Description (Optional)</Label><Input placeholder="e.g. 2nd Installment" value={receiptFormData.description} onChange={(e) => setReceiptFormData({...receiptFormData, description: e.target.value})} /></div></div></div>)}</div></div>
           <DialogFooter className="p-6 border-t bg-muted/10 shrink-0"><Button onClick={handleSaveReceipt} disabled={isSubmitting} className="w-full">{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Confirm & Generate</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -691,28 +706,44 @@ function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateF
   );
 }
 
-function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) {
+function StudentProfileView({ student, db, isAdmin }: any) {
+  // Real-time Queries for Profiles
   const attendanceQuery = useMemoFirebase(() => (!db || !student?.userId) ? null : query(collection(db, 'attendance'), where('studentUid', '==', student.userId)), [db, student?.userId]);
-  const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+  const paymentsQuery = useMemoFirebase(() => (!db || !student?.id) ? null : query(collection(db, 'payments'), where('studentId', '==', student.id)), [db, student?.id]);
   const vehiclesQuery = useMemoFirebase(() => (db ? collection(db, 'vehicles') : null), [db]);
+
+  const { data: attendance, isLoading: isAttendanceLoading } = useCollection(attendanceQuery);
+  const { data: payments, isLoading: isPaymentsLoading } = useCollection(paymentsQuery);
   const { data: vehicles } = useCollection(vehiclesQuery);
-  const hourStats = useMemo(() => {
-    if (!attendance) return { practical: 0, theory: 0, byType: {} as Record<string, number> };
+
+  const stats = useMemo(() => {
+    const res = { practical: 0, theory: 0, paid: 0, byType: {} as Record<string, number> };
+    if (!attendance || !payments) return res;
+
     const vMap: Record<string, string> = {};
     vehicles?.forEach(v => { vMap[v.id] = v.type; });
-    return attendance.reduce((acc, curr) => {
+
+    attendance.forEach(curr => {
       const h = Number(curr.duration) || 0;
-      if (curr.type === 'Theory') acc.theory += h;
+      if (curr.type === 'Theory') res.theory += h;
       else {
-        acc.practical += h;
+        res.practical += h;
         const type = curr.vehicleType || vMap[curr.vehicleId] || 'Other';
-        if (type !== 'N/A') acc.byType[type] = (acc.byType[type] || 0) + h;
+        if (type !== 'N/A') res.byType[type] = (res.byType[type] || 0) + h;
       }
-      return acc;
-    }, { practical: 0, theory: 0, byType: {} as Record<string, number> });
-  }, [attendance, vehicles]);
+    });
+
+    res.paid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    return res;
+  }, [attendance, payments, vehicles]);
+
+  const balanceDue = Math.max(0, (student.amount || 0) - stats.paid);
   const sortedAttendance = useMemo(() => (!attendance) ? [] : [...attendance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.startTime || '').localeCompare(a.startTime || '')), [attendance]);
-  const paidAmount = useMemo(() => student?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0, [student?.payments]);
+  const sortedPayments = useMemo(() => (!payments) ? [] : [...payments].sort((a, b) => {
+    const getT = (d: any) => d?.seconds || 0;
+    return getT(b.date) - getT(a.date);
+  }), [payments]);
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col items-center text-center gap-4 py-6 bg-primary/5 rounded-2xl border-2 border-primary/10">
@@ -724,10 +755,10 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatSummary label="Practical Hr" value={`${hourStats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" breakdown={hourStats.byType} />
-        <StatSummary label="Theory Hr" value={`${hourStats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
-        <StatSummary label="Paid" value={`₹${paidAmount.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
-        <StatSummary label="Balance" value={`₹${calculateBalanceDue(student).toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
+        <StatSummary label="Practical Hr" value={`${stats.practical.toFixed(1)}h`} icon={<Car className="h-3 w-3" />} color="blue" breakdown={stats.byType} />
+        <StatSummary label="Theory Hr" value={`${stats.theory.toFixed(1)}h`} icon={<BookOpen className="h-3 w-3" />} color="orange" />
+        <StatSummary label="Paid" value={`₹${stats.paid.toLocaleString()}`} icon={<CreditCard className="h-3 w-3" />} color="green" />
+        <StatSummary label="Balance" value={`₹${balanceDue.toLocaleString()}`} icon={<Wallet className="h-3 w-3" />} color="red" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section className="space-y-4">
@@ -764,9 +795,9 @@ function StudentProfileView({ student, db, isAdmin, calculateBalanceDue }: any) 
           <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader><TableBody>{sortedAttendance.map((a: any) => (<TableRow key={a.id} className="hover:bg-muted/30"><TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell><TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell><TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell><TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
-      <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Receipts</h3>
-        {!student.payments || student.payments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts.</p>) : (
-          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader><TableBody>{student.payments.map((p: any) => (<TableRow key={p.id || p.receiptNo} className="hover:bg-muted/30"><TableCell className="text-xs">{toUI(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table></div>
+      <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Ledger (Real-time Payments)</h3>
+        {isPaymentsLoading ? (<div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>) : sortedPayments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts.</p>) : (
+          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader><TableBody>{sortedPayments.map((p: any) => (<TableRow key={p.id} className="hover:bg-muted/30"><TableCell className="text-xs">{toUI(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
     </div>
@@ -782,9 +813,7 @@ function StatSummary({ label, value, icon, color, breakdown }: any) {
   );
 }
 
-function ProfileItem({ icon, label, value, fullWidth = false }: any) {
-  return (<div className={`grid gap-1 ${fullWidth ? 'col-span-full' : ''}`}><div className="flex items-center gap-2 text-muted-foreground font-medium text-[10px] uppercase tracking-wider"><span className="text-primary/60">{icon}</span>{label}</div><div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent">{value || 'N/A'}</div></div>);
-}
+function ProfileItem({ icon, label, value, fullWidth = false }: any) { return (<div className={`grid gap-1 ${fullWidth ? 'col-span-full' : ''}`}><div className="flex items-center gap-2 text-muted-foreground font-medium text-[10px] uppercase tracking-wider"><span className="text-primary/60">{icon}</span>{label}</div><div className="font-bold text-foreground bg-muted/10 p-2 rounded border border-transparent">{value || 'N/A'}</div></div>); }
 
 function Separator({ className }: { className?: string }) { return <div className={`h-px w-full bg-border ${className}`} />; }
 
