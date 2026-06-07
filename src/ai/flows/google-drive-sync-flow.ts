@@ -1,14 +1,13 @@
-
 'use server';
 /**
  * @fileOverview A robust Genkit flow for backing up Firestore and Storage.
  * 
  * Process:
  * 1. Generates JSON of all Firestore data.
- * 2. Packages with Storage files into a single ZIP.
+ * 2. Packages with Storage files into a single ZIP for internal recovery.
  * 3. Saves ZIP to Firebase Storage (Internal Archive).
- * 4. Syncs ZIP to Google Drive (External Mirror).
- * 5. Implements 30-day retention policies on both.
+ * 4. Syncs the raw JSON database snapshot to Google Drive (External Mirror) 
+ *    in the "CityDrive Backups" folder.
  */
 
 import { ai } from '@/ai/genkit';
@@ -17,8 +16,8 @@ import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { Readable } from 'stream';
 import { initializeFirebase } from '@/firebase/init';
-import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { getStorage, ref, listAll, getBytes, uploadBytes, deleteObject } from 'firebase/storage';
+import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, listAll, getBytes, uploadBytes } from 'firebase/storage';
 import { headers } from 'next/headers';
 
 const BACKUP_COLLECTIONS = [
@@ -87,7 +86,8 @@ const driveSyncFlow = ai.defineFlow(
       const zip = new JSZip();
       const timestamp = Date.now();
       const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `backup-${dateStr}-${timestamp}.zip`;
+      const zipFileName = `full-archive-${dateStr}-${timestamp}.zip`;
+      const driveFileName = `citydrive_backup_${dateStr}.json`;
 
       // 1. DATA AGGREGATION: Firestore
       console.log("[BACKUP] Aggregating Firestore collections...");
@@ -100,7 +100,8 @@ const driveSyncFlow = ai.defineFlow(
           console.warn(`[BACKUP] Skipped collection ${colName}:`, e); 
         }
       }
-      zip.file("database.json", JSON.stringify(dbData, null, 2));
+      const jsonDatabaseString = JSON.stringify(dbData, null, 2);
+      zip.file("database.json", jsonDatabaseString);
 
       // 2. DATA AGGREGATION: Storage (Student Photos)
       console.log("[BACKUP] Aggregating Storage files...");
@@ -115,29 +116,29 @@ const driveSyncFlow = ai.defineFlow(
         console.warn("[BACKUP] Storage backup limited or empty:", e); 
       }
 
-      // Generate ZIP Buffer
+      // Generate ZIP Buffer for internal archival
       const zipBuffer = await zip.generateAsync({ 
         type: 'nodebuffer', 
         compression: 'DEFLATE', 
         compressionOptions: { level: 9 } 
       });
 
-      // 3. INTERNAL ARCHIVAL: Save to Firebase Storage
-      console.log("[BACKUP] Saving copy to Firebase Storage...");
-      const internalRef = ref(storage, `system_backups/${fileName}`);
+      // 3. INTERNAL ARCHIVAL: Save Full ZIP to Firebase Storage
+      console.log("[BACKUP] Saving recovery ZIP to Firebase Storage...");
+      const internalRef = ref(storage, `system_backups/${zipFileName}`);
       await uploadBytes(internalRef, zipBuffer, { contentType: 'application/zip' });
 
-      // 4. EXTERNAL MIRRORING: Upload to Google Drive
+      // 4. EXTERNAL MIRRORING: Upload JSON Snapshot to Google Drive
       let driveFileId = undefined;
       if (tokenSnap.exists()) {
-        console.log("[BACKUP] Syncing to Google Drive...");
+        console.log("[BACKUP] Mirroring JSON snapshot to Google Drive...");
         const tokens = tokenSnap.data();
         const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
         oauth2Client.setCredentials(tokens);
 
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-        // Ensure Folder Exists
+        // Ensure "CityDrive Backups" Folder Exists
         let folderId: string | null = null;
         const folderSearch = await drive.files.list({
           q: "name = 'CityDrive Backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
@@ -148,6 +149,7 @@ const driveSyncFlow = ai.defineFlow(
         if (folderSearch.data.files && folderSearch.data.files.length > 0) {
           folderId = folderSearch.data.files[0].id!;
         } else {
+          console.log("[BACKUP] Creating 'CityDrive Backups' folder on Drive...");
           const newFolder = await drive.files.create({
             requestBody: { name: 'CityDrive Backups', mimeType: 'application/vnd.google-apps.folder' },
             fields: 'id',
@@ -155,10 +157,10 @@ const driveSyncFlow = ai.defineFlow(
           folderId = newFolder.data.id!;
         }
 
-        // Upload ZIP to Drive
+        // Upload JSON Snapshot to Drive
         const response = await drive.files.create({
-          requestBody: { name: fileName, parents: [folderId!] },
-          media: { mimeType: 'application/zip', body: Readable.from(zipBuffer) },
+          requestBody: { name: driveFileName, parents: [folderId!] },
+          media: { mimeType: 'application/json', body: Readable.from(jsonDatabaseString) },
           fields: 'id',
         });
         driveFileId = response.data.id!;
@@ -171,19 +173,19 @@ const driveSyncFlow = ai.defineFlow(
         timestamp: serverTimestamp(),
         status: "Successful",
         type: "Daily Cloud Sync",
-        fileName,
-        storagePath: `system_backups/${fileName}`,
+        fileName: driveFileName,
+        storagePath: `system_backups/${zipFileName}`,
         driveFileId: driveFileId || "NOT_CONNECTED"
       });
 
       return { 
         success: true, 
-        message: `Backup archived to Firebase and Drive as ${fileName}.`, 
+        message: `Snapshot mirrored to Google Drive as ${driveFileName}. Full recovery ZIP archived internally.`, 
         fileId: driveFileId 
       };
     } catch (error: any) {
       console.error('[BACKUP ERROR]', error);
-      return { success: false, message: `Backup failed: ${error.message}` };
+      return { success: false, message: `Backup pipeline failed: ${error.message}` };
     }
   }
 );
