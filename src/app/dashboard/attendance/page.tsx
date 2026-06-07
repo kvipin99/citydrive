@@ -505,17 +505,7 @@ export default function AttendancePage() {
           ) : (
             <Table>
               <TableHeader className="bg-muted/30">
-                <TableRow>
-                  {(isStudent || dateRange.from !== dateRange.to) && <TableHead className="pl-6">Date</TableHead>}
-                  {!isStudent && <TableHead className="pl-6">Student</TableHead>}
-                  <TableHead>Instructor</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Timing</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Branch</TableHead>
-                  {isStaff && <TableHead className="text-right pr-6">Action</TableHead>}
-                </TableRow>
+                <TableRow>{(isStudent || dateRange.from !== dateRange.to) && <TableHead className="pl-6">Date</TableHead>}{!isStudent && <TableHead className="pl-6">Student</TableHead>}<TableHead>Instructor</TableHead><TableHead>Type</TableHead><TableHead>Vehicle</TableHead><TableHead>Timing</TableHead><TableHead>Duration</TableHead><TableHead>Branch</TableHead>{isStaff && <TableHead className="text-right pr-6">Action</TableHead>}</TableRow>
               </TableHeader>
               <TableBody>
                 {sortedRecords.length === 0 ? (
@@ -529,69 +519,7 @@ export default function AttendancePage() {
                   </TableRow>
                 ) : (
                   sortedRecords.map((record) => (
-                    <TableRow key={record.id} className="hover:bg-muted/20">
-                      {(isStudent || dateRange.from !== dateRange.to) && (
-                        <TableCell className="pl-6 font-medium text-xs">{toUI(record.date)}</TableCell>
-                      )}
-                      {!isStudent && (
-                        <TableCell className="pl-6">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                              {record.studentName?.charAt(0) || 'S'}
-                            </div>
-                            <div className="grid gap-0.5">
-                              <span className="font-bold text-sm leading-none">{record.studentName}</span>
-                              <span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <UserSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-xs font-medium">{record.instructorName || 'Unknown'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>
-                          {record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}
-                          {record.type || 'Practical'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-                          {record.type === 'Theory' ? 'Classroom' : (
-                            <>
-                              <Car className="h-3 w-3" />
-                              {record.vehicleReg || 'None'}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-xs font-medium">
-                          <Clock className="h-3.5 w-3.5 text-primary" />
-                          {record.startTime} - {record.endTime}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100 text-[10px]">
-                          {record.duration}h
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px] uppercase">
-                          {record.branch}
-                        </Badge>
-                      </TableCell>
-                      {isStaff && (
-                        <TableCell className="text-right pr-6">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if(window.confirm('Delete record?')) deleteDocumentNonBlocking(doc(db, 'attendance', record.id)); }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
+                    <TableRow key={record.id} className="hover:bg-muted/20">{(isStudent || dateRange.from !== dateRange.to) && (<TableCell className="pl-6 font-medium text-xs">{toUI(record.date)}</TableCell>)}{!isStudent && (<TableCell className="pl-6"><div className="flex items-center gap-3"><div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{record.studentName?.charAt(0) || 'S'}</div><div className="grid gap-0.5"><span className="font-bold text-sm leading-none">{record.studentName}</span><span className="text-[10px] text-muted-foreground uppercase font-mono">{record.studentId}</span></div></div></TableCell>)}<TableCell><div className="flex items-center gap-2"><UserSquare className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs font-medium">{record.instructorName || 'Unknown'}</span></div></TableCell><TableCell><Badge variant="outline" className={`gap-1.5 text-[10px] uppercase font-bold ${record.type === 'Theory' ? 'text-orange-600 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>{record.type === 'Theory' ? <BookOpen className="h-3 w-3" /> : <Car className="h-3 w-3" />}{record.type || 'Practical'}</Badge></TableCell><TableCell><div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">{record.type === 'Theory' ? 'Classroom' : (<><Car className="h-3 w-3" />{record.vehicleReg || 'None'}</>)}</div></TableCell><TableCell><div className="flex items-center gap-2 text-xs font-medium"><Clock className="h-3.5 w-3.5 text-primary" />{record.startTime} - {record.endTime}</div></TableCell><TableCell><Badge variant="secondary" className="font-bold bg-green-50 text-green-700 border-green-100 text-[10px]">{record.duration}h</Badge></TableCell><TableCell><Badge variant="outline" className="text-[10px] uppercase">{record.branch}</Badge></TableCell>{isStaff && (<TableCell className="text-right pr-6"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if(window.confirm('Delete record?')) deleteDocumentNonBlocking(doc(db, 'attendance', record.id)); }}><Trash2 className="h-4 w-4" /></Button></TableCell>)}</TableRow>
                   ))
                 )}
               </TableBody>

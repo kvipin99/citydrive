@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -88,20 +87,16 @@ export default function AccountingPage() {
     const rBranchStr = normalize(record.branch);
     const tBranchStr = normalize(branchName);
     
-    // 1. Exact normalized name match
     if (rBranchStr === tBranchStr) return true;
 
-    // 2. Kainatty / Branch 1 Synonym Logic
     const isB1 = (s: string) => s === 'branch1' || s === 'kainatty' || s === 'kainaty' || s === 'b1';
     if (isB1(rBranchStr) && isB1(tBranchStr)) return true;
 
-    // 3. Branch number comparison (e.g. "Branch 2" vs "2")
     const getNum = (s: string) => s.match(/\d+/)?.[0];
     const rNum = getNum(rBranchStr);
     const tNum = getNum(tBranchStr);
     if (rNum && tNum && rNum === tNum) return true;
 
-    // 4. ID Prefix Check (e.g. B1, REC-B1, EXP-B1)
     if (tNum) {
       const rid = normalize(record.id || '');
       const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
