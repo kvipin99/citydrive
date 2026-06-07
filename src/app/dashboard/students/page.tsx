@@ -17,8 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking, useUser, useDoc, useStorage } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, getDoc, Timestamp } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { MoreHorizontal, Edit2, Trash2, Search, PlusCircle, RefreshCw, Eye, User, Phone, MapPin, Fingerprint, CheckCircle2, Eraser, AlertCircle, Camera, Lock, BookOpen, Car, Tags, Wallet, Clock, CreditCard, FileText, Receipt as ReceiptIcon, Filter, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -27,7 +28,7 @@ import { firebaseConfig } from "@/firebase/config";
 import { format, isValid, parseISO } from "date-fns";
 import { DateSegmentedInput } from "@/components/ui/date-segmented-input";
 
-const BRANCHES = ["Branch 1", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
+const BRANCHES = ["Kainatty", "Branch 2", "Branch 3", "Branch 4", "Branch 5"] as const;
 
 export interface Student {
   id: string;
@@ -91,6 +92,7 @@ const toUI = (dateVal: any) => {
 
 function StudentsContent() {
   const db = useFirestore();
+  const storage = useStorage();
   const { user } = useUser();
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -127,7 +129,6 @@ function StudentsContent() {
     return collection(db, 'courses');
   }, [db, user?.uid]);
 
-  // Fetch all payments to calculate real-time balances in the table
   const paymentsQuery = useMemoFirebase(() => {
     if (!db || !user || !profile?.role) return null;
     return collection(db, 'payments');
@@ -227,7 +228,7 @@ function StudentsContent() {
   }, [students, isFromBranch]);
 
   const resetForm = useCallback(() => {
-    const defaultBranch = isAdmin ? "Branch 1" : (profileBranch || "Branch 1");
+    const defaultBranch = isAdmin ? "Kainatty" : (profileBranch || "Kainatty");
     const nextId = generateBranchStudentId(defaultBranch);
     setFormData({ 
       id: nextId,
@@ -259,7 +260,7 @@ function StudentsContent() {
 
   useEffect(() => {
     if (profile && !isAdmin) {
-      setSelectedBranchFilter(profileBranch || "Branch 1");
+      setSelectedBranchFilter(profileBranch || "Kainatty");
     }
   }, [profile?.branch, isAdmin, profileBranch]);
 
@@ -275,7 +276,7 @@ function StudentsContent() {
   const filteredStudentsList = useMemo(() => {
     if (!students) return [];
     let result = [...students];
-    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Branch 1");
+    const currentBranchContext = isAdmin ? selectedBranchFilter : (profileBranch || "Kainatty");
     if (currentBranchContext !== "All" && currentBranchContext !== "Full") {
       result = result.filter(s => isFromBranch(s, currentBranchContext));
     }
@@ -316,6 +317,13 @@ function StudentsContent() {
     reader.readAsDataURL(file);
   };
 
+  const uploadPhotoToCloud = async (studentId: string, base64: string) => {
+    if (!base64.startsWith('data:image')) return base64; // Already a URL
+    const storageRef = ref(storage, `student-photos/${studentId}.jpg`);
+    await uploadString(storageRef, base64, 'data_url');
+    return await getDownloadURL(storageRef);
+  };
+
   const createStudentAuth = async (studentId: string, name: string) => {
     const email = `${studentId.toLowerCase()}@citydriving.in`;
     const password = "City123";
@@ -349,22 +357,26 @@ function StudentsContent() {
       toast({ variant: "destructive", title: "Error", description: "Name, Branch, and Student ID are required." });
       return;
     }
-    const existingStudentWithPhone = students?.find(s => s.phone === formData.phone);
-    if (existingStudentWithPhone) {
-      toast({ variant: "destructive", title: "Duplicate Entry", description: `Mobile number already registered to ${existingStudentWithPhone.name}.` });
-      return;
-    }
     setIsSubmitting(true);
     const studentId = formData.id;
-    const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
+    
     try {
+      toast({ title: "Uploading Identity", description: "Securing student photograph to Google Cloud Storage..." });
+      let finalPhotoUrl = "";
+      if (formData.photoUrl) {
+        finalPhotoUrl = await uploadPhotoToCloud(studentId, formData.photoUrl);
+      }
+
       toast({ title: "Registering Student", description: `Generating ID ${studentId}...` });
       const authUid = await createStudentAuth(studentId, formData.name!);
+      
+      const amount = calculateFees(formData.courses || [], formData.discount || 0, formData.specialCourseFee || 0);
       const newStudentData = {
         ...formData,
         id: studentId,
         userId: authUid,
         amount,
+        photoUrl: finalPhotoUrl,
         registrationDate: formData.registrationDate || new Date().toISOString().split('T')[0],
         payments: [],
         createdAt: serverTimestamp(),
@@ -378,27 +390,33 @@ function StudentsContent() {
       toast({ title: "Success", description: `Student ${studentId} registered.` });
     } catch (error: any) {
       console.error("Registration Error:", error);
-      let errorMsg = "An unexpected error occurred.";
-      if (error.code === 'auth/email-already-in-use') {
-        errorMsg = `ID Conflict: Auth record for "${studentId}" already exists.`;
-      }
-      toast({ variant: "destructive", title: "Registration Failed", description: errorMsg });
+      toast({ variant: "destructive", title: "Registration Failed", description: error.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleUpdateStudent = () => {
+  const handleUpdateStudent = async () => {
     if (!selectedStudent) return;
     setIsSubmitting(true);
-    const studentRef = doc(db, 'students', selectedStudent.id);
-    const updatedData = { ...formData, updatedAt: serverTimestamp() };
-    updateDocumentNonBlocking(studentRef, updatedData);
-    setTimeout(() => {
+    try {
+      let finalPhotoUrl = formData.photoUrl;
+      if (formData.photoUrl?.startsWith('data:image')) {
+        toast({ title: "Updating Storage", description: "Uploading new photo to Google Cloud..." });
+        finalPhotoUrl = await uploadPhotoToCloud(selectedStudent.id, formData.photoUrl);
+      }
+
+      const studentRef = doc(db, 'students', selectedStudent.id);
+      const updatedData = { ...formData, photoUrl: finalPhotoUrl, updatedAt: serverTimestamp() };
+      updateDocumentNonBlocking(studentRef, updatedData);
+      
       setIsEditDialogOpen(false);
-      setIsSubmitting(false);
       toast({ title: "Student Updated" });
-    }, 150);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Update Failed", description: e.message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSaveReceipt = async () => {
@@ -411,7 +429,6 @@ function StudentsContent() {
     const branchNum = selectedStudent.branch.match(/\d+/)?.[0] || '1';
     const receiptId = `REC-B${branchNum}-${Date.now()}`;
     const receiptRef = doc(db, 'payments', receiptId);
-    const studentRef = doc(db, 'students', selectedStudent.id);
     const transactionDateStr = isDateLocked ? format(new Date(), 'yyyy-MM-dd') : receiptFormData.date;
     const transactionDate = new Date(transactionDateStr);
     const record = {
@@ -429,21 +446,7 @@ function StudentsContent() {
       description: receiptFormData.description
     };
     
-    // Core action: Update payments collection
     setDocumentNonBlocking(receiptRef, record, { merge: true });
-    
-    // Optional legacy sync: update the student doc if needed for non-profile queries
-    try {
-      const studentSnap = await getDoc(studentRef);
-      if (studentSnap.exists()) {
-        const currentPayments = studentSnap.data().payments || [];
-        const updatedPayments = [
-          ...currentPayments,
-          { id: receiptId, amount: receiptFormData.amount, date: transactionDate.toISOString(), receiptNo: receiptFormData.receiptNo, method: receiptFormData.method, category: "Course Fee" }
-        ];
-        updateDocumentNonBlocking(studentRef, { payments: updatedPayments, updatedAt: serverTimestamp() });
-      }
-    } catch (e) { console.error(e); }
     
     setTimeout(() => {
       setIsReceiptDialogOpen(false);
@@ -457,17 +460,26 @@ function StudentsContent() {
     if (!selectedStudent || !isAdmin) return;
     setIsSubmitting(true);
     try {
+      // 1. Delete Photo from Storage
+      try {
+        const photoRef = ref(storage, `student-photos/${selectedStudent.id}.jpg`);
+        await deleteObject(photoRef);
+      } catch (e) { console.warn("Photo already gone or not found."); }
+
+      // 2. Delete Payments
       const paymentsCol = collection(db, 'payments');
       const q = query(paymentsCol, where('studentId', '==', selectedStudent.id));
       const paymentSnaps = await getDocs(q);
       paymentSnaps.forEach((p) => deleteDocumentNonBlocking(doc(db, 'payments', p.id)));
+      
+      // 3. Delete Student and Auth
       deleteDocumentNonBlocking(doc(db, 'students', selectedStudent.id));
       if (selectedStudent.userId) {
         deleteDocumentNonBlocking(doc(db, 'users', selectedStudent.userId));
       }
       setIsDeleteAlertOpen(false);
       setSelectedStudent(null);
-      toast({ title: "Student Removed" });
+      toast({ title: "Student Removed from Cloud" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -550,7 +562,7 @@ function StudentsContent() {
                   <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if(open) resetForm(); }}>
                     <DialogTrigger asChild><Button onClick={resetForm}><PlusCircle className="mr-2 h-4 w-4" />Register Student</Button></DialogTrigger>
                     <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>New Student Registration</DialogTitle><DialogDescription>IDs are auto-generated based on branch.</DialogDescription></DialogHeader>
+                      <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>New Student Registration</DialogTitle><DialogDescription>Secure Google Cloud hosted profiles.</DialogDescription></DialogHeader>
                       <div className="flex-1 overflow-y-auto px-6 py-4">
                         <div className="space-y-8 pb-32">
                           <StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={photoInputRef} handleCourseToggle={handleCourseToggle} />
@@ -570,14 +582,14 @@ function StudentsContent() {
              <div className="flex justify-center py-8"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead>Student ID & Name</TableHead>
+                  <TableHead className="pl-6">Student ID & Name</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Admission Date</TableHead>
                   <TableHead>Agreed Fee (₹)</TableHead>
                   <TableHead>Balance Due (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -585,27 +597,27 @@ function StudentsContent() {
                   <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No records found.</TableCell></TableRow>
                 ) : (
                   filteredStudentsList.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-medium">
+                    <TableRow key={student.id} className="hover:bg-muted/10">
+                      <TableCell className="pl-6">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8"><AvatarImage src={student.photoUrl || undefined} alt={student.name} /><AvatarFallback>{student.name.charAt(0)}</AvatarFallback></Avatar>
+                          <Avatar className="h-9 w-9 border shadow-sm"><AvatarImage src={student.photoUrl || undefined} alt={student.name} /><AvatarFallback className="bg-primary/5 text-primary text-xs">{student.name.charAt(0)}</AvatarFallback></Avatar>
                           <div className="grid gap-0.5">
-                            <span className="font-bold text-primary">{student.id}</span>
-                            <span className="text-sm">{student.name}</span>
-                            {student.registerNo && <span className="text-[10px] text-muted-foreground font-bold">REG: {student.registerNo}</span>}
+                            <span className="font-bold text-sm text-primary">{student.id}</span>
+                            <span className="text-sm font-medium">{student.name}</span>
+                            {student.registerNo && <span className="text-[10px] text-muted-foreground font-black uppercase">REG: {student.registerNo}</span>}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{student.branch}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px] font-bold uppercase">{student.branch}</Badge></TableCell>
                       <TableCell className="text-xs text-muted-foreground font-medium">{toUI(student.registrationDate)}</TableCell>
-                      <TableCell>₹{(student.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell><span className={`font-bold ${calculateBalanceDueRealTime(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDueRealTime(student).toLocaleString()}</span></TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="font-mono text-sm">₹{(student.amount || 0).toLocaleString()}</TableCell>
+                      <TableCell><span className={`font-bold text-sm ${calculateBalanceDueRealTime(student) > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{calculateBalanceDueRealTime(student).toLocaleString()}</span></TableCell>
+                      <TableCell className="text-right pr-6">
                         <div className="flex justify-end gap-2">
-                          <Button size="icon" variant="ghost" onClick={(e) => { e.preventDefault(); setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.preventDefault(); setSelectedStudent(student); setTimeout(() => setIsProfileSheetOpen(true), 150); }}><Eye className="h-4 w-4 text-primary" /></Button>
                           {!isStudent && (
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                              <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" disabled={isSubmitting}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={(e) => { 
                                   e.preventDefault(); 
@@ -620,7 +632,7 @@ function StudentsContent() {
                                   setTimeout(() => setIsReceiptDialogOpen(true), 150);
                                 }}><ReceiptIcon className="mr-2 h-4 w-4" /> Issue Receipt</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                {isAdmin && (<DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); setSelectedStudent(student); setIsDeleteAlertOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Permanent Delete</DropdownMenuItem>)}
+                                {isAdmin && (<DropdownMenuItem className="text-destructive font-bold" onSelect={(e) => { e.preventDefault(); setSelectedStudent(student); setIsDeleteAlertOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Delete from Cloud</DropdownMenuItem>)}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -650,14 +662,14 @@ function StudentsContent() {
 
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>Permanently delete <b>{selectedStudent?.name} ({selectedStudent?.id})</b>.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel><Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Wipe Record</Button></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>Confirm Cloud Wipe</AlertDialogTitle><AlertDialogDescription>This will delete <b>{selectedStudent?.name}</b>'s profile, data, and their photograph from Google Cloud Storage.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel><Button variant="destructive" onClick={handlePermanentDelete} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Wipe All Data</Button></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if(!open) setSelectedStudent(null); }}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col h-[90dvh] max-h-[90dvh] gap-0">
-          <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Update info for {selectedStudent?.name}.</DialogDescription></DialogHeader>
+          <DialogHeader className="p-6 border-b bg-muted/5 shrink-0"><DialogTitle>Edit Student Profile</DialogTitle><DialogDescription>Managing identity on Google Cloud.</DialogDescription></DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4"><div className="space-y-8 pb-32"><StudentForm formData={formData} setFormData={setFormData} isAdmin={isAdmin} masterCourses={masterCourses} calculateFees={calculateFees} handlePhotoUpload={handlePhotoUpload} photoInputRef={editPhotoInputRef} handleCourseToggle={handleCourseToggle} isEdit={true} /></div></div>
           <DialogFooter className="p-6 border-t shrink-0"><div className="flex w-full justify-end gap-3"><Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>Cancel</Button><Button onClick={handleUpdateStudent} disabled={isSubmitting}>{isSubmitting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : null}Save Changes</Button></div></DialogFooter>
         </DialogContent>
@@ -678,36 +690,36 @@ function StudentForm({ formData, setFormData, isAdmin, masterCourses, calculateF
   return (
     <div className="grid gap-8 py-4">
       <div className="flex flex-col items-center gap-4 py-6 border-2 border-dashed rounded-2xl bg-muted/20">
-        <Label className="font-bold text-primary">STUDENT PHOTOGRAPH (REQUIRED)</Label>
+        <Label className="font-black text-[10px] uppercase tracking-widest text-primary">STUDENT PHOTOGRAPH (SECURE CLOUD STORAGE)</Label>
         <div className="relative group">
           <Avatar className="h-40 w-40 border-4 border-white shadow-2xl"><AvatarImage src={formData.photoUrl || undefined} alt="Preview" /><AvatarFallback className="bg-primary/5"><Camera className="h-16 w-16 text-primary/20" /></AvatarFallback></Avatar>
-          <Button size="icon" variant="default" className="absolute bottom-2 right-2 rounded-full h-10 w-10" onClick={() => photoInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
+          <Button size="icon" variant="default" className="absolute bottom-2 right-2 rounded-full h-10 w-10 shadow-lg" onClick={() => photoInputRef.current?.click()}><Camera className="h-5 w-5" /></Button>
           <input type="file" ref={photoInputRef} className="hidden" accept="image/jpeg" onChange={handlePhotoUpload} />
         </div>
+        <p className="text-[9px] text-muted-foreground uppercase font-bold">Only JPEG images are supported for registration.</p>
       </div>
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><User className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Basic Identity</h3></div>
+        <div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><User className="h-4 w-4" /><h3 className="text-xs uppercase tracking-wider">Basic Identity</h3></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="grid gap-2"><Label className="text-primary font-bold flex items-center gap-1.5">Branch Identity {!isAdmin && !isEdit && <Lock className="h-3 w-3" />}</Label><Select value={formData.branch} onValueChange={(v) => setFormData((prev:any) => ({...prev, branch: v}))} disabled={!isAdmin && !isEdit}><SelectTrigger className="h-11 font-bold"><SelectValue placeholder="Select Branch" /></SelectTrigger><SelectContent>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
           <div className="grid gap-2"><Label className="text-primary font-bold">Student ID <Lock className="h-3 w-3 text-muted-foreground" /></Label><Input className="h-11 bg-muted font-black text-primary" value={formData.id || ''} readOnly /></div>
           <div className="grid gap-2"><Label className="text-primary font-bold">Register Number</Label><Input className="h-11 font-bold" placeholder="Manual Book No." value={formData.registerNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, registerNo: e.target.value}))} /></div>
-          <div className="grid gap-2"><Label>Full Student Name</Label><Input className="h-11" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} /></div>
+          <div className="grid gap-2"><Label>Full Student Name</Label><Input className="h-11 font-bold" placeholder="e.g. Rahul Sharma" value={formData.name || ''} onChange={(e) => setFormData((prev:any) => ({...prev, name: e.target.value}))} /></div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="grid gap-2"><Label>Mobile Contact No.</Label><Input className="h-11 font-mono" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} /></div>
+          <div className="grid gap-2"><Label>Mobile Contact No.</Label><Input className="h-11 font-mono font-bold" placeholder="98XXXXXXXX" value={formData.phone || ''} onChange={(e) => setFormData((prev:any) => ({...prev, phone: e.target.value}))} /></div>
           <div className="grid gap-2"><Label>Date of Birth</Label><DateSegmentedInput value={formData.dob} onChange={(v) => setFormData((prev:any) => ({...prev, dob: v}))} /></div>
         </div>
       </div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><MapPin className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Address & Family</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Parent / Guardian Name</Label><Input className="h-11" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} /></div><div className="grid gap-2"><Label>Full Residential Address</Label><Textarea className="min-h-[44px]" value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div></div></div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><Fingerprint className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Government Identifiers</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Aadhar Number</Label><Input className="h-11 font-mono" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Online Application No.</Label><Input className="h-11 font-mono" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div></div></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="p-6 border-2 border-primary/10 rounded-2xl bg-primary/5 space-y-4"><div className="flex items-center gap-2 text-primary font-black uppercase text-xs"><BookOpen className="h-4 w-4" /> Learners License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Learners License No.</Label><Input className="bg-background font-mono" value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Learners Test Date</Label><DateSegmentedInput value={formData.learnersDate} onChange={(v) => setFormData((prev:any) => ({...prev, learnersDate: v}))} /></div></div></div><div className="p-6 border-2 border-green-100 rounded-2xl bg-green-50/30 space-y-4"><div className="flex items-center gap-2 text-green-700 font-black uppercase text-xs"><Car className="h-4 w-4" /> Permanent License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Driving License No.</Label><Input className="bg-background font-mono" value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div><div className="grid gap-2"><Label>DL Test Date</Label><DateSegmentedInput value={formData.testDate} onChange={(v) => setFormData((prev:any) => ({...prev, testDate: v}))} /></div></div></div></div>
-      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><CheckCircle2 className="h-4 w-4" /><h3 className="text-sm uppercase tracking-wider">Course Enrollment & Billing</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="grid gap-2"><Label>Admission Date</Label><DateSegmentedInput value={formData.registrationDate} onChange={(v) => setFormData((prev:any) => ({...prev, registrationDate: v}))} /></div><div className="grid gap-2"><Label>Admission Status</Label><Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}><SelectTrigger className="h-11 font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent></Select></div><div className="grid gap-2"><Label>Internal Remarks</Label><Input className="h-11" value={formData.remarks || ''} onChange={(e) => setFormData((prev:any) => ({...prev, remarks: e.target.value}))} /></div></div><div className="p-6 border rounded-2xl bg-muted/30 space-y-6"><Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{masterCourses?.map((course: any) => (<div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer"><Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} /><Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label><Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge></div>))}<div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer"><Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} /><Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label></div></div>{formData.courses?.includes('Others') && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2"><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Course Title</Label><Input value={formData.specialCourseName || ''} placeholder="e.g. VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div></div>)}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4"><div className="p-6 border-2 border-orange-100 rounded-2xl bg-orange-50/20"><div className="grid gap-3"><Label className={`flex items-center gap-2 font-bold ${!isAdmin ? "text-muted-foreground" : "text-orange-700"}`}><Tags className="h-4 w-4" /> Discount Applied (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label><Input type="number" className="h-12 text-lg font-bold bg-background" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} /></div></div><div className="p-6 border-4 border-primary rounded-2xl bg-primary text-primary-foreground shadow-2xl"><div className="grid gap-1"><span className="text-[10px] font-black uppercase tracking-widest opacity-80">Final Agreed Net Fee</span><div className="text-4xl font-black">₹{formData.amount?.toLocaleString() || '0'}</div></div></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><MapPin className="h-4 w-4" /><h3 className="text-xs uppercase tracking-wider">Address & Family</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Parent / Guardian Name</Label><Input className="h-11 font-medium" placeholder="Father or Spouse name" value={formData.parentName || ''} onChange={(e) => setFormData((prev:any) => ({...prev, parentName: e.target.value}))} /></div><div className="grid gap-2"><Label>Full Residential Address</Label><Textarea className="min-h-[44px]" value={formData.address || ''} onChange={(e) => setFormData((prev:any) => ({...prev, address: e.target.value}))} /></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><Fingerprint className="h-4 w-4" /><h3 className="text-xs uppercase tracking-wider">Government Identifiers</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="grid gap-2"><Label>Aadhar Number</Label><Input className="h-11 font-mono font-bold" placeholder="XXXX XXXX XXXX" value={formData.aadharNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, aadharNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Online Application No.</Label><Input className="h-11 font-mono font-bold" value={formData.onlineAppNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, onlineAppNo: e.target.value}))} /></div></div></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="p-6 border-2 border-primary/10 rounded-2xl bg-primary/5 space-y-4"><div className="flex items-center gap-2 text-primary font-black uppercase text-xs"><BookOpen className="h-4 w-4" /> Learners License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Learners License No.</Label><Input className="bg-background font-mono font-bold" value={formData.learnersNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, learnersNo: e.target.value}))} /></div><div className="grid gap-2"><Label>Learners Test Date</Label><DateSegmentedInput value={formData.learnersDate} onChange={(v) => setFormData((prev:any) => ({...prev, learnersDate: v}))} /></div></div></div><div className="p-6 border-2 border-green-100 rounded-2xl bg-green-50/30 space-y-4"><div className="flex items-center gap-2 text-green-700 font-black uppercase text-xs"><Car className="h-4 w-4" /> Permanent License Status</div><div className="grid gap-4"><div className="grid gap-2"><Label>Driving License No.</Label><Input className="bg-background font-mono font-bold" value={formData.drivingNo || ''} onChange={(e) => setFormData((prev:any) => ({...prev, drivingNo: e.target.value}))} /></div><div className="grid gap-2"><Label>DL Test Date</Label><DateSegmentedInput value={formData.testDate} onChange={(v) => setFormData((prev:any) => ({...prev, testDate: v}))} /></div></div></div></div>
+      <div className="space-y-6"><div className="flex items-center gap-2 text-primary font-bold border-b pb-2"><CheckCircle2 className="h-4 w-4" /><h3 className="text-xs uppercase tracking-wider">Course Enrollment & Billing</h3></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="grid gap-2"><Label>Admission Date</Label><DateSegmentedInput value={formData.registrationDate} onChange={(v) => setFormData((prev:any) => ({...prev, registrationDate: v}))} /></div><div className="grid gap-2"><Label>Admission Status</Label><Select value={formData.status} onValueChange={(v) => setFormData((prev:any) => ({...prev, status: v}))}><SelectTrigger className="h-11 font-bold"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="On Hold">On Hold</SelectItem></SelectContent></Select></div><div className="grid gap-2"><Label>Internal Remarks</Label><Input className="h-11" value={formData.remarks || ''} onChange={(e) => setFormData((prev:any) => ({...prev, remarks: e.target.value}))} /></div></div><div className="p-6 border rounded-2xl bg-muted/30 space-y-6"><Label className="font-black text-xs uppercase tracking-widest text-muted-foreground">Select Courses</Label><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{masterCourses?.map((course: any) => (<div key={course.id} className="flex items-center space-x-3 p-3 rounded-xl border bg-background hover:bg-primary/5 transition-colors cursor-pointer"><Checkbox id={`course-${course.id}`} checked={formData.courses?.includes(course.name)} onCheckedChange={() => handleCourseToggle(course.name)} /><Label htmlFor={`course-${course.id}`} className="text-sm font-bold flex-1 cursor-pointer">{course.name}</Label><Badge variant="outline" className="font-mono text-[10px]">₹{course.amount}</Badge></div>))}<div className="flex items-center space-x-3 p-3 rounded-xl border border-primary/20 bg-primary/5 cursor-pointer"><Checkbox id="course-others" checked={formData.courses?.includes('Others')} onCheckedChange={() => handleCourseToggle('Others')} /><Label htmlFor="course-others" className="text-sm font-black text-primary flex-1 cursor-pointer">Others / Custom</Label></div></div>{formData.courses?.includes('Others') && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border-2 border-primary/20 rounded-xl bg-background animate-in fade-in slide-in-from-top-2"><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Course Title</Label><Input value={formData.specialCourseName || ''} placeholder="e.g. VIP Refresher" onChange={(e) => setFormData((prev:any) => ({...prev, specialCourseName: e.target.value}))} /></div><div className="grid gap-2"><Label className="text-xs font-bold text-primary">Custom Fee (₹)</Label><Input type="number" value={formData.specialCourseFee || ''} onChange={(e) => { const val = Number(e.target.value); setFormData((prev:any) => ({ ...prev, specialCourseFee: val, amount: calculateFees(prev.courses || [], prev.discount || 0, val)})); }} /></div></div>)}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4"><div className="p-6 border-2 border-orange-100 rounded-2xl bg-orange-50/20"><div className="grid gap-3"><Label className={`flex items-center gap-2 font-bold ${!isAdmin ? "text-muted-foreground" : "text-orange-700"}`}><Tags className="h-4 w-4" /> Discount Applied (₹) {!isAdmin && <Lock className="h-3 w-3" />}</Label><Input type="number" className="h-12 text-lg font-bold bg-background" value={formData.discount} disabled={!isAdmin} onChange={(e) => { const disc = Number(e.target.value); setFormData((prev:any) => ({...prev, discount: disc, amount: calculateFees(prev.courses || [], disc, prev.specialCourseFee || 0)})); }} /></div></div><div className="p-6 border-4 border-primary rounded-2xl bg-primary text-primary-foreground shadow-2xl"><div className="grid gap-1"><span className="text-[10px] font-black uppercase tracking-widest opacity-80">Final Agreed Net Fee</span><div className="text-4xl font-black">₹{formData.amount?.toLocaleString() || '0'}</div></div></div></div></div>
     </div>
   );
 }
 
 function StudentProfileView({ student, db, isAdmin }: any) {
-  // Real-time Queries for Profiles
   const attendanceQuery = useMemoFirebase(() => (!db || !student?.userId) ? null : query(collection(db, 'attendance'), where('studentUid', '==', student.userId)), [db, student?.userId]);
   const paymentsQuery = useMemoFirebase(() => (!db || !student?.id) ? null : query(collection(db, 'payments'), where('studentId', '==', student.id)), [db, student?.id]);
   const vehiclesQuery = useMemoFirebase(() => (db ? collection(db, 'vehicles') : null), [db]);
@@ -792,12 +804,12 @@ function StudentProfileView({ student, db, isAdmin }: any) {
       <Separator className="my-4" />
       <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><Clock className="h-4 w-4" /> Attendance</h3>
         {isAttendanceLoading ? (<div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>) : sortedAttendance.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No logs found.</p>) : (
-          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader><TableBody>{sortedAttendance.map((a: any) => (<TableRow key={a.id} className="hover:bg-muted/30"><TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell><TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell><TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell><TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell></TableRow>))}</TableBody></Table></div>
+          <div className="rounded-xl border overflow-hidden"><Table><TableHeader className="bg-muted/30"><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Details</TableHead><TableHead className="text-right">Duration</TableHead></TableRow></TableHeader><TableBody>{sortedAttendance.map((a: any) => (<TableRow key={a.id} className="hover:bg-muted/30"><TableCell className="text-xs font-medium">{toUI(a.date)}</TableCell><TableCell><Badge variant="outline" className="text-[9px] font-bold uppercase">{a.type || 'Practical'}</Badge></TableCell><TableCell className="text-[10px] text-muted-foreground">{a.startTime} - {a.endTime} {a.vehicleReg && `• ${a.vehicleReg}`}</TableCell><TableCell className="text-right font-bold text-primary text-xs">{a.duration}h</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
       <section className="space-y-4"><h3 className="font-bold flex items-center gap-2 text-primary border-b pb-2"><CreditCard className="h-4 w-4" /> Ledger (Real-time Payments)</h3>
         {isPaymentsLoading ? (<div className="flex justify-center py-6"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>) : sortedPayments.length === 0 ? (<p className="text-center py-10 text-muted-foreground italic text-sm border-2 border-dashed rounded-xl">No receipts.</p>) : (
-          <div className="rounded-xl border overflow-hidden"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader><TableBody>{sortedPayments.map((p: any) => (<TableRow key={p.id} className="hover:bg-muted/30"><TableCell className="text-xs">{toUI(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table></div>
+          <div className="rounded-xl border overflow-hidden"><Table><TableHeader className="bg-muted/30"><TableRow><TableHead>Date</TableHead><TableHead>Receipt No.</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader><TableBody>{sortedPayments.map((p: any) => (<TableRow key={p.id} className="hover:bg-muted/30"><TableCell className="text-xs">{toUI(p.date)}</TableCell><TableCell className="text-xs font-mono font-bold">#{p.receiptNo}</TableCell><TableCell className="text-right font-bold text-green-600">₹{p.amount.toLocaleString()}</TableCell></TableRow>))}</TableBody></Table></div>
         )}
       </section>
     </div>
@@ -807,8 +819,8 @@ function StudentProfileView({ student, db, isAdmin }: any) {
 function StatSummary({ label, value, icon, color, breakdown }: any) {
   const colorMap: Record<string, string> = { primary: "bg-primary/5 border-primary/10 text-primary", green: "bg-green-50/50 border-green-100 text-green-700", red: "bg-red-50/50 border-red-100 text-red-700", blue: "bg-blue-50/50 border-blue-100 text-blue-700", orange: "bg-orange-50/50 border-orange-100 text-orange-700" };
   return (
-    <Card className={colorMap[color]}><CardHeader className="p-4 pb-2"><CardTitle className="text-xs font-bold uppercase flex items-center gap-2">{icon} {label}</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-xl font-black">{value}</div>
-        {breakdown && Object.keys(breakdown).length > 0 && (<div className="mt-2 flex flex-wrap gap-1">{Object.entries(breakdown).map(([type, hours]: [string, any]) => hours > 0 && (<Badge key={type} variant="outline" className="text-[11px] px-2 py-0.5 h-6 font-mono font-bold bg-muted/30 border-primary/10">{typeLabelMap[type] || type}: {hours.toFixed(1)}h</Badge>))}</div>)}
+    <Card className={colorMap[color]}><CardHeader className="p-4 pb-2"><CardTitle className="text-[10px] font-black uppercase flex items-center gap-2 tracking-widest opacity-80">{icon} {label}</CardTitle></CardHeader><CardContent className="p-4 pt-0"><div className="text-xl font-black">{value}</div>
+        {breakdown && Object.keys(breakdown).length > 0 && (<div className="mt-2 flex flex-wrap gap-1">{Object.entries(breakdown).map(([type, hours]: [string, any]) => hours > 0 && (<Badge key={type} variant="outline" className="text-[9px] px-1.5 py-0 h-5 font-mono font-bold bg-muted/30 border-primary/10">{typeLabelMap[type] || type}: {hours.toFixed(1)}h</Badge>))}</div>)}
       </CardContent></Card>
   );
 }

@@ -3,6 +3,7 @@ import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage';
 
 /**
  * Robust initialization for App Router (Server & Client side).
@@ -53,6 +54,7 @@ export function initializeFirebase() {
   return {
     firebaseApp: app,
     auth: getAuth(app),
-    firestore: firestore
+    firestore: firestore,
+    storage: getStorage(app)
   };
 }

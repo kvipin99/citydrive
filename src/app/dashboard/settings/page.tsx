@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Suspense } from "react";
@@ -13,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Copy } from "lucide-react";
+import { Mail, ShieldCheck, DatabaseBackup, Users, Key, Camera, User as UserIcon, RefreshCw, Search, Send, Loader2, Trash2, UserCircle, Lock, MapPin, AlertTriangle, Eraser, Clock, HardDrive, FileArchive, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Copy, Cloud, Server, Database } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { updatePassword, sendPasswordResetEmail } from "firebase/auth";
@@ -32,21 +33,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-const BACKUP_COLLECTIONS = [
-  "users", 
-  "students", 
-  "instructors", 
-  "vehicles", 
-  "courses", 
-  "payments", 
-  "expenses", 
-  "classes",
-  "attendance",
-  "resources",
-  "quizLinks",
-  "settings"
-];
 
 function SettingsContent() {
   const { toast } = useToast();
@@ -80,11 +66,6 @@ function SettingsContent() {
     const success = searchParams.get("success");
     if (success === "connected") {
       toast({ title: "Google Drive Connected", description: "The backup system is now linked to your account." });
-    }
-    
-    const error = searchParams.get("error");
-    if (error === "auth_failed") {
-      toast({ variant: "destructive", title: "Connection Failed", description: "The Google authorization flow was interrupted or failed." });
     }
   }, [searchParams, profile, isAdmin, toast]);
 
@@ -136,7 +117,6 @@ function SettingsContent() {
 
     try {
       const result = await runFullDriveBackup();
-
       if (result.success) {
         toast({ title: "Sync Successful", description: result.message });
       } else {
@@ -204,6 +184,54 @@ function SettingsContent() {
 
         {isAdmin && (
           <TabsContent value="general" className="space-y-6 mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                    <Cloud className="h-4 w-4 text-primary" /> Cloud Infrastructure
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-3">
+                      <Database className="h-4 w-4 text-primary opacity-50" />
+                      <span className="text-sm font-bold">Cloud Firestore</span>
+                    </div>
+                    <Badge variant="outline" className="text-green-600 bg-green-50 border-green-100 gap-1.5 font-bold">
+                      <CheckCircle2 className="h-3 w-3" /> Operational
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-3">
+                      <Server className="h-4 w-4 text-primary opacity-50" />
+                      <span className="text-sm font-bold">Cloud Storage</span>
+                    </div>
+                    <Badge variant="outline" className="text-green-600 bg-green-50 border-green-100 gap-1.5 font-bold">
+                      <CheckCircle2 className="h-3 w-3" /> Operational
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">System data and photographs are securely hosted on Google Cloud Platform.</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-orange-200 bg-orange-50/10">
+                <CardHeader>
+                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-orange-600" /> Operational Guardrails
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-bold">Lock Entry Date</Label>
+                      <p className="text-[10px] text-muted-foreground">Restrict branches to today's date entries.</p>
+                    </div>
+                    <Switch checked={controls?.lockDateEntry ?? false} onCheckedChange={(checked) => setDocumentNonBlocking(controlsRef!, { lockDateEntry: checked }, { merge: true })} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="grid gap-1">
@@ -281,25 +309,6 @@ function SettingsContent() {
 
         {isAdmin && (
           <TabsContent value="automation" className="space-y-6 mt-6">
-            <Card className="border-orange-200 bg-orange-50/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-orange-600" />
-                  Operational Guardrails
-                </CardTitle>
-                <CardDescription>Branch entry policies.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Lock Entry Date (Today Only)</Label>
-                    <p className="text-sm text-muted-foreground">Restrict branches to current date entries.</p>
-                  </div>
-                  <Switch checked={controls?.lockDateEntry ?? false} onCheckedChange={(checked) => setDocumentNonBlocking(controlsRef!, { lockDateEntry: checked }, { merge: true })} />
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -314,9 +323,6 @@ function SettingsContent() {
                   <AlertTitle>Google Console Checklist</AlertTitle>
                   <AlertDescription className="text-xs space-y-3 mt-2">
                     <ol className="list-decimal pl-5 space-y-2">
-                      <li>
-                        <b>Test Users:</b> Ensure <b>{user?.email}</b> is added to "Test Users" in OAuth Consent Screen.
-                      </li>
                       <li>
                         <b>Authorized Redirect URI:</b> Add this URI to your OAuth Client credentials:
                         <div className="flex items-center gap-2 mt-1 p-2 bg-muted rounded font-mono text-[10px] break-all">
