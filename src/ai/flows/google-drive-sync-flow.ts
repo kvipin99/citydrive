@@ -7,7 +7,7 @@
  * 2. Packages with Storage files into a single ZIP for internal recovery.
  * 3. Saves ZIP to Firebase Storage (Internal Archive).
  * 4. Syncs the raw JSON database snapshot to Google Drive (External Mirror) 
- *    in the "CityDrive Backups" folder.
+ *    using a Service Account for zero-intervention automation.
  */
 
 import { ai } from '@/ai/genkit';
@@ -16,9 +16,8 @@ import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { Readable } from 'stream';
 import { initializeFirebase } from '@/firebase/init';
-import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { getStorage, ref, listAll, getBytes, uploadBytes } from 'firebase/storage';
-import { headers } from 'next/headers';
 
 const BACKUP_COLLECTIONS = [
   "users", "students", "instructors", "vehicles", 
@@ -36,30 +35,10 @@ const DriveSyncOutputSchema = z.object({
   fileId: z.string().optional(),
 });
 
-// Credentials provided by user
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID || "144251106401-7asi8iiqruhe8jq52drha3ct6pgkn4rq.apps.googleusercontent.com";
-const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET || "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";
-
-async function getRedirectUri() {
-  const headerList = await headers();
-  const host = headerList.get('host') || 'localhost:9002';
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${host}/api/auth/google/callback`;
-}
-
-/**
- * Generates the Google Auth URL for the user to link their account.
- */
-export async function getGoogleAuthUrl() {
-  const redirectUri = await getRedirectUri();
-  const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
-  
-  return oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    scope: ['https://www.googleapis.com/auth/drive.file'],
-  });
-}
+// Service Account Credentials
+// Note: In production, these should be stored in environment variables.
+const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || "citydrive-backup@studio-6224335835-298c7.iam.gserviceaccount.com";
+const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, '\n');
 
 /**
  * Main function to run the full cloud backup pipeline.
@@ -77,12 +56,8 @@ const driveSyncFlow = ai.defineFlow(
   async (input) => {
     const { firestore, firebaseApp } = initializeFirebase();
     const storage = getStorage(firebaseApp);
-    const redirectUri = await getRedirectUri();
     
     try {
-      const tokenRef = doc(firestore, 'settings', 'drive_tokens');
-      const tokenSnap = await getDoc(tokenRef);
-      
       const zip = new JSZip();
       const timestamp = Date.now();
       const dateStr = new Date().toISOString().split('T')[0];
@@ -128,15 +103,20 @@ const driveSyncFlow = ai.defineFlow(
       const internalRef = ref(storage, `system_backups/${zipFileName}`);
       await uploadBytes(internalRef, zipBuffer, { contentType: 'application/zip' });
 
-      // 4. EXTERNAL MIRRORING: Upload JSON Snapshot to Google Drive
+      // 4. EXTERNAL MIRRORING: Upload JSON Snapshot to Google Drive via Service Account
       let driveFileId = undefined;
-      if (tokenSnap.exists()) {
-        console.log("[BACKUP] Mirroring JSON snapshot to Google Drive...");
-        const tokens = tokenSnap.data();
-        const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
-        oauth2Client.setCredentials(tokens);
+      
+      if (SERVICE_ACCOUNT_KEY) {
+        console.log("[BACKUP] Connecting to Google Drive via Service Account...");
+        
+        const auth = new google.auth.JWT(
+          SERVICE_ACCOUNT_EMAIL,
+          undefined,
+          SERVICE_ACCOUNT_KEY,
+          ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.metadata.readonly']
+        );
 
-        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+        const drive = google.drive({ version: 'v3', auth });
 
         // Ensure "CityDrive Backups" Folder Exists
         let folderId: string | null = null;
@@ -175,7 +155,7 @@ const driveSyncFlow = ai.defineFlow(
         type: "Daily Cloud Sync",
         fileName: driveFileName,
         storagePath: `system_backups/${zipFileName}`,
-        driveFileId: driveFileId || "NOT_CONNECTED"
+        driveFileId: driveFileId || "SERVICE_ACCOUNT_KEY_MISSING"
       });
 
       return { 
