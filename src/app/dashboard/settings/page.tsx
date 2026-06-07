@@ -113,12 +113,12 @@ function SettingsContent() {
   const handleManualBackupTrigger = async () => {
     if (!isAdmin) return;
     setIsBackingUpManual(true);
-    toast({ title: "Backup Sync Started", description: "Packaging database and storage into ZIP..." });
+    toast({ title: "Cloud Pipeline Started", description: "Archiving to Firebase and syncing to Google Drive..." });
 
     try {
       const result = await runFullDriveBackup();
       if (result.success) {
-        toast({ title: "Sync Successful", description: result.message });
+        toast({ title: "Pipeline Successful", description: result.message });
       } else {
         toast({ variant: "destructive", title: "Sync Failed", description: result.message });
       }
@@ -210,7 +210,6 @@ function SettingsContent() {
                       <CheckCircle2 className="h-3 w-3" /> Operational
                     </Badge>
                   </div>
-                  <p className="text-[10px] text-muted-foreground italic">System data and photographs are securely hosted on Google Cloud Platform.</p>
                 </CardContent>
               </Card>
 
@@ -313,77 +312,76 @@ function SettingsContent() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <HardDrive className="h-5 w-5 text-primary" />
-                  Google Drive Backup Sync
+                  Multi-Stage Cloud Backup
                 </CardTitle>
-                <CardDescription>Daily database and storage ZIP snapshots.</CardDescription>
+                <CardDescription>Scheduled daily archival to Firebase and Google Drive.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <Alert className="bg-primary/5 border-primary/20">
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>Google Console Checklist</AlertTitle>
-                  <AlertDescription className="text-xs space-y-3 mt-2">
-                    <ol className="list-decimal pl-5 space-y-2">
-                      <li>
-                        <b>Authorized Redirect URI:</b> Add this URI to your OAuth Client credentials:
-                        <div className="flex items-center gap-2 mt-1 p-2 bg-muted rounded font-mono text-[10px] break-all">
-                          <span>{currentOrigin}/api/auth/google/callback</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCopyUri}>
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </li>
-                    </ol>
-                  </AlertDescription>
-                </Alert>
+                <div className="p-4 bg-muted/30 rounded-xl border border-dashed border-primary/20">
+                  <h4 className="text-xs font-black uppercase text-primary mb-2 flex items-center gap-2">
+                    <Clock className="h-4 w-4" /> 10:00 PM Daily Schedule
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    The system is configured to perform a full database and media snapshot every night at 10:00 PM.
+                    The pipeline generates a JSON archive, saves a recovery copy to <b>Firebase Storage</b>, and mirrors a ZIP to <b>Google Drive</b>.
+                  </p>
+                </div>
 
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between rounded-lg border p-4 bg-primary/5">
                     <div className="space-y-0.5">
-                      <Label className="text-base">Connection Status</Label>
+                      <Label className="text-base">Google Drive Link</Label>
                       <p className="text-sm text-muted-foreground">
-                        {driveTokens ? 'Linked to Google Drive' : 'Drive access not authorized.'}
+                        {driveTokens ? 'Successfully authorized external mirroring.' : 'External Drive sync not yet connected.'}
                       </p>
                     </div>
                     {driveTokens ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
-                          <CheckCircle2 className="h-3 w-3" /> Connected
-                        </Badge>
-                        <Button variant="ghost" size="sm" onClick={handleConnectDrive} className="text-xs">Reconnect</Button>
-                      </div>
+                      <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
+                        <CheckCircle2 className="h-3 w-3" /> Linked
+                      </Badge>
                     ) : (
                       <Button onClick={handleConnectDrive} size="sm" className="gap-2">
-                        <LinkIcon className="h-4 w-4" /> Connect Google Account
+                        <LinkIcon className="h-4 w-4" /> Authorize Drive
                       </Button>
                     )}
                   </div>
 
-                  {driveTokens && (
-                    <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
-                      <div className="space-y-0.5">
-                        <Label className="text-base">Enable Daily ZIP Sync</Label>
-                        <p className="text-sm text-muted-foreground">Automatic interval snapshots (24h).</p>
-                      </div>
-                      <Switch checked={autoSettings?.enabled ?? true} onCheckedChange={(checked) => setDocumentNonBlocking(settingsRef!, { enabled: checked }, { merge: true })} />
+                  <div className="flex items-center justify-between rounded-lg border p-4 bg-background">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Internal Archiving</Label>
+                      <p className="text-sm text-muted-foreground">Automatic backup to Firebase Storage bucket.</p>
                     </div>
-                  )}
+                    <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 gap-1.5 font-bold">
+                      <CheckCircle2 className="h-3 w-3" /> Active
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
+                   <Alert className="bg-primary/5 border-primary/20">
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Developer / Admin Webhook</AlertTitle>
+                    <AlertDescription className="text-[10px] space-y-3 mt-2 font-mono break-all">
+                      POST: {currentOrigin}/api/backup/run
+                      <br />
+                      Auth: Bearer CitydriveSecret123
+                    </AlertDescription>
+                  </Alert>
                 </div>
                 
-                {driveTokens && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
-                    <div className="grid gap-1">
-                      <p className="text-sm font-bold flex items-center gap-2">
-                        <FileArchive className="h-4 w-4 text-primary" />
-                        Sync ZIP Snapshot Now
-                      </p>
-                      <p className="text-xs text-muted-foreground">Manually trigger a full ZIP upload to Drive.</p>
-                    </div>
-                    <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
-                      {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                      Sync Now
-                    </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border bg-accent/5">
+                  <div className="grid gap-1">
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      <FileArchive className="h-4 w-4 text-primary" />
+                      Manually Trigger Cloud Pipeline
+                    </p>
+                    <p className="text-xs text-muted-foreground">Execute the full 10:00 PM sequence right now.</p>
                   </div>
-                )}
+                  <Button size="sm" onClick={handleManualBackupTrigger} disabled={isBackingUpManual}>
+                    {isBackingUpManual ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Run Now
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

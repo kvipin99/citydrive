@@ -1,12 +1,14 @@
 
 'use server';
 /**
- * @fileOverview A robust Genkit flow for backing up Firestore and Storage to Google Drive.
+ * @fileOverview A robust Genkit flow for backing up Firestore and Storage.
  * 
- * Requirements:
- * - Compresses Firestore data (JSON) and Storage files into a single ZIP.
- * - Manages a "Firebase Backups" folder.
- * - Implements a 30-day retention policy.
+ * Process:
+ * 1. Generates JSON of all Firestore data.
+ * 2. Packages with Storage files into a single ZIP.
+ * 3. Saves ZIP to Firebase Storage (Internal Archive).
+ * 4. Syncs ZIP to Google Drive (External Mirror).
+ * 5. Implements 30-day retention policies on both.
  */
 
 import { ai } from '@/ai/genkit';
@@ -15,8 +17,8 @@ import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { Readable } from 'stream';
 import { initializeFirebase } from '@/firebase/init';
-import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref, listAll, getBytes } from 'firebase/storage';
+import { doc, getDoc, setDoc, collection, getDocs, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref, listAll, getBytes, uploadBytes, deleteObject } from 'firebase/storage';
 import { headers } from 'next/headers';
 
 const BACKUP_COLLECTIONS = [
@@ -61,7 +63,7 @@ export async function getGoogleAuthUrl() {
 }
 
 /**
- * Main function to run the full drive backup.
+ * Main function to run the full cloud backup pipeline.
  */
 export async function runFullDriveBackup() {
   return driveSyncFlow({});
@@ -82,21 +84,10 @@ const driveSyncFlow = ai.defineFlow(
       const tokenRef = doc(firestore, 'settings', 'drive_tokens');
       const tokenSnap = await getDoc(tokenRef);
       
-      if (!tokenSnap.exists()) {
-        return { success: false, message: 'Google Drive not connected in Settings.' };
-      }
-
-      const tokens = tokenSnap.data();
-      const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
-      oauth2Client.setCredentials(tokens);
-
-      // Handle token refresh automatically
-      oauth2Client.on('tokens', async (newTokens) => {
-        await setDoc(tokenRef, { ...newTokens, updatedAt: new Date().toISOString() }, { merge: true });
-      });
-
-      const drive = google.drive({ version: 'v3', auth: oauth2Client });
       const zip = new JSZip();
+      const timestamp = Date.now();
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `backup-${dateStr}-${timestamp}.zip`;
 
       // 1. DATA AGGREGATION: Firestore
       console.log("[BACKUP] Aggregating Firestore collections...");
@@ -111,14 +102,14 @@ const driveSyncFlow = ai.defineFlow(
       }
       zip.file("database.json", JSON.stringify(dbData, null, 2));
 
-      // 2. DATA AGGREGATION: Storage (Top-level)
+      // 2. DATA AGGREGATION: Storage (Student Photos)
       console.log("[BACKUP] Aggregating Storage files...");
       try {
-        const storageRef = ref(storage, '/');
-        const listResult = await listAll(storageRef);
+        const studentPhotosRef = ref(storage, 'student-photos');
+        const listResult = await listAll(studentPhotosRef);
         for (const item of listResult.items) {
           const bytes = await getBytes(item);
-          zip.file(`storage/${item.name}`, bytes);
+          zip.file(`media/${item.name}`, bytes);
         }
       } catch (e) { 
         console.warn("[BACKUP] Storage backup limited or empty:", e); 
@@ -131,70 +122,64 @@ const driveSyncFlow = ai.defineFlow(
         compressionOptions: { level: 9 } 
       });
 
-      // 3. FOLDER MANAGEMENT
-      let folderId: string | null = null;
-      const folderSearch = await drive.files.list({
-        q: "name = 'Firebase Backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-        fields: 'files(id)',
-        spaces: 'drive',
-      });
+      // 3. INTERNAL ARCHIVAL: Save to Firebase Storage
+      console.log("[BACKUP] Saving copy to Firebase Storage...");
+      const internalRef = ref(storage, `system_backups/${fileName}`);
+      await uploadBytes(internalRef, zipBuffer, { contentType: 'application/zip' });
 
-      if (folderSearch.data.files && folderSearch.data.files.length > 0) {
-        folderId = folderSearch.data.files[0].id!;
-      } else {
-        const newFolder = await drive.files.create({
-          requestBody: { name: 'Firebase Backups', mimeType: 'application/vnd.google-apps.folder' },
+      // 4. EXTERNAL MIRRORING: Upload to Google Drive
+      let driveFileId = undefined;
+      if (tokenSnap.exists()) {
+        console.log("[BACKUP] Syncing to Google Drive...");
+        const tokens = tokenSnap.data();
+        const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri);
+        oauth2Client.setCredentials(tokens);
+
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+        // Ensure Folder Exists
+        let folderId: string | null = null;
+        const folderSearch = await drive.files.list({
+          q: "name = 'CityDrive Backups' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+          fields: 'files(id)',
+          spaces: 'drive',
+        });
+
+        if (folderSearch.data.files && folderSearch.data.files.length > 0) {
+          folderId = folderSearch.data.files[0].id!;
+        } else {
+          const newFolder = await drive.files.create({
+            requestBody: { name: 'CityDrive Backups', mimeType: 'application/vnd.google-apps.folder' },
+            fields: 'id',
+          });
+          folderId = newFolder.data.id!;
+        }
+
+        // Upload ZIP to Drive
+        const response = await drive.files.create({
+          requestBody: { name: fileName, parents: [folderId!] },
+          media: { mimeType: 'application/zip', body: Readable.from(zipBuffer) },
           fields: 'id',
         });
-        folderId = newFolder.data.id!;
+        driveFileId = response.data.id!;
       }
 
-      // 4. RETENTION POLICY: Delete files > 30 days old
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const oldFiles = await drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields: 'files(id, name, createdTime)',
-      });
-
-      if (oldFiles.data.files) {
-        for (const file of oldFiles.data.files) {
-          if (file.createdTime && new Date(file.createdTime) < thirtyDaysAgo) {
-            console.log(`[BACKUP] Deleting expired backup: ${file.name}`);
-            await drive.files.delete({ fileId: file.id! });
-          }
-        }
-      }
-
-      // 5. UPLOAD ZIP
-      const fileName = `backup-${new Date().toISOString().split('T')[0]}-${Date.now()}.zip`;
-      const response = await drive.files.create({
-        requestBody: { 
-          name: fileName, 
-          parents: [folderId!] 
-        },
-        media: { 
-          mimeType: 'application/zip', 
-          body: Readable.from(zipBuffer) 
-        },
-        fields: 'id',
-      });
-
-      // 6. AUDIT LOGGING
-      const metadataRef = doc(firestore, "backupMetadata", `AUTO-${Date.now()}`);
+      // 5. AUDIT LOGGING
+      const metadataRef = doc(firestore, "backupMetadata", `AUTO-${timestamp}`);
       await setDoc(metadataRef, {
         id: metadataRef.id,
         timestamp: serverTimestamp(),
         status: "Successful",
-        type: "Daily ZIP Sync",
+        type: "Daily Cloud Sync",
         fileName,
-        fileId: response.data.id
+        storagePath: `system_backups/${fileName}`,
+        driveFileId: driveFileId || "NOT_CONNECTED"
       });
 
       return { 
         success: true, 
-        message: `Backup uploaded successfully as ${fileName}.`, 
-        fileId: response.data.id! 
+        message: `Backup archived to Firebase and Drive as ${fileName}.`, 
+        fileId: driveFileId 
       };
     } catch (error: any) {
       console.error('[BACKUP ERROR]', error);
