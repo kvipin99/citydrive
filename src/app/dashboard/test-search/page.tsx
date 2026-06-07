@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -94,7 +93,7 @@ export default function TestSearchPage() {
 
     if (tNum) {
       const rid = normalize(record.id || '');
-      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}`, 'i');
+      const bPattern = new RegExp(`(^|[^a-z0-9])b${tNum}([^0-9]|$)`, 'i');
       if (bPattern.test(rid)) return true;
     }
     
@@ -109,7 +108,7 @@ export default function TestSearchPage() {
     return students.filter(s => {
       if (!isFromBranch(s, context)) return false;
       
-      const targetDate = testType === "learners" ? s.learnersDate : s.testDate;
+      const targetDate = testType === "learners" ? s.learnersNo : s.testDate;
       if (!targetDate) return false;
       
       return targetDate >= dateRange.from && targetDate <= dateRange.to;
@@ -128,163 +127,19 @@ export default function TestSearchPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">License Test Search</h2>
-          <p className="text-muted-foreground text-sm">Find students with upcoming tests.</p>
-        </div>
-        <Button variant="outline" onClick={handleTomorrow} className="border-primary/20 text-primary hover:bg-primary/5 shadow-sm">
-          <Calendar className="mr-2 h-4 w-4" />
-          Tests Tomorrow
-        </Button>
+        <div><h2 className="text-2xl font-bold tracking-tight">License Test Search</h2><p className="text-muted-foreground text-sm">Find students with upcoming tests.</p></div>
+        <Button variant="outline" onClick={handleTomorrow} className="border-primary/20 text-primary hover:bg-primary/5 shadow-sm"><Calendar className="mr-2 h-4 w-4" />Tests Tomorrow</Button>
       </div>
-
       <div className="grid gap-6 md:grid-cols-4">
-        <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit">
-          <CardHeader className="pb-3 border-b bg-muted/5">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Filter className="h-4 w-4 text-primary" /> 
-              Search Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label>
-              <div className="space-y-2">
-                <div className="grid gap-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase">From</span>
-                  <DateSegmentedInput value={dateRange.from} onChange={(v) => setDateRange({...dateRange, from: v})} />
-                </div>
-                <div className="grid gap-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase">To</span>
-                  <DateSegmentedInput value={dateRange.to} onChange={(v) => setDateRange({...dateRange, to: v})} />
-                </div>
-              </div>
-            </div>
-            
-            <Separator />
-            
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Branch View</Label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}>
-                <SelectTrigger className="h-10 font-bold border-primary/20">
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Branches</SelectItem>
-                  {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
+        <Card className="md:col-span-1 shadow-sm border-primary/10 h-fit"><CardHeader className="pb-3 border-b bg-muted/5"><CardTitle className="text-sm font-bold flex items-center gap-2"><Filter className="h-4 w-4 text-primary" /> Search Filters</CardTitle></CardHeader><CardContent className="space-y-6 pt-6"><div className="space-y-3"><Label className="text-[10px] font-black uppercase text-primary tracking-widest">Date Range</Label><div className="space-y-2"><div className="grid gap-1"><span className="text-[10px] font-medium text-muted-foreground uppercase">From</span><DateSegmentedInput value={dateRange.from} onChange={(v) => setDateRange({...dateRange, from: v})} /></div><div className="grid gap-1"><span className="text-[10px] font-medium text-muted-foreground uppercase">To</span><DateSegmentedInput value={dateRange.to} onChange={(v) => setDateRange({...dateRange, to: v})} /></div></div></div><Separator /><div className="space-y-1.5"><Label className="text-xs font-medium uppercase text-[10px] tracking-widest text-muted-foreground">Branch View</Label><Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!isAdmin}><SelectTrigger className="h-10 font-bold border-primary/20"><SelectValue placeholder="Branch" /></SelectTrigger><SelectContent><SelectItem value="All">All Branches</SelectItem>{BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div></CardContent></Card>
         <div className="md:col-span-3">
           <Tabs value={testType} onValueChange={(v) => setTestType(v as any)} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 border mb-6">
-              <TabsTrigger value="learners" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
-                <GraduationCap className="h-4 w-4" /> Learners Test
-              </TabsTrigger>
-              <TabsTrigger value="driving" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white">
-                <Car className="h-4 w-4" /> Driving Test
-              </TabsTrigger>
-            </TabsList>
-            
-            <Card className="border-primary/10 shadow-sm overflow-hidden">
-              <CardHeader className="bg-muted/20 border-b">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">
-                      {testType === 'learners' ? 'Learners License Candidates' : 'Permanent License Candidates'}
-                    </CardTitle>
-                    <CardDescription>
-                      Showing {filteredResults.length} records for the selected period.
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline" className="bg-background font-bold text-primary border-primary/20">
-                    {dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} - ${toUI(dateRange.to)}`}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {isProfileLoading || isStudentsLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm font-medium text-muted-foreground">Searching records...</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="bg-muted/10">
-                      <TableRow>
-                        <TableHead className="pl-6">Student ID & Name</TableHead>
-                        <TableHead>Mobile</TableHead>
-                        <TableHead>Branch</TableHead>
-                        <TableHead>Test Date</TableHead>
-                        <TableHead className="text-right pr-6">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredResults.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic">
-                            <div className="flex flex-col items-center gap-2 opacity-40">
-                              <Search className="h-10 w-10" />
-                              <p>No candidates found for this date range.</p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredResults.map((s) => (
-                          <TableRow key={s.id} className="hover:bg-muted/5 group">
-                            <TableCell className="pl-6">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-9 w-9 border-2 border-primary/10">
-                                  <AvatarImage src={s.photoUrl} />
-                                  <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
-                                    {s.name?.charAt(0) || 'S'}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="grid gap-0.5">
-                                  <span className="font-bold text-sm leading-none group-hover:text-primary transition-colors">{s.name}</span>
-                                  <span className="text-[10px] text-muted-foreground uppercase font-mono">{s.id}</span>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm font-medium text-muted-foreground">{s.phone}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold border-primary/10">
-                                {s.branch}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={`font-bold ${testType === 'learners' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                                {toUI(testType === 'learners' ? s.learnersDate : s.testDate)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right pr-6">
-                              <Button variant="ghost" size="sm" onClick={() => { setSelectedStudent(s); setIsProfileSheetOpen(true); }} className="hover:bg-primary/5">
-                                View Profile <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+            <TabsList className="grid w-full grid-cols-2 max-w-md bg-muted/50 border mb-6"><TabsTrigger value="learners" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white"><GraduationCap className="h-4 w-4" /> Learners Test</TabsTrigger><TabsTrigger value="driving" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white"><Car className="h-4 w-4" /> Driving Test</TabsTrigger></TabsList>
+            <Card className="border-primary/10 shadow-sm overflow-hidden"><CardHeader className="bg-muted/20 border-b"><div className="flex items-center justify-between"><div><CardTitle className="text-lg">{testType === 'learners' ? 'Learners License Candidates' : 'Permanent License Candidates'}</CardTitle><CardDescription>Showing {filteredResults.length} records for the selected period.</CardDescription></div><Badge variant="outline" className="bg-background font-bold text-primary border-primary/20">{dateRange.from === dateRange.to ? toUI(dateRange.from) : `${toUI(dateRange.from)} - ${toUI(dateRange.to)}`}</Badge></div></CardHeader><CardContent className="p-0">{isProfileLoading || isStudentsLoading ? (<div className="flex flex-col items-center justify-center py-20 gap-4"><RefreshCw className="h-8 w-8 animate-spin text-primary" /><p className="text-sm font-medium text-muted-foreground">Searching records...</p></div>) : (<Table><TableHeader className="bg-muted/10"><TableRow><TableHead className="pl-6">Student ID & Name</TableHead><TableHead>Mobile</TableHead><TableHead>Branch</TableHead><TableHead>Test Date</TableHead><TableHead className="text-right pr-6">Action</TableHead></TableRow></TableHeader><TableBody>{filteredResults.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic"><div className="flex flex-col items-center gap-2 opacity-40"><Search className="h-10 w-10" /><p>No candidates found for this date range.</p></div></TableCell></TableRow>) : (filteredResults.map((s) => (<TableRow key={s.id} className="hover:bg-muted/5 group"><TableCell className="pl-6"><div className="flex items-center gap-3"><Avatar className="h-9 w-9 border-2 border-primary/10"><AvatarImage src={s.photoUrl} /><AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">{s.name?.charAt(0) || 'S'}</AvatarFallback></Avatar><div className="grid gap-0.5"><span className="font-bold text-sm leading-none group-hover:text-primary transition-colors">{s.name}</span><span className="text-[10px] text-muted-foreground uppercase font-mono">{s.id}</span></div></div></TableCell><TableCell className="text-sm font-medium text-muted-foreground">{s.phone}</TableCell><TableCell><Badge variant="outline" className="text-[10px] uppercase font-bold border-primary/10">{s.branch}</Badge></TableCell><TableCell><Badge className={`font-bold ${testType === 'learners' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{toUI(testType === 'learners' ? s.learnersDate : s.testDate)}</Badge></TableCell><TableCell className="text-right pr-6"><Button variant="ghost" size="sm" onClick={() => { setSelectedStudent(s); setIsProfileSheetOpen(true); }} className="hover:bg-primary/5">View Profile <ArrowRight className="ml-2 h-3.5 w-3.5" /></Button></TableCell></TableRow>)))}</TableBody></Table>)}</CardContent></Card>
           </Tabs>
         </div>
       </div>
-
-      <Sheet open={isProfileSheetOpen} onOpenChange={setIsProfileSheetOpen}>
-        <SheetContent className="sm:max-w-3xl overflow-y-auto">
-          <SheetHeader className="pb-6">
-            <SheetTitle>Student Profile Dashboard</SheetTitle>
-          </SheetHeader>
-          {selectedStudent && (<StudentProfileViewContent student={selectedStudent} db={db} />)}
-        </SheetContent>
-      </Sheet>
+      <Sheet open={isProfileSheetOpen} onOpenChange={setIsProfileSheetOpen}><SheetContent className="sm:max-w-3xl overflow-y-auto"><SheetHeader className="pb-6"><SheetTitle>Student Profile Dashboard</SheetTitle></SheetHeader>{selectedStudent && (<StudentProfileViewContent student={selectedStudent} db={db} />)}</SheetContent></Sheet>
     </div>
   );
 }
@@ -409,7 +264,7 @@ function StatSummary({ label, value, icon, color, breakdown }: any) {
           {icon} {label}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
+      <CardContent>
         <div className="text-xl font-black">{value}</div>
         {breakdown && Object.keys(breakdown).length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

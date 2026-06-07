@@ -224,24 +224,14 @@ export default function AccountingPage() {
             </TabsContent>
             <TabsContent value="monthly">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Monthly Summaries</CardTitle>
-                  <CardDescription>Consolidated revenue and expenses by month.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? <LoadingSpinner /> : <SummaryTable data={monthlySummary} type="Month" />}
-                </CardContent>
+                <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Monthly Summaries</CardTitle><CardDescription>Consolidated revenue and expenses by month.</CardDescription></CardHeader>
+                <CardContent>{isLoading ? <LoadingSpinner /> : <SummaryTable data={monthlySummary} type="Month" />}</CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="yearly">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5 text-primary" /> Yearly Summaries</CardTitle>
-                  <CardDescription>Consolidated financial performance by fiscal year.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? <LoadingSpinner /> : <SummaryTable data={yearlySummary} type="Year" />}
-                </CardContent>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5 text-primary" /> Yearly Summaries</CardTitle><CardDescription>Consolidated financial performance by fiscal year.</CardDescription></CardHeader>
+                <CardContent>{isLoading ? <LoadingSpinner /> : <SummaryTable data={yearlySummary} type="Year" />}</CardContent>
               </Card>
             </TabsContent>
           </Tabs>
