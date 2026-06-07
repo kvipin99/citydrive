@@ -216,12 +216,8 @@ function SettingsContent() {
               </CardHeader>
               <CardContent>
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User / Role</TableHead>
-                      <TableHead>Last Active</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow><TableHead>User / Role</TableHead><TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
                   </TableHeader>
                   <TableBody>
                     {isUsersLoading ? (
@@ -229,29 +225,7 @@ function SettingsContent() {
                     ) : filteredUsers.length === 0 ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8 italic">No matches.</TableCell></TableRow>
                     ) : filteredUsers.map((u: any) => (
-                      <TableRow key={u.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{u.name || u.email}</span>
-                            <span className="text-[10px] uppercase font-bold text-muted-foreground">{u.role}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold" onClick={() => sendPasswordResetEmail(auth!, u.email)}>
-                              <Key className="h-3 w-3 mr-1" /> Reset Pwd
-                            </Button>
-                            {isMaster && u.id !== user?.uid && (
-                              <Button variant="ghost" size="sm" className="text-destructive h-8 text-[10px] font-bold" onClick={() => { if(window.confirm('Delete user?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}>
-                                <Trash2 className="h-3 w-3 mr-1" /> Delete
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <TableRow key={u.id}><TableCell><div className="flex flex-col"><span className="font-medium">{u.name || u.email}</span><span className="text-[10px] uppercase font-bold text-muted-foreground">{u.role}</span></div></TableCell><TableCell className="text-xs text-muted-foreground">{u.updatedAt?.seconds ? formatDistanceToNow(new Date(u.updatedAt.seconds * 1000), { addSuffix: true }) : 'Never'}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="outline" size="sm" className="h-8 text-[10px] font-bold" onClick={() => sendPasswordResetEmail(auth!, u.email)}><Key className="h-3 w-3 mr-1" /> Reset Pwd</Button>{isMaster && u.id !== user?.uid && (<Button variant="ghost" size="sm" className="text-destructive h-8 text-[10px] font-bold" onClick={() => { if(window.confirm('Delete user?')) deleteDocumentNonBlocking(doc(db, "users", u.id)); }}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>)}</div></TableCell></TableRow>
                     ))}
                   </TableBody>
                 </Table>
