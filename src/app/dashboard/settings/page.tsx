@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Key, User as UserIcon, RefreshCw, Search, Loader2, Trash2, Clock, HardDrive, FileArchive, CheckCircle2, AlertCircle, Info, Cloud, Server, Database, ShieldAlert, Share2 } from "lucide-react";
+import { Mail, Key, User as UserIcon, RefreshCw, Search, Loader2, Trash2, Clock, HardDrive, FileArchive, CheckCircle2, AlertCircle, Info, Cloud, Server, Database, ShieldAlert, Share2, Users } from "lucide-react";
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDocumentNonBlocking, useAuth } from "@/firebase";
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
