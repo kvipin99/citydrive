@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, Suspense } from "react";
@@ -18,7 +19,6 @@ import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase, deleteDo
 import { collection, doc, serverTimestamp, getDocs } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
-import { setDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { runFullDriveBackup } from "@/ai/flows/google-drive-sync-flow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -30,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 function SettingsContent() {
@@ -42,7 +41,6 @@ function SettingsContent() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState("profile");
-  const [currentOrigin, setCurrentOrigin] = useState("");
 
   const profileRef = useMemoFirebase(() => (db && user ? doc(db, "users", user.uid) : null), [db, user]);
   const { data: profile } = useDoc(profileRef);
@@ -51,10 +49,6 @@ function SettingsContent() {
   const isAdmin = profile?.role === 'Admin' || isMaster;
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCurrentOrigin(window.location.origin);
-    }
-
     const tabFromUrl = searchParams.get("tab");
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
@@ -216,9 +210,7 @@ function SettingsContent() {
               </CardHeader>
               <CardContent>
                 <Table>
-                  <TableHeader className="bg-muted/30">
-                    <TableRow><TableHead>User / Role</TableHead><TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
-                  </TableHeader>
+                  <TableHeader className="bg-muted/30"><TableRow><TableHead>User / Role</TableHead><TableHead>Last Active</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {isUsersLoading ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8">Loading...</TableCell></TableRow>
